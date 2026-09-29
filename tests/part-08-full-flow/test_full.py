@@ -32,7 +32,7 @@ from helper import (Checker, docx_text, docx_nospace, contains_ns,
 from docx_image_injector import ImageInjector
 
 CURL = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "curl.exe")
-BASE = "http://localhost:4000"
+BASE = "http://127.0.0.1:4000"
 TPL = os.path.join(HERE, "templates", "หนังสือราชการ.docx")
 OUTD = os.path.join(HERE, "output")
 os.makedirs(OUTD, exist_ok=True)

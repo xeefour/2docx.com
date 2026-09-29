@@ -1,0 +1,12 @@
+{
+  "port": 4000,
+  "bind": "0.0.0.0",
+  "factories": 3,
+  "authentication": false,
+  "jwtAudience": "carbone-ee",
+  "templatePathRetention": 0,
+  "maxDataSize": 62914560,
+  "converterFactoryTimeout": 300000,
+  "instanceMaxFiles": 200,
+  "instanceQueueSize": 10
+}

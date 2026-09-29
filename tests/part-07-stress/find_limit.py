@@ -4,7 +4,7 @@ import os, sys, json, time, subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CURL = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "curl.exe")
-BASE = "http://localhost:4000"
+BASE = "http://127.0.0.1:4000"
 TPL = os.path.normpath(os.path.join(HERE, "..", "part-03-table-loop",
                                     "templates", "ตารางและเงื่อนไข.docx"))
 OUTD = os.path.join(HERE, "output")

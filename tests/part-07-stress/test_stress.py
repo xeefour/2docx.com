@@ -30,7 +30,7 @@ os.makedirs(OUTD, exist_ok=True)
 
 CURL = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"),
                     "System32", "curl.exe")
-BASE = "http://localhost:4000"
+BASE = "http://127.0.0.1:4000"
 
 c = Checker()
 c.section("ตั้งค่า")

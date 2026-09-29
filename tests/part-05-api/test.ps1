@@ -15,7 +15,7 @@ $here = $PSScriptRoot
 $outDir = Join-Path $here 'output'
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $curl = "$env:SystemRoot\System32\curl.exe"
-$base = 'http://localhost:4000'
+$base = 'http://127.0.0.1:4000'
 # ใช้แม่แบบของส่วนที่ 2 (มีข้อความไทยครบ)
 $tpl = Join-Path $here '..\part-02-thai-text\templates\ข้อความไทย.docx'
 $dataFile = Join-Path $here '..\part-02-thai-text\data\ข้อมูล.json'

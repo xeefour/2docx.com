@@ -20,7 +20,7 @@ REAL_TEXT = ("ตามที่ จังหวัดพิษณุโลก �
              "โดยให้ที่ทำการปกครองอำเภอเร่งดำเนินการเบิกจ่ายงบประมาณ"
              "ให้เป็นไปตามระเบียบและหลักเกณฑ์ที่กำหนดโดยเร็ว")
 
-BASE = "http://localhost:4000"
+BASE = "http://127.0.0.1:4000"
 CURL = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "curl.exe")
 
 

@@ -33,6 +33,7 @@ $all = @(
     @{ No = 7; Name = 'เอกสารขนาดใหญ่';           Dir = 'part-07-stress';     Slow = $true  }
     @{ No = 8; Name = 'เอกสารจริงครบวงจร';         Dir = 'part-08-full-flow';  Slow = $true  }
     @{ No = 9; Name = 'การกระจายย่อหน้าไทย';       Dir = 'part-09-thai-distribute'; Slow = $false }
+    @{ No = 10; Name = 'หัวกระดาษและเลขหน้า';        Dir = 'part-10-header-footer';   Slow = $false }
 )
 
 # ---------- -List ----------

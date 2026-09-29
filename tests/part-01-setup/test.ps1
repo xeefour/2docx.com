@@ -23,7 +23,7 @@ Write-Host 'ส่วนที่ 1: ติดตั้งและตรวจ�
 
 # --- 1.1 Carbone ตอบเวอร์ชัน ---
 $version = $null
-try { $version = (Invoke-RestMethod 'http://localhost:4000/status' -TimeoutSec 20).version } catch { }
+try { $version = (Invoke-RestMethod 'http://127.0.0.1:4000/status' -TimeoutSec 20).version } catch { }
 Check '1.1 Carbone ตอบเวอร์ชันได้' ($version -ne $null) 'เปิด Docker แล้วรัน container ชื่อ carbone-thai'
 if ($version) { Write-Host "        เวอร์ชัน $version" -ForegroundColor DarkGray }
 
@@ -51,7 +51,7 @@ if (Test-Path $tpl) {
     [System.IO.File]::WriteAllText($pf, ('{"template":"' + $b64 + '","convertTo":"pdf"}'),
         (New-Object System.Text.UTF8Encoding($false)))
     $curl = "$env:SystemRoot\System32\curl.exe"
-    & $curl -s -o $out -X POST 'http://localhost:4000/render/template?download=true' `
+    & $curl -s -o $out -X POST 'http://127.0.0.1:4000/render/template?download=true' `
         -H 'Authorization: Bearer carbon-ce' -H 'Content-Type: application/json' `
         -H 'carbone-version: 5' --data-binary "@$pf" --max-time 120 2>$null
     $head = if (Test-Path $out) { [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($out)[0..4]) } else { '' }

@@ -6,7 +6,7 @@ $here = $PSScriptRoot
 $outDir = Join-Path $here 'output'
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $curl = "$env:SystemRoot\System32\curl.exe"
-$base = 'http://localhost:4000'
+$base = 'http://127.0.0.1:4000'
 
 Write-Host ''
 Write-Host 'ส่วนที่ 9: ทดสอบการกระจายย่อหน้าไทย (thaiDistribute)' -ForegroundColor Cyan

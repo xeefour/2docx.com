@@ -27,6 +27,9 @@ tests/parts/
 tests/__pycache__/
 _เก็บไว้/
 
+# ไฟล์ที่แตกออกมาจาก rar (ต้นฉบับเก็บไว้ใน Downloads)
+tests/lib/fonts/_จากrar/
+
 # แม่แบบสำรองที่ไม่ได้ใช้
 **/_เก่า.docx
 **/_เก่า*

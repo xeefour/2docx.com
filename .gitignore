@@ -1,0 +1,60 @@
+# ============================================================
+#  ผลลัพธ์จากการทดสอบ — สร้างใหม่ได้เสมอ ไม่ต้องเก็บ
+# ============================================================
+tests/*/output/
+tests/output/
+*.pdf
+*.docx.tmp
+
+# ภาพที่ได้จากการทดสอบ
+*_ตรวจ*.png
+*-1.png
+*-2.png
+*หน้าแรก.png
+
+# ไฟล์ชั่วคราวจากการรัน
+_*.json
+_*.txt
+_*.py
+_check*.py
+_topng*.py
+_inject*.py
+probe*.ps1
+
+# โฟลเดอร์เก่า
+tests/_เก่า_*/
+tests/parts/
+tests/__pycache__/
+
+# แม่แบบสำรองที่ไม่ได้ใช้
+**/_เก่า.docx
+**/_เก่า*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node
+node_modules/
+
+# ไฟล์ชั่วคราวของ Microsoft Office
+~$*
+~$*
+.~lock.*
+
+# ระบบปฏิบัติการ
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ตัวแปรสภาพแวดล้อม
+.env
+.env.local
+*.key
+
+# Log
+*.log
+logs/

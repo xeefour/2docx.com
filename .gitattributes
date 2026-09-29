@@ -1,0 +1,33 @@
+# ให้แน่ใจว่าไฟล์ข้อความถูกจัดการบรรทัดและ encoding เดียวกันทุกเครื่อง
+# จำเป็นมากสำหรับโปรเจกต์นี้ เพราะมีไฟล์ภาษาไทยจำนวนมาก
+
+# ไฟล์ข้อความทั่วไป
+* text=auto eol=lf
+
+*.md      text eol=lf
+*.txt     text eol=lf
+*.json    text eol=lf
+*.py      text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+
+# PowerShell ต้องเป็น CRLF และต้องมี BOM
+# เพราะ Windows PowerShell 5.1 จะอ่านภาษาไทยไม่ถูกต้องถ้าไม่มี BOM
+*.ps1     text eol=crlf working-tree-encoding=UTF-8
+
+# Dockerfile
+Dockerfile text eol=lf
+
+# ไฟล์ไบนารี — ห้ามแตะ
+*.docx    binary
+*.xlsx    binary
+*.pptx    binary
+*.ttf     binary
+*.otf     binary
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.pdf     binary
+*.zip     binary
+*.ico     binary

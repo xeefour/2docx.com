@@ -32,6 +32,7 @@ $all = @(
     @{ No = 6; Name = 'ตัวฉีดรูป (ไม่ต้อง Docker)'; Dir = 'part-06-injector';  Slow = $false }
     @{ No = 7; Name = 'เอกสารขนาดใหญ่';           Dir = 'part-07-stress';     Slow = $true  }
     @{ No = 8; Name = 'เอกสารจริงครบวงจร';         Dir = 'part-08-full-flow';  Slow = $true  }
+    @{ No = 9; Name = 'การกระจายย่อหน้าไทย';       Dir = 'part-09-thai-distribute'; Slow = $false }
 )
 
 # ---------- -List ----------

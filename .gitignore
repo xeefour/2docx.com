@@ -25,6 +25,7 @@ probe*.ps1
 tests/_เก่า_*/
 tests/parts/
 tests/__pycache__/
+_เก็บไว้/
 
 # แม่แบบสำรองที่ไม่ได้ใช้
 **/_เก่า.docx

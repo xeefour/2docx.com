@@ -13,9 +13,12 @@ RUN apt-get update -qq \
          fonts-noto-core \
     && rm -rf /var/lib/apt/lists/*
 
-# 2) ฟอนต์ TH Sarabun New (4 สไตล์) จาก SIPA/กรมทรัพย์สิทธิ์ทางปัญญา
-#    สัญญาอนุญาต GPL 2.0 + Font Exception - ใช้เชิงพาณิชย์ได้
-COPY fonts/ /usr/local/share/fonts/thai/
+# 2) ฟอนต์ TH Sarabun จาก SIPA/กรมทรัพย์สิทธิ์ทางปัญญา
+#    - TH Sarabun New  : รุ่นปัจจุบัน (GPL 2.0 + Font Exception)
+#    - TH Sarabun PSK  : รุ่นเดิมที่เอกสารราชการส่วนใหญ่ยังอ้างอิงอยู่
+#    ทั้งสองรุ่นหน้าตาและขนาดตัวอักษรเท่ากัน ใช้แทนกันได้
+#    สัญญาอนุญาต: ใช้ได้ทั้งงานราชการและเชิงพาณิชย์
+COPY lib/fonts/ /usr/local/share/fonts/thai/
 
 # 3) สร้าง font cache ใหม่ให้ LibreOffice มองเห็นฟอนต์ใหม่ทันที
 RUN fc-cache -f -v > /dev/null 2>&1 || true

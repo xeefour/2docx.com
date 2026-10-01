@@ -2,7 +2,8 @@
 #  ส่วนที่ 1: ติดตั้งและตรวจสอบระบบ
 # ============================================================
 #  รัน:  .\test.ps1
-#  ต้องมี Docker และ container ชื่อ carbone-thai ทำงานอยู่
+#  ต้องมี Docker และ container ที่ listen พอร์ต 4000 ทำงานอยู่
+#  (ชื่อไม่ตายตัว — หา container จากพอร์ตอัตโนมัติ)
 # ============================================================
 
 $ErrorActionPreference = 'Continue'
@@ -24,13 +25,19 @@ Write-Host 'ส่วนที่ 1: ติดตั้งและตรวจ�
 # --- 1.1 Carbone ตอบเวอร์ชัน ---
 $version = $null
 try { $version = (Invoke-RestMethod 'http://127.0.0.1:4000/status' -TimeoutSec 20).version } catch { }
-Check '1.1 Carbone ตอบเวอร์ชันได้' ($version -ne $null) 'เปิด Docker แล้วรัน container ชื่อ carbone-thai'
+Check '1.1 Carbone ตอบเวอร์ชันได้' ($version -ne $null) 'เปิด Docker แล้วรัน container ที่ listen พอร์ต 4000'
 if ($version) { Write-Host "        เวอร์ชัน $version" -ForegroundColor DarkGray }
+
+# --- หา container ที่ publish พอร์ต 4000 (ไม่ hardcode ชื่อ) ---
+#    รองรับทั้ง carbone-thai (build เอง) และ docserver (ดึงจาก Docker Hub)
+$cname = docker ps --filter 'publish=4000' --format '{{.Names}}' 2>$null | Select-Object -First 1
+if (-not $cname) { $cname = 'carbone-thai' }
+Write-Host "  ใช้ container: $cname" -ForegroundColor DarkGray
 
 # --- 1.2 / 1.3 ฟอนต์ ---
 $sarabun = 0; $thai = 0
 try {
-    $f = docker exec carbone-thai fc-list 2>&1
+    $f = docker exec $cname fc-list 2>&1
     $sarabun = ($f | Select-String 'TH Sarabun New').Count
     $thai    = ($f | Select-String 'Tlwg|Noto Sans Thai|Laksaman|Garuda').Count
 } catch { }
@@ -40,7 +47,7 @@ Write-Host "        TH Sarabun New $sarabun รูปแบบ | ฟอนต์
 
 # --- 1.4 หน่วยความจำ ---
 $mem = 'ไม่ทราบ'
-try { $mem = (docker stats carbone-thai --no-stream --format '{{.MemUsage}}' 2>&1).Trim() } catch { }
+try { $mem = (docker stats $cname --no-stream --format '{{.MemUsage}}' 2>&1).Trim() } catch { }
 Check '1.4 ใช้หน่วยความจำไม่เกิน 1 GB' ($mem -match '(\d+(?:\.\d+)?)(MiB|GiB)') "ใช้ $mem"
 Write-Host "        ใช้ $mem" -ForegroundColor DarkGray
 

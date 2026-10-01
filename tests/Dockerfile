@@ -32,7 +32,9 @@ RUN apt-get update -qq \
 #      - TH SarabunPSK       รุ่นซีดีการาชการ รองรับทั้งชื่อ
 #                            "TH SarabunPSK" และ "TH SarabunIT๙"
 #                            จึงใช้กับเอกสารราชการรุ่นเก่าได้โดยไม่ต้องแก้ชื่อ
-#      - TH Niramit AS       ฟอนต์ราชการอีกตัว
+#
+#    หมายเหตุ: ไม่มี TH Niramit AS ใน image นี้
+#    ถ้าต้องการ ต้องเพิ่มไฟล์ .ttf เข้า lib/fonts/ ก่อน build
 #
 #    สัญญาอนุญาต: GPL 2.0 + Font Exception
 #    ใช้ได้ทั้งงานราชการและเชิงพาณิชย์

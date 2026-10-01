@@ -107,8 +107,10 @@ payload.json:
 | `TH Sarabun New` | SIPA / กรมทรัพย์สิทธิ์ทางปัญญา | เอกสารรุ่นใหม่ |
 | `TH Sarabun PSK` | GitHub SarabunConsortium | เอกสารราชการทั่วไป |
 | `TH SarabunPSK` | ชุดซีดีการาชการ | รองรับทั้ง `TH SarabunPSK` และ `TH SarabunIT๙` |
-| `TH Niramit AS` | ชุดฟอนต์ราชการ | ฟอนต์ราชการอีกตัว |
-| อื่น ๆ 76 รูปแบบ | Debian (Tlwg, Noto) | ฟอนต์สำรอง |
+| อื่น ๆ 77 รูปแบบ | Debian (Tlwg, Noto) | ฟอนต์สำรอง |
+
+> **`TH Niramit AS` ไม่ได้อยู่ใน image** — ยืนยันจาก `fc-list` ใน container แล้ว
+> ถ้าต้องการ ให้เพิ่มไฟล์ `.ttf` ใน `lib/fonts/` แล้ว build ใหม่
 
 **ข้อดีของ `TH SarabunPSK`:** ประกาศชื่อรองรับทั้ง 2 แบบ ทำให้เอกสารราชการรุ่นเก่าที่ใช้ชื่อ
 `TH SarabunIT๙` ใช้ได้โดยไม่ต้องแก้ชื่อฟอนต์ในไฟล์

@@ -81,18 +81,33 @@ if ($needDocker) {
     if (-not $dockerOk) {
         Write-Host ''
         Write-Host 'Docker ยังไม่ทำงาน' -ForegroundColor Yellow
-        Write-Host '  เปิดก่อน:  Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"' -ForegroundColor DarkGray
+        Write-Host '  เปิดก่อน:  Start-Process "$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe"' -ForegroundColor DarkGray
         Write-Host '  หรือใช้:   .\run-all.ps1 -Part 6   (ทดสอบเฉพาะส่วนที่ไม่ต้องใช้ Docker)' -ForegroundColor DarkGray
         exit 2
     }
-    $running = docker ps --filter 'name=carbone-thai' --format '{{.Names}}' 2>$null
-    if (-not $running) {
+    # ถ้ามี Carbone ตอบอยู่ที่พอร์ต 4000 อยู่แล้ว ใช้ตัวนั้นเลย
+    # (ครอบคลุมกรณีใช้ image จาก Docker Hub ชื่อ docserver แทน carbone-thai)
+    $apiAlive = $false
+    try {
+        $v = (Invoke-RestMethod "http://127.0.0.1:4000/status" -TimeoutSec 5).version
+        if ($v) { $apiAlive = $true }
+    } catch { }
+
+    if ($apiAlive) {
+        $who = docker ps --filter 'publish=4000' --format '{{.Names}} ({{.Image}})' 2>$null
         Write-Host ''
-        Write-Host 'กำลังเปิด container Carbone...' -ForegroundColor Yellow
-        docker rm -f carbone-thai 2>$null | Out-Null
-        docker run -d --name carbone-thai -p 4000:4000 -e CARBONE_EE_API_KEY=carbon-ce `
-            --restart unless-stopped carbone-thai:5.15.2 | Out-Null
-        Start-Sleep -Seconds 10
+        Write-Host "ใช้ Carbone ที่ทำงานอยู่แล้ว: $who  [v$v]" -ForegroundColor Green
+    }
+    else {
+        $running = docker ps --filter 'name=carbone-thai' --format '{{.Names}}' 2>$null
+        if (-not $running) {
+            Write-Host ''
+            Write-Host 'กำลังเปิด container Carbone...' -ForegroundColor Yellow
+            docker rm -f carbone-thai 2>$null | Out-Null
+            docker run -d --name carbone-thai -p 4000:4000 -e CARBONE_EE_API_KEY=carbon-ce `
+                --restart unless-stopped carbone-thai:5.15.2 | Out-Null
+            Start-Sleep -Seconds 10
+        }
     }
 }
 

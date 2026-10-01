@@ -1,0 +1,28 @@
+{
+  "name": "docgen-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build -w @docgen/shared && npm run build -w @docgen/api && npm run build -w @docgen/worker && npm run build -w @docgen/web",
+    "dev": "npm run dev -w @docgen/api",
+    "dev:shared": "tsc -b --watch --preserveWatchOutput packages/shared",
+    "dev:worker": "npm run dev -w @docgen/worker",
+    "dev:web": "npm run dev -w @docgen/web",
+    "typecheck": "tsc -b --pretty packages/shared apps/api apps/worker",
+    "clean": "rimraf packages/shared/dist apps/api/dist apps/worker/dist apps/web/.next"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3"
+  }
+}

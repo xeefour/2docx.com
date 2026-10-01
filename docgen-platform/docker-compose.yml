@@ -1,0 +1,92 @@
+name: docgen
+
+# ─────────────────────────────────────────────────────────────
+#  Docgen Platform — แค่ตัวแอป
+#
+#  API      = Fastify 5 + Zod 4
+#  Worker   = ดึงงานจาก NATS → เรนเดอร์ผ่าน docserver → เก็บ PDF ลง S3
+#
+#  ⚠️ ทุก service ที่ตัวแอปต้องใช้ (NATS / Valkey / RustFS / docserver /
+#     MongoDB replica set) อยู่ใน stack `../dokploy-infra` แล้ว
+#     ต้องขึ้น infra ก่อน แล้วค่อยขึ้น stack นี้:
+#
+#       cd ../dokploy-infra && docker compose up -d
+#       cd ../docgen-platform && docker compose up -d
+#
+#  ระหว่าง dev ปกติจะไม่ใช้ stack นี้ แต่รันบน host ตรง ๆ ด้วย npm run dev
+# ─────────────────────────────────────────────────────────────
+
+services:
+  # ══ API ════════════════════════════════════════════════════
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      API_HOST: 0.0.0.0
+      API_PORT: 4000
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      # ⚠️ ต่างจาก .env ตอน dev — ใน Docker ต้องใช้ชื่อ service
+      MONGO_URL: mongodb://docgen:${MONGO_PASSWORD}@mongo-1:27017,mongo-2:27017,mongo-3:27017/app?replicaSet=rs0
+      MONGO_INIT_URL: mongodb://docgen:${MONGO_PASSWORD}@mongo-1:27017/?replicaSet=rs0&directConnection=true
+      VALKEY_URL: redis://:${VALKEY_PASSWORD}@valkey:6379
+      NATS_URL: nats://app:${NATS_PASSWORD}@nats:4222
+      NATS_STREAM: ${NATS_STREAM:-DOCGEN}
+      NATS_SUBJECT: ${NATS_SUBJECT:-jobs.render}
+      S3_ENDPOINT: http://rustfs:9000
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:-documents}
+      S3_FORCE_PATH_STYLE: "true"
+      DOCSERVER_URL: http://docserver:4000
+      DOCSERVER_API_KEY: ${DOCSERVER_API_KEY:-carbon-ce}
+      DOCSERVER_TIMEOUT_MS: ${DOCSERVER_TIMEOUT_MS:-300000}
+    ports:
+      - "4001:4000"
+    networks: [infra]
+    # ⚠️ mongo-init อยู่ project อื่น (dokploy-infra) → depends_on ข้าม project ไม่ได้
+    #    ต้องขึ้น infra ก่อน แล้วค่อยขึ้น stack นี้
+    #    ถ้า infra ยังไม่พร้อม แอปจะ crash ตอน boot แล้ว restart วนจนกว่าจะสำเร็จ
+    restart: unless-stopped
+
+  # ══ Worker ═════════════════════════════════════════════════
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      MONGO_URL: mongodb://docgen:${MONGO_PASSWORD}@mongo-1:27017,mongo-2:27017,mongo-3:27017/app?replicaSet=rs0
+      MONGO_INIT_URL: mongodb://docgen:${MONGO_PASSWORD}@mongo-1:27017/?replicaSet=rs0&directConnection=true
+      VALKEY_URL: redis://:${VALKEY_PASSWORD}@valkey:6379
+      NATS_URL: nats://app:${NATS_PASSWORD}@nats:4222
+      NATS_STREAM: ${NATS_STREAM:-DOCGEN}
+      NATS_SUBJECT: ${NATS_SUBJECT:-jobs.render}
+      S3_ENDPOINT: http://rustfs:9000
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:-documents}
+      S3_FORCE_PATH_STYLE: "true"
+      DOCSERVER_URL: http://docserver:4000
+      DOCSERVER_API_KEY: ${DOCSERVER_API_KEY:-carbon-ce}
+      DOCSERVER_TIMEOUT_MS: ${DOCSERVER_TIMEOUT_MS:-300000}
+    networks: [infra]
+    # ดูหมายเหตุข้างบน — รอ infra ไม่ได้ข้าม project
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 1G
+
+# ไม่มี volume ของตัวเองแล้ว — MongoDB อยู่ที่ ../dokploy-infra
+
+networks:
+  infra:
+    name: infra
+    external: true

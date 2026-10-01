@@ -1,0 +1,1021 @@
+:root {
+  /* โทนหลักของ 2docx — ม่วงอมฟ้าเข้มตามธีมเอกสารราชการไทย */
+  --brand: #6d3bbf;
+  --brand-dark: #542a96;
+  --brand-soft: #f3ecfc;
+  --brand-border: #ded0f5;
+
+  --ink: #1a1523;
+  --ink-2: #5c5468;
+  --ink-3: #8b8397;
+  --line: #e6e1ee;
+  --bg: #faf8fd;
+  --surface: #ffffff;
+
+  --ok: #1a7f4b;
+  --ok-bg: #e6f5ec;
+  --warn: #9a6a00;
+  --warn-bg: #fdf3dd;
+  --err: #c02626;
+  --err-bg: #fdeaea;
+
+  --radius: 10px;
+  --shadow: 0 1px 3px rgb(26 21 35 / 8%), 0 6px 20px rgb(26 21 35 / 5%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family:
+    'Sarabun', 'Noto Sans Thai', 'IBM Plex Sans Thai', -apple-system, BlinkMacSystemFont,
+    'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── ปุ่ม ─────────────────────────────────────────────── */
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: var(--brand);
+  color: #fff;
+  transition: background 0.15s;
+}
+button:hover:not(:disabled) {
+  background: var(--brand-dark);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button.ghost {
+  background: transparent;
+  color: var(--ink-2);
+  border-color: var(--line);
+}
+button.ghost:hover:not(:disabled) {
+  background: var(--bg);
+  color: var(--ink);
+}
+button.danger {
+  background: var(--err);
+}
+button.danger:hover:not(:disabled) {
+  background: #9d1f1f;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 11px;
+  width: 100%;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--brand-border);
+  border-color: var(--brand);
+}
+
+a {
+  color: var(--brand);
+}
+
+/* ── ตาราง ────────────────────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th {
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+tbody tr:hover {
+  background: var(--brand-soft);
+}
+
+/* ── ป้าย ─────────────────────────────────────────────── */
+.pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  border: 1px solid var(--brand-border);
+  white-space: nowrap;
+}
+.pill.ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: #bfe5cf;
+}
+.pill.warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: #f0dcae;
+}
+.pill.err {
+  background: var(--err-bg);
+  color: var(--err);
+  border-color: #f5c6c6;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.muted {
+  color: var(--ink-3);
+}
+.mono {
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  font-size: 13px;
+}
+
+/* ── หน้าแก้แม่แบบ: ฟอร์มครึ่งซ้าย · ตัวอย่างเอกสารครึ่งขวา ────
+   ⚠️ เดิมตัวอย่างเอกสารถูกวาง**ทับล่าง**ฟอร์มในคอลัมน์เดียวกัน
+      ฟอร์มยิ่งยาว ตัวอย่างยิ่งถูกดันลงใต้ขอบจอ → ต้องเลื่อนหน้าจอถึงจะเห็น
+      จึงย้ายไปเป็นอีกคอลัมน์ และทำให้ `sticky`
+      เลื่อนฟอร์มไปเรื่อย ๆ ตัวอย่างยังอยู่ในสายตา
+   ─────────────────────────────────────────────────────────── */
+.editor-split {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+  /* จอแคบ → ซ้อนกันเป็นคอลัมน์เดียวก่อน (ตัวอย่างอยู่ล่างฟอร์มแบบเดิม) */
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1080px) {
+  .editor-split {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+/** คอลัมน์ซ้าย — ฟอร์มทับ AI วางซ้อนกันลงไป */
+.editor-col {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  min-width: 0;
+}
+
+/**
+ * คอลัมน์ขวา — ตัวอย่างเอกสาร + แท็บฝั่งขวา
+ *
+ * ⚠️ `align-items: start` ที่ `.editor-split` จำเป็นมาก
+ *    ถ้าไม่ใส่ grid จะยืดไอเทมให้สูงเท่าคอลัมน์อีกฝั่ง
+ *    แล้ว `position: sticky` จะไม่มีที่ให้เลื่อน → หน้าจะเหมือนไม่ทำอะไร
+ *
+ * ⚠️ sticky ต้องอยู่ที่**คอลัมน์** ไม่ใช่ที่การ์ดข้างใน
+ *    เพราะแท็บถูกย้ายเข้ามาอยู่ในคอลัมน์เดียวกันแล้ว
+ *    ถ้า sticky เฉพาะการ์ด แท็บจะเลื่อนหายไปทั้งที่เนื้อหายังอยู่บนจอ
+ */
+.editor-col--right {
+  min-width: 0;
+}
+@media (min-width: 1080px) {
+  .editor-col--right {
+    position: sticky;
+    top: 16px;
+  }
+}
+.editor-preview {
+  min-width: 0;
+}
+
+/** พื้นที่รูปหน้าเอกสาร — สูงไม่เกินจอ จะได้ไม่ล้นเป็นสองชั้นของ scrollbar */
+.docpage {
+  padding: 16px;
+  background: var(--surface);
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  max-height: min(620px, calc(100vh - 260px));
+}
+@media (max-width: 1079px) {
+  .docpage {
+    max-height: 620px;
+  }
+}
+
+/* ── เมนูดาวน์โหลด (ไอคอน → เลือกรูปแบบทีหลัง) ─────────────────
+   ⚠️ เดิมเป็น `<select>` กว้าง ~290px อยู่ในหัวการ์ด
+      ดันหัวการ์ดสูงเปล่าและแย่งที่ของแถบซูม
+      เปลี่ยนเป็นปุ่มไอคอนในแถบซูม — คลิกแล้วค่อยเลือกรูปแบบ
+   ─────────────────────────────────────────────────────────── */
+.dl {
+  position: relative;
+  flex: 0 0 auto;
+}
+.dl__btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  line-height: 1;
+}
+.dl__btn svg {
+  width: 19px;
+  height: 19px;
+  display: block;
+}
+.dl__btn[data-open='true'] {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.dl__pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  min-width: 268px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+.dl__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  margin-bottom: 10px;
+  color: var(--ink-2);
+}
+/**
+ * ⚠️ ต้องกำหนดขนาดไอคอนในหัวเมนูด้วย
+ *   ถ้ากำหนดแค่ `.dl__btn svg` ไอคอนตรงนี้จะขยายเต็มความกว้าง
+ *   เพราะ SVG ไม่มีค่า width/height เอง → ตั้งแต่กดปุ่มเปิดเมนูจะดูผิดแบบทันที
+ */
+.dl__title svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+/* ── เลือกหน้าที่จะดาวน์โหลด ─────────────────────────────────── */
+.dl__range {
+  display: grid;
+  gap: 6px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-border);
+}
+.dl__rangehead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.dl__count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--brand-dark);
+}
+.dl__rangeinput {
+  padding: 6px 9px;
+  font-size: 13px;
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+}
+.dl__quick {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.dl__quick .ghost {
+  padding: 3px 8px;
+  font-size: 11.5px;
+}
+.dl__hint {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.dl__hint--err {
+  color: var(--err);
+}
+/* ไฮไลต์ตัวที่ชี้อยู่ เพื่อให้เห็นว่าตอนนี้ "หน้าที่เลือก" จะถูกใช้กับรูปแบบไหน */
+.dl__opt[data-peek='true'] {
+  border-color: var(--brand);
+  background: var(--surface);
+}
+.dl__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.dl__opt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+.dl__opt:hover:not(:disabled) {
+  background: var(--brand-soft, var(--surface-2));
+  border-color: var(--brand);
+}
+.dl__opt:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+.dl__opt small {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+/** เครื่องหมายชนิดไฟล์สีตามจริง (PDF แดง · Word ฟ้า · รูป เขียว) */
+.dl__badge {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 30px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.2px;
+}
+.dl__status {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* ── แท็บ ──────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+.tabs__tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--ink-2);
+  padding: 9px 14px;
+  font-size: 14px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tabs__tab:hover:not(:disabled) {
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+}
+.tabs__tab--on {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+  font-weight: 600;
+}
+.tabs__count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  font-size: 11px;
+  line-height: 17px;
+  text-align: center;
+}
+
+/* ── ช่องฟอร์ม ──────────────────────────────────────────── */
+.fieldset {
+  display: grid;
+  gap: 12px;
+}
+.fieldset__group {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px 14px;
+  background: var(--surface);
+}
+.fieldset__legend {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--brand-dark);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  width: fit-content;
+}
+.field-error {
+  display: block;
+  color: var(--err);
+  font-size: 12px;
+  margin-top: 4px;
+}
+.field-help {
+  display: block;
+  color: var(--ink-3);
+  font-size: 12px;
+  margin-top: 4px;
+}
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.checkbox-row input[type='checkbox'] {
+  width: auto;
+}
+.checkbox-row label {
+  margin: 0;
+}
+
+/* ── แชท AI ─────────────────────────────────────────────── */
+.chat {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  height: 100%;
+  min-height: 320px;
+}
+.chat__log {
+  overflow-y: auto;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.chat__msg {
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 92%;
+}
+.chat__msg--user {
+  background: var(--brand);
+  color: #fff;
+  justify-self: end;
+}
+.chat__msg--ai {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  justify-self: start;
+}
+.chat__msg--err {
+  background: var(--err-bg);
+  border: 1px solid #f5c6c6;
+  color: var(--err);
+}
+.chat__msg--pending {
+  background: var(--brand-soft);
+  border: 1px dashed var(--brand-border);
+  color: var(--ink-3);
+  justify-self: start;
+}
+.chat__keys {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.chat__msg--user .chat__keys {
+  color: rgb(255 255 255 / 80%);
+}
+.chat__composer {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+  align-items: flex-end;
+}
+.chat__composer textarea {
+  resize: vertical;
+  min-height: 58px;
+  font-size: 14px;
+}
+
+/* ── ไม้บรรทัด (ruler) ──────────────────────────────────────── */
+.rulbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  font-size: 12px;
+}
+/* ปุ่มหน่วยกว้างเท่ากันทั้ง "ซม." และ "นิ้ว" ไม่งั้นแถบเครื่องมือขยับตอนสลับ */
+.rulbtn[data-testid='ruler-unit'] {
+  min-width: 44px;
+  justify-content: center;
+}
+.rulbtn[aria-pressed='true'] {
+  background: var(--brand-soft);
+  border-color: var(--brand-border);
+  color: var(--brand);
+}
+@media (max-width: 720px) {
+  /* จอแคบ — ตัดคำว่า "ไม้บรรทัด" เหลือไอคอนอย่างเดียว เหมือนแถบเครื่องมืออื่น */
+  .rulbtn__t {
+    display: none;
+  }
+}
+.docstage {
+  display: grid;
+  justify-content: center;
+  align-items: start;
+  width: max-content;
+  margin: 0 auto;
+}
+.docstage__corner {
+  grid-area: 1 / 1;
+}
+.docstage__page {
+  grid-area: 2 / 2;
+}
+.rul--h {
+  grid-area: 1 / 2;
+  display: block;
+}
+.rul--v {
+  grid-area: 2 / 1;
+  display: block;
+}
+
+/* ── ผู้ช่วย AI ประจำช่องกรอก ────────────────────────────────── */
+.fieldbox {
+  position: relative;
+}
+/* เว้นที่ให้ไอคอนทับช่อง มิฉะนั้นข้อความยาว ๆ จะไปทับไอคอนทับจนกดไม่ได้ */
+.fieldbox > input,
+.fieldbox > textarea {
+  padding-right: 38px;
+}
+.fieldai {
+  position: absolute;
+  top: 50%;
+  right: var(--fieldai-inset, 9px);
+  transform: translateY(-50%);
+}
+.fieldbox:has(textarea) .fieldai {
+  /* textarea สูงกว่า input มาก — ย้ายไปติดมุมบนแทนกลางกล่อง จะได้ไม่บังตัวอักษร */
+  top: 26px;
+  transform: none;
+}
+/* ช่องตัวเลขมีลูกศรขึ้น-ลงของเบราว์เซอร์เกาะขวาสุดอยู่แล้ว
+   ถ้าไม่ถอยไอคอนออก สองอย่างจะทับกันจนกดลูกศรไม่ได้ */
+.fieldbox:has(input[type='number']) {
+  --fieldai-inset: 24px;
+}
+.fieldbox:has(input[type='number']) > input {
+  padding-right: 50px;
+}
+.fieldai__btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.fieldai__btn:hover:not(:disabled) {
+  background: var(--brand-soft);
+  border-color: var(--brand-border);
+  color: var(--brand);
+}
+.fieldai__btn[aria-expanded='true'] {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.fieldai__pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  display: grid;
+  gap: 8px;
+  width: 320px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 18%);
+}
+.fieldai__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.fieldai__head strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fieldai__x {
+  padding: 0 6px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.fieldai__tools {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.fieldai__tools .pill {
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.fieldai__tools .pill:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.fieldai__prov {
+  width: auto;
+  padding: 4px 8px;
+  font-size: 12.5px;
+}
+.fieldai__log {
+  display: grid;
+  gap: 6px;
+  max-height: 210px;
+  overflow-y: auto;
+}
+.fieldai__msg {
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.fieldai__msg--user {
+  background: var(--brand);
+  color: #fff;
+  justify-self: end;
+}
+.fieldai__msg--ai {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  justify-self: start;
+}
+.fieldai__msg--pending {
+  background: var(--brand-soft);
+  border: 1px dashed var(--brand-border);
+  color: var(--ink-3);
+}
+.fieldai__apply {
+  display: block;
+  margin-top: 7px;
+  padding: 5px 11px;
+  font-size: 12.5px;
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.fieldai__composer {
+  display: flex;
+  gap: 7px;
+  align-items: flex-end;
+}
+.fieldai__composer textarea {
+  resize: vertical;
+  min-height: 46px;
+  font-size: 13.5px;
+}
+
+/* ── รายการประวัติ ───────────────────────────────────────── */
+.who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.who:last-child {
+  border-bottom: none;
+}
+.who__name {
+  font-weight: 500;
+}
+.who__meta {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+label {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-2);
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+
+/* ── สถานะระหว่างเปลี่ยนหน้า + แถบ URL ─────────────────────
+   ใช้ z-index สูงสุดเพื่อให้ทับทุกอย่างรวมถึงผ้าคลุมตอนเปิดหน้าครั้งแรก
+*/
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 3px solid var(--brand-border);
+  border-top-color: var(--brand);
+  animation: spin 0.7s linear infinite;
+}
+.spinner--sm {
+  width: 13px;
+  height: 13px;
+  border-width: 2px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* แถบโหลดบนสุด — ขึ้นทันทีที่เริ่มนำทาง */
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 2147483000;
+  background: linear-gradient(90deg, var(--brand) 0%, #b48cf2 50%, var(--brand) 100%);
+  background-size: 45% 100%;
+  background-repeat: no-repeat;
+  animation: topbar-slide 1.05s ease-in-out infinite;
+}
+@keyframes topbar-slide {
+  0% {
+    background-position: -50% 0;
+  }
+  100% {
+    background-position: 130% 0;
+  }
+}
+
+/* ผ้าคลุมหน้าจอ — บอกว่ากำลังไปหน้าไหน */
+.veil {
+  position: fixed;
+  inset: 0;
+  z-index: 2147482000;
+  display: grid;
+  place-items: center;
+  background: rgb(250 248 253 / 74%);
+  animation: veil-in 0.14s ease-out;
+}
+@keyframes veil-in {
+  from {
+    opacity: 0;
+  }
+}
+.veil__card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--brand-border);
+  border-radius: 14px;
+  padding: 18px 24px;
+  box-shadow: 0 10px 40px rgb(26 21 35 / 18%);
+  max-width: min(560px, 90vw);
+}
+.veil__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.veil__text strong {
+  font-size: 15px;
+}
+.veil__text .mono {
+  color: var(--ink-3);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ผ้าคลุมตอนเปิดหน้าครั้งแรก (server render)
+   ถ้า JS ไม่ทำงาน CSS จะซ่อนเองใน 6 วินาที เว็บจะไม่ถูกบังค้างตลอดไป */
+.bootveil {
+  position: fixed;
+  inset: 0;
+  z-index: 2147484000;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  animation: bootveil-out 0.4s ease 6s forwards;
+}
+.bootveil__card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+@keyframes bootveil-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+/* แถบ URL มุมล่างซ้าย
+   ⚠️ z-index ต้องสูงกว่า .veil — เวลาหน้าค้างจริง ผ้าคลุมจะบังหน้าเว็บ
+      ถ้าผ้าคลุมบังแถบนี้ด้วย ผู้ใช้จะกดคัดลอก URL ไม่ได้ตอนที่ต้องการที่สุด */
+.urlbar {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 2147482500;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+}
+.urlbar__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 52vw;
+  padding: 6px 13px;
+  background: var(--surface);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  font-size: 12.5px;
+}
+.urlbar__toggle:hover:not(:disabled) {
+  background: var(--surface);
+  color: var(--brand-dark);
+  border-color: var(--brand-border);
+}
+.urlbar__name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.urlbar__path {
+  color: var(--ink-3);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.urlbar[data-open='false'] .urlbar__path {
+  display: none;
+}
+
+.urlbar__panel {
+  width: min(540px, calc(100vw - 32px));
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--brand-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgb(26 21 35 / 16%);
+}
+.urlbar__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.urlbar__url {
+  display: block;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-all;
+  user-select: all;
+}
+.urlbar__slow {
+  padding: 9px 11px;
+  background: var(--warn-bg);
+  border: 1px solid #f0dcae;
+  border-radius: 8px;
+  color: var(--warn);
+  font-size: 12.5px;
+}
+.urlbar__err {
+  display: grid;
+  gap: 3px;
+  padding: 9px 11px;
+  background: var(--err-bg);
+  border: 1px solid #f5c6c6;
+  border-radius: 8px;
+  color: var(--err);
+  font-size: 12.5px;
+}
+.urlbar__err .mono {
+  color: var(--ink-2);
+  word-break: break-all;
+}
+.urlbar__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.urlbar__actions button {
+  padding: 6px 12px;
+  font-size: 12.5px;
+}
+
+/* คนที่ตั้งค่าลด animation ไว้ ให้เหลือแค่สีบอกสถานะ ไม่ต้องกะพริบ */
+@media (prefers-reduced-motion: reduce) {
+  .topbar,
+  .spinner {
+    animation: none;
+  }
+  .spinner {
+    border-top-color: var(--brand);
+  }
+  .topbar {
+    background: var(--brand);
+  }
+  .bootveil {
+    animation-duration: 0.01s;
+    animation-delay: 0s;
+  }
+}

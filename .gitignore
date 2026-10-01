@@ -1,7 +1,18 @@
 # ============================================================
+#  Dokploy Infra — stack ที่รวม NATS + Valkey + RustFS + docserver
+#  ข้อมูลจริงอยู่ใน Docker volume ไม่ใช่โฟลเดอร์นี้
+# ============================================================
+dokploy-infra/.env
+dokploy-infra/rclone/rclone.conf
+
+# backup ของ docserver (สร้างตอนย้ายเข้า compose — มีแม่แบบ + metadata.db)
+docserver-backup-*/
+
+# ============================================================
 #  ผลลัพธ์จากการทดสอบ — สร้างใหม่ได้เสมอ ไม่ต้องเก็บ
 # ============================================================
 tests/*/output/
+tests/*/output-*/
 tests/output/
 *.pdf
 *.docx.tmp

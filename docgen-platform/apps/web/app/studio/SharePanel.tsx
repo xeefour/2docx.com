@@ -6,8 +6,9 @@
  * ซ้าย: metadata ที่แก้ได้ (ชื่อ/หมวด/แท็ก) — ไปที่ Carbone
  * ขวา: ใครมีสิทธิ์ใช้แม่แบบนี้ — เก็บใน Mongo ของเราเอง
  */
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, ApiError, type AccessView, type Template } from './lib/api'
+import { copyText } from './lib/copy'
 
 /** ชนิดไฟล์ที่ Carbone รับได้ — ต้องตรงกับ ALLOWED_EXT ของ API */
 const ACCEPT = '.docx,.xlsx,.pptx,.odt,.ods,.odp,.doc,.odf'
@@ -34,6 +35,28 @@ export default function SharePanel({
   const fileRef = useRef<HTMLInputElement>(null)
 
   const isOwner = access?.relation === 'owner'
+
+  /**
+   * ── ลิงก์สาธารณ ──
+   *
+   * ผู้ใช้สั่ง: *"เลือกเปิดสาธารณแล้ว ให้แสดง url ด้วย"*
+   * เพราะตอนกด "เปิดสาธารณ" เดิมได้แค่ข้อความว่าเปิดแล้ว
+   * แต่ผู้ใช้ยังหา**ลิงก์ที่จะส่งให้คนอื่น**ไม่เจอ ต้องไปเดาเองจากแถบ URL
+   *
+   * ⚠️ ต้องอ่าน origin หลัง mount เท่านั้น
+   *   `window` ไม่มีตอน Next prerender ฝั่งเซิร์ฟเวอร์
+   *   ถ้าใช้ตรง ๆ ใน render จะพังตอน build (`window is not defined`)
+   *   ตอน mount เสร็จค่อยเติม — ก่อนหน้านั้นแสดง "…" ไปก่อน
+   *
+   * ⚠️ URL นี้ต้อง**ไม่มี query string**
+   *   ตอนผู้ใช้เปิดอยู่ในแท็บ "แม่แบบ" URL จะมี `?tabs=form&pane=template` ติดมาด้วย
+   *   ถ้าเอาไปส่งตรง ๆ คนอื่นจะเปิดหน้าในสถานะเดียวกับผู้ส่ง ซึ่งไม่ใช่สิ่งที่ตั้งใจ
+   *   เพราะฉะนั้นต้องประกอบเองจาก origin + key เท่านั้น
+   */
+  const [origin, setOrigin] = useState('')
+  useEffect(() => setOrigin(window.location.origin), [])
+  const publicUrl = origin ? `${origin}/studio/${templateKeyOfTemplate(template)}` : ''
+
   /**
    * ยังไม่มีใครตั้งค่าแม่แบบนี้ → คนแรกที่กดกลายเป็นเจ้าของ (ตรงกับฝั่ง API)
    *
@@ -230,12 +253,74 @@ export default function SharePanel({
           {access?.ownerName ? ` · เจ้าของ: ${access.ownerName}` : ''}
         </div>
 
+        {/* ── ลิงก์สาธารณ: ต้องอยู่นอก `canManage` ──
+         *   คนที่ไม่ใช่เจ้าของก็ต้องเห็นลิงก์เหมือนกัน ถ้าเอาไปส่งต่อได้จริง
+         *   (ถ้าซ่อนไว้ในกล่องของเจ้าของ ผู้ใช้ที่ได้รับการแชร์จะหาลิงก์ไม่เจอ) */}
+        {access?.visibility === 'published' && (
+          <div
+            data-testid="share-public-url"
+            style={{
+              display: 'grid',
+              gap: 8,
+              marginBottom: 14,
+              padding: '11px 12px',
+              background: 'var(--brand-soft)',
+              border: '1px solid var(--brand-border)',
+              borderRadius: 10,
+            }}
+          >
+            <div style={{ fontSize: 12.5, fontWeight: 600 }}>🌐 ลิงก์สาธารณ</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-2)' }}>
+              ใครมีลิงก์นี้ก็เปิดใช้และแก้ไขแม่แบบนี้ได้ทันที ไม่ต้องเชิญทีละคน
+            </div>
+            <code
+              className="mono"
+              title={publicUrl}
+              style={{
+                display: 'block',
+                padding: '8px 10px',
+                background: 'var(--bg)',
+                border: '1px solid var(--line)',
+                borderRadius: 8,
+                fontSize: 12,
+                lineHeight: 1.5,
+                /**
+                 * ลิงก์ยาวมากตอนจอแคบ → ต้องตัดบรรทัดได้
+                 * ไม่งั้นกล่องการ์ดจะดันความสูงหน้าเว็บพุ่ง (เคยเจอกับตารางรายการแม่แบบ)
+                 */
+                wordBreak: 'break-all',
+                userSelect: 'all',
+              }}
+            >
+              {publicUrl || '…'}
+            </code>
+            <button
+              className="ghost"
+              disabled={busy || !publicUrl}
+              data-testid="share-copy-url"
+              style={{ justifySelf: 'start' }}
+              onClick={() =>
+                void (async () => {
+                  notify(
+                    (await copyText(publicUrl))
+                      ? 'คัดลอกลิงก์สาธารณแล้ว'
+                      : 'คัดลอกไม่สำเร็จ — ให้เลือกข้อความในกล่องด้านบนเอง',
+                  )
+                })()
+              }
+            >
+              คัดลอกลิงก์
+            </button>
+          </div>
+        )}
+
         {canManage ? (
           <>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
               <button
                 className="ghost"
                 disabled={busy}
+                data-testid="share-publish"
                 onClick={() => void setVis('published')}
                 style={{
                   borderColor: access?.visibility === 'published' ? 'var(--brand)' : undefined,
@@ -246,6 +331,7 @@ export default function SharePanel({
               <button
                 className="ghost"
                 disabled={busy}
+                data-testid="share-private"
                 onClick={() => void setVis('private')}
                 style={{ borderColor: access?.visibility === 'private' ? 'var(--brand)' : undefined }}
               >

@@ -26,6 +26,7 @@ import {
   type ReactNode,
 } from 'react'
 import { usePathname } from 'next/navigation'
+import { copyText } from '../studio/lib/copy'
 
 /* ── จังหวะเวลา ────────────────────────────────────────────────
  * SHOW_VEIL_AFTER — เปลี่ยนหน้าเร็วกว่านี้ไม่ต้องกางผ้าคลุม (ไม่กะพริบตามสายตา)
@@ -54,31 +55,6 @@ const errorLog: ErrorRecord[] = []
 function logError(where: string, message: string) {
   errorLog.unshift({ at: new Date().toISOString(), where, message: message.slice(0, 400) })
   if (errorLog.length > 5) errorLog.pop()
-}
-
-/** คัดลอกข้อความ — มีทางสำรองกรณี clipboard ถูกบล็อก (เช่น ไม่ได้กดอนุญาต) */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text)
-      return true
-    }
-  } catch {
-    /* ตกไปลองวิธีถัดไป */
-  }
-  try {
-    const ta = document.createElement('textarea')
-    ta.value = text
-    ta.setAttribute('readonly', '')
-    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'
-    document.body.appendChild(ta)
-    ta.select()
-    const ok = document.execCommand('copy')
-    ta.remove()
-    return ok
-  } catch {
-    return false
-  }
 }
 
 /* ── บริบท "กำลังทำงาน" ให้หน้าจอในระบบรายงานได้ ──────────────

@@ -555,6 +555,25 @@ if (total >= 1) {
   skipCheck('ดาวน์โหลดรูป 1 หน้า', `เอกสารมี ${total} หน้า`)
 }
 
+// ── 7b. ปิดแล้วเปิดใหม่ = เริ่มใหม่ทุกครั้ง ─────────────────────────
+console.log('\n[7b] ปิดเมนูแล้วเปิดใหม่ — ต้องกลับเป็นสถานะเริ่มต้น')
+/**
+ * ⚠️ ผู้ใช้สั่ง: *"ถ้า popup นี้ปิดให้ซ่อนส่วนนี้เหมือนเริ่มใหม่ ครั้งแรกจะไม่แสดงหน้าที่ต้องการ"*
+ *
+ *   ข้างล่างสำคัญกว่าที่เห็น: ถ้าปิดเมนูแล้วช่วงหน้ายังค้างอยู่
+ *   รอบถัดไปผู้ใช้กดดาวน์โหลดรูปโดยไม่ได้เลือกอะไร → ได้ไม่ครบทุกหน้าเงียบ ๆ
+ *   ตรงนี้เพิ่งเลือก `1` ไว้ ถ้าไม่ถูกล้าง รอบถัดไปต้องได้หน้า 1 ทันที (ผิดจากที่ตั้งใจ)
+ */
+check('หลังดาวน์โหลด เมนูปิดไปแล้ว', !(await evaluate("!!document.querySelector('.dl__pop')")))
+await realClick('.dl__btn')
+check('เปิดเมนูได้อีกครั้ง', await waitFor("!!document.querySelector('.dl__pop')", 8000))
+check('กล่องหน้าที่ต้องการไม่โผล่เอง (ต้องกดรูปภาพก่อน)', !(await evaluate("!!document.querySelector('.dl__imgpanel')")))
+check('กดรูปภาพแล้วกล่องกลับมา', await clickOpt('รูปภาพ') && (await waitFor("!!document.querySelector('.dl__imgpanel')", 5000)))
+const rangeVal = await evaluate("document.querySelector('.dl__rangeinput')?.value ?? '(ไม่มีช่อง)'")
+check('ช่องช่วงหน้าว่าง (กลับเป็นทุกหน้า ไม่ตกหลุดจากรอบก่อน)', rangeVal === '', JSON.stringify(rangeVal))
+const countFresh = await evaluate("document.querySelector('.dl__count')?.textContent ?? ''")
+check('ตัวบอกจำนวนหน้าบอก "ทั้งหมด" อีกครั้ง', countFresh.includes('ทั้งหมด'), countFresh)
+
 // ── 8. ดาวน์โหลดรูปหลายหน้า → ไฟล์ ZIP ────────────────────────────
 console.log('\n[8] ดาวน์โหลดรูปมากกว่า 1 หน้า — ต้องได้ไฟล์ .zip ไฟล์เดียว')
 if (total >= 2) {

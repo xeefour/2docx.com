@@ -675,6 +675,7 @@ export default function DocumentPreview({
 
             {unitMenu && (
               <div className="rulpick" role="menu" aria-label="หน่วยของไม้บรรทัด">
+                <p className="rulpick__title">หน่วยไม้บรรทัด</p>
                 {UNITS.map((u) => (
                   <button
                     key={u.id}
@@ -686,23 +687,50 @@ export default function DocumentPreview({
                   >
                     {u.label}
                     {unit === u.id && (
-                      <span className="rulpick__tick" aria-hidden="true">
-                        ✓
-                      </span>
+                      <svg
+                        className="rulpick__tick"
+                        viewBox="0 0 24 24"
+                        width="15"
+                        height="15"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="m5 13 4 4L19 7"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
                     )}
                   </button>
                 ))}
+
                 {ruler && (
-                  <button
-                    className="rulpick__opt rulpick__opt--off"
-                    data-testid="ruler-hide"
-                    onClick={setRulerOff}
-                  >
-                    ซ่อนไม้บรรทัด
-                  </button>
+                  <>
+                    <div className="rulpick__sep" role="separator" />
+                    <button
+                      className="rulpick__opt rulpick__opt--off"
+                      data-testid="ruler-hide"
+                      onClick={setRulerOff}
+                    >
+                      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+                        <path
+                          d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.7 2.7M9.9 5.2A9.7 9.7 0 0 1 12 5c5 0 9 4.5 9 7 0 .8-.5 1.9-1.4 3M6.3 6.4C4.2 7.7 3 9.4 3 12c0 2.5 4 7 9 7 1 0 2-.2 2.9-.6"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.7"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <span>ซ่อนไม้บรรทัด</span>
+                    </button>
+                  </>
                 )}
               </div>
             )}
+
           </div>
 
 

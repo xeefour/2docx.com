@@ -857,31 +857,51 @@ tbody tr:hover {
   position: relative;
   display: inline-flex;
 }
+/**
+ * ⚠️ กล่องต้องกว้างกว่าปุ่มเสมอ ไม่ใช่ `min-width: 100%`
+ *   ค่าเดิมทำให้กล่องกว้างเท่าปุ่ม (85px) แล้วข้อความยาว ๆ
+ *   อย่าง "ซ่อนไม้บรรทัด" ล้นออกนอกกล่อง (เห็นเงาตัดตัวหัวข้อความ)
+ *   กำหนดเป็นค่าตายตัวแทน เพราะเนื้อหายาวที่สุดคือ 100% ไม่ใช่ปุ่ม
+ */
 .rulpick {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   left: 0;
-  z-index: 30;
-  min-width: 100%;
-  display: grid;
-  gap: 2px;
-  padding: 4px;
+  z-index: 40;
+  width: 186px;
+  padding: 5px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgb(26 21 35 / 16%);
+  animation: rulpick-in 0.12s ease-out;
+}
+@keyframes rulpick-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.rulpick__title {
+  margin: 0;
+  padding: 5px 9px 6px;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 .rulpick__opt {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 7px 10px;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 9px;
   border: none;
-  border-radius: 7px;
+  border-radius: 8px;
   background: transparent;
   color: var(--ink);
-  font-size: 13px;
+  font: inherit;
+  font-size: 13.5px;
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
@@ -890,18 +910,31 @@ tbody tr:hover {
   background: var(--brand-soft);
   color: var(--brand-dark);
 }
-/** ตัวเลือก "ซ่อนไม้บรรทัด" — คั่นด้วยเส้นเพราะเป็นคนละอย่างกับการเลือกหน่วย */
-.rulpick__opt--off {
-  border-top: 1px solid var(--line);
-  border-radius: 0 0 7px 7px;
-  margin-top: 2px;
-  padding-top: 9px;
-  color: var(--ink-2);
+/** หน่วยที่ใช้อยู่ — ต้องเด่นกว่าตัวอื่น ไม่ใช่พึ่งสีพื้นหลังอย่างเดียว */
+.rulpick__opt[aria-checked='true'] {
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  font-weight: 600;
 }
 .rulpick__tick {
+  margin-left: auto;
   color: var(--brand);
-  font-weight: 700;
+  flex: 0 0 auto;
 }
+.rulpick__sep {
+  height: 1px;
+  margin: 5px 3px;
+  background: var(--line);
+}
+/** ตัวเลือก "ซ่อนไม้บรรทัด" — คนละอย่างกับการเลือกหน่วย จึงคั่นด้วยเส้น */
+.rulpick__opt--off {
+  color: var(--ink-2);
+}
+.rulpick__opt--off:hover {
+  background: var(--err-bg);
+  color: var(--err);
+}
+
 
 .rulbtn[aria-pressed='true'] {
   background: var(--brand-soft);

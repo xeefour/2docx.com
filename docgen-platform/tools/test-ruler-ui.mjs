@@ -312,6 +312,35 @@ console.log('\n[6] สลับหน่วย ซม. ↔ นิ้ว')
   check('เปิดเมนูหน่วยได้', await clickTestId('ruler-toggle'))
   const sawIn = await waitFor("!!document.querySelector('[data-testid=\"ruler-unit-in\"]')", 5000)
   check('เมนูหน่วยโผล่ตอนไม้บรรทัดเปิดอยู่', sawIn)
+  // ตอนนี้เมนูมีตัวเลือก "ซ่อนไม้บรรทัด" เพิ่มด้วย — ข้อความยาวที่สุดในเมนู
+  // เคยล้นออกนอกกล่องตอนกำหนด `min-width: 100%` จึงต้องมีภาพกัน
+  // ต้องรอ animation fade-in (120ms) ก่อนถ่าย ไม่งั้นภาพจะออกมาโปร่งใส
+  // แล้วเข้าใจผิดว่าเมนูโปร่งใสให้เลขบนไม้บรรทัดทะลุ
+  await sleep(400)
+  await shot('00b-unit-menu-on.png')
+  const hideW = await evaluate(`(() => {
+    const box = document.querySelector('.rulpick')
+    const off = document.querySelector('[data-testid="ruler-hide"]')
+    if (!box || !off) return null
+    const b = box.getBoundingClientRect()
+    const o = off.getBoundingClientRect()
+    return { over: Math.round(o.right - b.right), boxW: Math.round(b.width) }
+  })()`)
+  check('ข้อความ "ซ่อนไม้บรรทัด" ไม่ล้นออกกล่อง', hideW && hideW.over <= 0, hideW ? `ล้น ${hideW.over}px · กล่อง ${hideW.boxW}px` : 'ไม่พบเมนู')
+  /**
+   * ⚠️ เมนูต้อง**ทึบ**ไม้บรรทัด ไม่ใช่โปร่งใสให้เลขทะลุ
+   *    เคยเห็นเลข 15–20 โผล่ผ่านกล่องเมนู — เมนูกับไม้บรรทัดอยู่คนละชั้นวาด
+   *    จึงต้องพิสูจน์ด้วย `elementFromPoint` ว่าจุดที่ทับเมนูคือเมนูจริง
+   *    (ดูภาพอย่างเดียวอาจเข้าใจผิดว่าเป็นเงาหรือ antialiasing)
+   */
+  const topAt = await evaluate(`(() => {
+    const box = document.querySelector('.rulpick')
+    if (!box) return null
+    const r = box.getBoundingClientRect()
+    const hit = document.elementFromPoint(r.x + r.width / 2, r.y + 4)
+    return { tag: hit?.tagName ?? 'null', cls: hit?.getAttribute('class') ?? '', inMenu: !!hit && box.contains(hit) }
+  })()`)
+  check('เมนูทึบไม้บรรทัด (เลขบนไม้บรรทัดต้องไม่ทะลุกล่อง)', topAt?.inMenu === true, topAt ? `${topAt.tag}.${topAt.cls}` : 'ไม่พบเมนู')
   check('เลือกหน่วย นิ้ว ได้', sawIn && (await clickTestId('ruler-unit-in')))
   await sleep(600)
   const after = await geom()

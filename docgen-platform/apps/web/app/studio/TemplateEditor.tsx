@@ -353,14 +353,14 @@ export default function TemplateEditor({
       </div>
 
       {err && (
-        <div className="pill err" style={{ padding: '12px 16px', marginBottom: 12, display: 'block' }}>
+        <div className="pill err pill--msg" style={{ padding: '12px 16px', marginBottom: 12 }}>
           {err}
         </div>
       )}
       {errorCount > 0 && (
         <div
-          className="pill warn"
-          style={{ padding: '10px 14px', marginBottom: 12, display: 'block' }}
+          className="pill warn pill--msg"
+          style={{ padding: '10px 14px', marginBottom: 12 }}
           onClick={() => setShowErrors(true)}
         >
           ยังกรอกไม่ครบ {errorCount} ช่อง — กดเพื่อดูรายละเอียด (กดเรนเดอร์จะพาไปแท็บฟอร์มให้)

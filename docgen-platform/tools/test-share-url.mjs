@@ -295,7 +295,86 @@ check(
 )
 await shot('04-back-private.png')
 
+// ── 6. กล่องเตือน "จะแทนไฟล์": มุมต้องไม่โค้งจนเป็นถุง และต้องไม่ล้นการ์ด ──
+console.log('\n[6] กล่องเตือนการอัปโหลดแทน — มุมโค้งและการล้นการ์ด')
+/**
+ * ผู้ใช้รายงาน: *"มันโค้งมากไปไหม Rounded Corners"*
+ *
+ * กล่องนี้ใช้ `className="pill warn"` ซึ่งเป็นป้ายเล็ก ๆ บรรทัดเดียว
+ * มี 2 ค่าที่เอามาใช้กับกล่องข้อความไม่ได้ และเจอทั้งคู่พร้อมกัน:
+ *   · `border-radius: 999px` → กล่องสูงหลายบรรทัดเป็นรูปครึ่งวงกลม
+ *   · `white-space: nowrap` → ข้อความยาวไม่ตัดบรรทัด ล้นออกนอกการ์ด
+ *     (เห็นชัดตอนจอ 579px ในภาพที่ผู้ใช้ส่งมา — ขอบขวาของกล่องโดนการ์ดซ้ำน)
+ *
+ * ⚠️ ต้องวัดตอนจอแคบจริง ที่ 1600px กล่องกว้างพอ จะได้ผ่านมั่วตลอด
+ */
+/**
+ * ใส่ไฟล์ปลอมเข้า `<input type="file">` ที่ซ่อนอยู่
+ * ⚠️ `input.files` ต้องผูกผ่าน `DataTransfer` แล้วยิง event `change` เอง
+ *    เพราะ React ผูก onChange ผ่านระบบ delegation ของมัน
+ *    การกำหนด `.files` อย่างเดียวจะไม่ทำให้ React รู้จักการเปลี่ยน
+ */
+const put = await evaluate(`(() => {
+  const input = document.querySelector('[data-testid="template-file"]')
+  if (!input) return { ok: false, why: 'ไม่พบช่องเลือกไฟล์ (canEdit อาจเป็น false)' }
+  const dt = new DataTransfer()
+  dt.items.add(new File([new Uint8Array([1, 2, 3])], 'ทดสอบ-มุมโค้ง.docx', {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  }))
+  input.files = dt.files
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+  return { ok: true, count: input.files.length }
+})()`)
+check('ใส่ไฟล์ปลอมเข้าช่องได้', !!put?.ok, put?.why ?? `${put?.count} ไฟล์`)
+
+await send('Emulation.setDeviceMetricsOverride', { width: 579, height: 539, deviceScaleFactor: 1, mobile: false })
+await sleep(800)
+const warnBox = await waitFor(
+  `(() => {
+    const el = [...document.querySelectorAll('.pill--msg')].find((x) => /จะแทนไฟล์/.test(x.textContent))
+    if (!el) return false
+    el.scrollIntoView({ block: 'center' })
+    return true
+  })()`,
+  10000,
+)
+check('กล่องเตือนแสดงหลังเลือกไฟล์', warnBox)
+if (warnBox) {
+  await sleep(300)
+  const geo = await evaluate(`(() => {
+    const el = [...document.querySelectorAll('.pill--msg')].find((x) => /จะแทนไฟล์/.test(x.textContent))
+    const card = el.closest('.card')
+    const cs = getComputedStyle(el)
+    const r = el.getBoundingClientRect()
+    const c = card ? card.getBoundingClientRect() : null
+    return {
+      radius: cs.borderRadius,
+      /** เกิน 40px = ยังเป็นรูปครึ่งวงกลม (999px) */
+      round: Math.max(...cs.borderRadius.split(' ').map((v) => parseFloat(v) || 0)),
+      whiteSpace: cs.whiteSpace,
+      /** ข้อความล้นกรอบตัวเอง */
+      selfOverflow: el.scrollWidth - el.clientWidth,
+      /** ล้นออกนอกการ์ด */
+      pastCard: c ? Math.round(r.right - c.right) : null,
+      lines: Math.round(r.height / parseFloat(cs.lineHeight || 20)),
+    }
+  })()`)
+  check(
+    'มุมไม่โค้งเป็นรูปครึ่งวงกลม',
+    geo.round <= 40,
+    `border-radius ${geo.radius} (เดิม 999px)`,
+  )
+  check('ข้อความตัดบรรทัดได้', geo.whiteSpace === 'normal', `white-space: ${geo.whiteSpace}`)
+  check('ข้อความไม่ล้นกล่องตัวเอง', geo.selfOverflow === 0, `ล้น ${geo.selfOverflow}px`)
+  check(
+    'กล่องไม่ล้นออกนอกการ์ด',
+    geo.pastCard !== null && geo.pastCard <= 0,
+    `ขอบขวาล้นการ์ด ${geo.pastCard}px · สูง ${geo.lines} บรรทัด`,
+  )
+  await shot('05-warn-box.png')
+}
 // ── เก็บกวาด ──────────────────────────────────────────────────
+await send('Emulation.setDeviceMetricsOverride', { width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false })
 await send('Browser.close').catch(() => {})
 chrome.kill()
 await cleanup('ลบแม่แบบชั่วคราว + สิทธิ์')

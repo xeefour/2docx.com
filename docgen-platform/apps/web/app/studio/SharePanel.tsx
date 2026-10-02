@@ -198,8 +198,8 @@ export default function SharePanel({
 
               {pendingFile && (
                 <div
-                  className="pill warn"
-                  style={{ padding: '10px 12px', display: 'block', lineHeight: 1.5 }}
+                  className="pill warn pill--msg"
+                  style={{ padding: '10px 12px', lineHeight: 1.5 }}
                 >
                   <div style={{ marginBottom: 8 }}>
                     จะแทนไฟล์ <b>{pendingFile.name}</b> (

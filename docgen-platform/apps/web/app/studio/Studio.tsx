@@ -590,7 +590,7 @@ function Banner({
 }) {
   return (
     <div
-      className={`pill ${tone}`}
+      className={`pill ${tone} pill--msg`}
       style={{
         display: 'flex',
         gap: 10,

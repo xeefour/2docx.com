@@ -551,7 +551,7 @@ export default function DocumentPreview({
 
   if (error) {
     return (
-      <div className="pill err" style={{ padding: '12px 16px', margin: 16 }}>
+      <div className="pill err pill--msg" style={{ padding: '12px 16px', margin: 16 }}>
         เปิดเอกสารไม่สำเร็จ: {error}
       </div>
     )

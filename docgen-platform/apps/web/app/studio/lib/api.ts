@@ -45,6 +45,23 @@ const RETRY_DELAYS = [400, 1100, 2400]
  */
 const isTransientStatus = (status: number): boolean => status === 502 || status === 503 || status === 504
 
+/**
+ * รอนานที่สุดก่อนลองใหม่เมื่อโดน rate limit
+ *
+ * ⚠️ ต้องจำกัดไว้ ไม่งั้นผู้ใช้จะนั่งมองหน้าค้างเกือบนาที
+ *    เซิร์ฟเวอร์บอกมาว่าเหลืออีกกี่วินาที (`Retry-After` / `X-RateLimit-Reset`)
+ *    ถ้านานกว่านี้แปลว่ารอครั้งเดียวไม่พอ → ต้องบอกผู้ใช้ตรง ๆ ว่ารออีกกี่วินาที
+ */
+const RATE_LIMIT_MAX_WAIT_MS = 12_000
+
+/** อ่านจำนวนวินาทีที่เซิร์ฟเวอร์บอกให้รอ (คิดเป็น ms) — ไม่มี header คืน null */
+function retryAfterMs(res: Response): number | null {
+  const raw = res.headers.get('retry-after') ?? res.headers.get('x-ratelimit-reset')
+  if (raw === null) return null
+  const n = Number(raw)
+  return Number.isFinite(n) ? Math.max(0, n * 1000) : null
+}
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   /**
    * ⚠️ อย่าตั้ง content-type เมื่อไม่มี body
@@ -57,6 +74,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
   let attempt = 0
   let lastError: ApiError | null = null
+  /** จำนวนครั้งที่ยอมรอเพื่อลองใหม่หลังโดน 429 — แยกจาก retry ของ transient */
+  let rateLimitWaits = 0
 
   // วนจนกว่าจะสำเร็จ หรือ ลองครบตาม RETRY_DELAYS
   for (;;) {
@@ -105,6 +124,35 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
       body = text ? JSON.parse(text) : null
     } catch {
       parseFailed = true
+    }
+
+    /**
+     * ⚠️ 429 = คิวของเราแน่นชั่วคราว ไม่ใช่ของที่พัง
+     *
+     *   เคยเจอว่า: ผู้ใช้กดบุ๊กมาร์กแล้วขึ้น "ยิงบ่อยเกินไป" แล้วกดซ้ำไม่ได้เลย
+     *   เพราะ `isTransientStatus` ครอบแค่ 502/503/504 → 429 หลุดไปโดนไม่รอ
+     *   ทั้งที่เซิร์ฟเวอร์ส่ง `Retry-After` มาบอกว่ารอได้พอดี
+     *
+     *   ไม่งั้นไม่ต้องแก้ที่ `isTransientStatus` เพราะนั่นหมายถึง
+     *   "เซิร์ฟเวอร์ยังไม่ได้ประมวลผลคำขอนี้" ซึ่ง 429 ไม่ใช่
+     *   (429 ถูกปฏิเสธก่อนถึง handler — ทำซ้ำแล้วไม่มีผลข้างเคียง)
+     */
+    if (res.status === 429) {
+      const wait = retryAfterMs(res)
+      const msg = body?.message ?? 'ยิงถี่เกินไป'
+      if (rateLimitWaits < 1 && wait !== null && wait <= RATE_LIMIT_MAX_WAIT_MS) {
+        rateLimitWaits++
+        await sleep(wait + 300)
+        continue
+      }
+      const secs = wait === null ? null : Math.ceil(wait / 1000)
+      throw new ApiError(
+        429,
+        body?.code ?? 'RATE_LIMITED',
+        secs === null
+          ? `${msg} — ลองใหม่อีกครั้งในอีกสักครู่`
+          : `${msg}\nโควตาจะเต็มใหม่ใน ${secs} วินาที — กดซ้ำได้เลย ไม่ต้องรีเฟรช`,
+      )
     }
 
     // ตอบไม่ใช่ JSON หรือเป็นสถานะ gateway → ลองใหม่ได้อย่างปลอดภัย

@@ -156,7 +156,7 @@ const geom = () =>
         v: t.textContent,
         x: t.getBoundingClientRect().x + t.getBoundingClientRect().width / 2,
       })),
-      unit: document.querySelector('[data-testid="ruler-unit"]')?.textContent?.trim(),
+      unit: document.querySelector('[data-testid="ruler-toggle"]')?.dataset.unit,
       on: document.querySelector('[data-testid="ruler-toggle"]')?.getAttribute('aria-pressed'),
     }
   })()`)
@@ -210,14 +210,35 @@ if (!rendered) {
 // ── 1–2. ปุ่มสลับ + เปิดไม้บรรทัด ──────────────────────────────────
 console.log('\n[1] ปุ่มสลับไม้บรรทัด')
 check('มีปุ่มสลับไม้บรรทัด', await evaluate("!!document.querySelector('[data-testid=\"ruler-toggle\"]')"))
-check('มีปุ่มหน่วย', await evaluate("!!document.querySelector('[data-testid=\"ruler-unit\"]')"))
-check('เริ่มต้นเป็นซม.', (await evaluate("document.querySelector('[data-testid=\"ruler-unit\"]').textContent.trim()")) === 'ซม.')
+/**
+ * ⚠️ ปุ่มหน่วย "ซม./นิ้ว" ถูก**ซ่อนไปแล้ว** (ผู้ใช้สั่ง)
+ *   หน่วยเปลี่ยนผ่าน dropdown ที่เปิดจากปุ่มไม้บรรทัดแทน
+ *   อ่านหน่วยปัจจุบันจาก `data-unit` ของปุ่มไม้บรรทัด (แหล่งจริงมีที่เดียว)
+ */
+check('ไม่มีปุ่มหน่วยแยกในแถบเครื่องมือแล้ว', !(await evaluate("!!document.querySelector('[data-testid=\"ruler-unit\"]')")))
+const unit0 = await evaluate("document.querySelector('[data-testid=\"ruler-toggle\"]')?.dataset.unit")
+check('เริ่มต้นเป็นหน่วย ซม.', unit0 === 'cm', unit0)
 check('เริ่มต้นซ่อนอยู่ (ไม่บังหน้าเอกสารทันที)', !(await evaluate("!!document.querySelector('.rul--h')")))
 
 console.log('\n[2] เปิดไม้บรรทัด')
-check('กดปุ่มได้', await clickTestId('ruler-toggle'))
+/**
+ * ⚠️ flow ใหม่: กดปุ่มไม้บรรทัด**ยังไม่โชว์ไม้บรรทัดทันที**
+ *    ต้องเลือกหน่วยก่อน (ผู้ใช้สั่ง: *"คลิกที่ ซม. กับ นิ้ว แล้วค่อยแสดง ruler"*)
+ *    ถ้าโชว์ทันที ผู้ใช้จะได้หน่วยค่าเริ่มต้นโดยไม่ได้ตั้งใจเลือก
+ *    เทสต์ข้อ "ยังไม่โชว์" นี้คือกันไม่ให้ใครไปทำให้กดแล้วขึ้นทันทีทีหลัง
+ */
+check('กดปุ่มไม้บรรทัดได้', await clickTestId('ruler-toggle'))
+check('กดแล้วมีเมนูหน่วยโผล่', await waitFor("!!document.querySelector('.rulpick')", 5000))
+await shot('00-unit-menu.png')
+const unitOpts = await evaluate(
+  "[...document.querySelectorAll('.rulpick__opt')].map((b) => b.dataset.testid ?? '').filter((s) => s.startsWith('ruler-unit-'))",
+)
+check('เมนูมีให้เลือก ซม. และ นิ้ว', unitOpts.length === 2, unitOpts.join(' | '))
+check('ยังไม่โชว์ไม้บรรทัดจนกว่าจะเลือกหน่วย', !(await evaluate("!!document.querySelector('.rul--h')")))
+check('เลือกหน่วย ซม. ได้', await clickTestId('ruler-unit-cm'))
 const hShown = await waitFor("!!document.querySelector('.rul--h')", 8000)
-check('ไม้บรรทัดบนปรากฏ', hShown)
+check('ไม้บรรทัดบนปรากฏหลังเลือกหน่วย', hShown)
+
 if (!hShown) {
   // ระบุให้ชัดว่าขาดอะไร — ไม่งั้นจะเดาว่าเป็น state, effect หรือเงื่อนไข render
   console.log('    stage:', await evaluate(`(() => {
@@ -288,10 +309,14 @@ console.log('\n[5] ตัวเลขบนไม้บรรทัด')
 console.log('\n[6] สลับหน่วย ซม. ↔ นิ้ว')
 {
   const before = await geom()
-  check('กดสลับหน่วยได้', await clickTestId('ruler-unit'))
+  check('เปิดเมนูหน่วยได้', await clickTestId('ruler-toggle'))
+  const sawIn = await waitFor("!!document.querySelector('[data-testid=\"ruler-unit-in\"]')", 5000)
+  check('เมนูหน่วยโผล่ตอนไม้บรรทัดเปิดอยู่', sawIn)
+  check('เลือกหน่วย นิ้ว ได้', sawIn && (await clickTestId('ruler-unit-in')))
   await sleep(600)
   const after = await geom()
-  check('ปุ่มเปลี่ยนเป็น "นิ้ว"', after.unit === 'นิ้ว', after.unit)
+  check('หน่วยเปลี่ยนเป็น นิ้ว', after.unit === 'in', after.unit)
+
   check('ตัวเลขเปลี่ยนไปจริง', after.nums.at(-1)?.v !== before.nums.at(-1)?.v, `${before.nums.at(-1)?.v} → ${after.nums.at(-1)?.v}`)
   const lastIn = Number(after.nums.at(-1).v)
   // A4 กว้าง 8.27 นิ้ว — ขั้นปกติคือ 1 นิ้ว จึงได้เลขสูงสุด 8
@@ -299,7 +324,9 @@ console.log('\n[6] สลับหน่วย ซม. ↔ นิ้ว')
   check('ยังขึ้นต้นด้วย 0', after.nums[0]?.v === '0')
   check('ยังตรงขอบกระดาษหลังสลับหน่วย', Math.abs(after.rh.x - after.page.x) <= 1 && Math.abs(after.rh.w - after.page.w) <= 1)
   await shot('02-inch.png')
-  await clickTestId('ruler-unit') // กลับเป็น ซม.
+  await clickTestId('ruler-toggle') // เปิดเมนูเพื่อกลับเป็น ซม.
+  await waitFor("!!document.querySelector('[data-testid=\"ruler-unit-cm\"]')", 5000)
+  await clickTestId('ruler-unit-cm')
   await sleep(500)
 }
 
@@ -348,7 +375,7 @@ console.log('\n[7] จำค่าไว้ข้ามการรีเฟร�
       rulBack,
       rulBack ? '' : 'รอ 10 วินาทีแล้วยังไม่ปรากฏ',
     )
-    check('หน่วยยังเป็น ซม. ตามที่เลือกไว้', (await evaluate("document.querySelector('[data-testid=\"ruler-unit\"]')?.textContent?.trim()")) === 'ซม.')
+    check('หน่วยยังเป็น ซม. ตามที่เลือกไว้', (await evaluate("document.querySelector('[data-testid=\"ruler-toggle\"]')?.dataset.unit")) === 'cm', await evaluate("document.querySelector('[data-testid=\"ruler-toggle\"]')?.dataset.unit"))
   }
 }
 
@@ -358,14 +385,20 @@ console.log('\n[8] ซ่อนไม้บรรทัด')
   // ถ้ารีเฟรชแล้วไม้บรรทัดยังไม่กลับมา ให้กดเปิดให้ครบก่อนจะได้วัดเทียบก่อน–หลัง
   if (!(await evaluate("!!document.querySelector('.rul--h')"))) {
     const clicked = await clickTestId('ruler-toggle')
-    const shown = clicked ? await waitFor("!!document.querySelector('.rul--h')", 10000) : false
+    const sawCm = clicked && (await waitFor("!!document.querySelector('[data-testid=\"ruler-unit-cm\"]')", 5000))
+    if (sawCm) await clickTestId('ruler-unit-cm')
+    const shown = sawCm ? await waitFor("!!document.querySelector('.rul--h')", 10000) : false
     check('เปิดไม้บรรทัดกลับได้ก่อนวัด', shown, shown ? '' : 'กดแล้วรอ 10 วินาทียังไม่ปรากฏ')
   }
   const before = await geom()
   if (!before) {
     check('วัดไม้บรรทัดก่อนซ่อนได้', false, 'ยังไม่มี .rul--h — ข้าส่วนที่วัดเทียบไม่ได้')
   }
-  check('กดซ่อนได้', await clickTestId('ruler-toggle'))
+  // ซ่อนผ่านตัวเลือกในเมนูหน่วย (ปุ่มไม้บรรทัดตอนนี้เปิดเมนู ไม่ได้ซ่อนตรง ๆ)
+  check('เปิดเมนูได้', await clickTestId('ruler-toggle'))
+  const sawHide = await waitFor("!!document.querySelector('[data-testid=\"ruler-hide\"]')", 5000)
+  check('เมนูมีตัวเลือก "ซ่อนไม้บรรทัด" ตอนที่มันเปิดอยู่', sawHide)
+  check('กดซ่อนได้', sawHide && (await clickTestId('ruler-hide')))
   await sleep(800)
   check('ไม้บรรทัดหายไป', !(await evaluate("!!document.querySelector('.rul--h')")))
   const after = await evaluate(`(() => {
@@ -396,6 +429,8 @@ console.log('\n[8] ซ่อนไม้บรรทัด')
 console.log('\n[9] ซูมแล้วไม้บรรทัดยังตรงขอบกระดาษ')
 {
   await clickTestId('ruler-toggle')
+  await waitFor("!!document.querySelector('[data-testid=\"ruler-unit-cm\"]')", 5000)
+  await clickTestId('ruler-unit-cm')
   await sleep(500)
   await waitFor("!!document.querySelector('.rul--h')", 10000)
 

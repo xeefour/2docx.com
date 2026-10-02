@@ -503,7 +503,15 @@ console.log('\n[3b] ความสูงพื้นที่รูป — ต�
 }
 
 console.log('\n[4] เปิดไม้บรรทัด — ต้องไม่ล้นแนวนอน (ไม้บรรทัดกินความกว้างไป 18px)')
+/**
+ * ⚠️ flow เปิดไม้บรรทัดเปลี่ยนไป: กดปุ่มแล้ว**ยังไม่ขึ้น** ต้องเลือกหน่วยก่อน
+ *    (ผู้ใช้สั่ง: *"เวลาคลิกที่ ruler จะมี dropdown ให้เลือก ซม. กับ นิ้ว
+ *    คลิกที่ ซม. กับ นิ้ว แล้วค่อยแสดง ruler"*)
+ *    ถ้ากดปุ่มอย่างเดียว ไม้บรรทัดจะไม่ขึ้น และข้อ "กระดาษย่อลง" จะตก
+ */
 await clickSelector('[data-testid="ruler-toggle"]')
+await waitFor("!!document.querySelector('[data-testid=\"ruler-unit-cm\"]')", 5000)
+await clickSelector('[data-testid="ruler-unit-cm"]')
 await sleep(900)
 const mRuler = await measure()
 if (mRuler) {
@@ -520,7 +528,10 @@ if (mRuler) {
   )
 }
 await shot('02-ruler-on.png')
+// ซ่อนไม้บรรทัดผ่านตัวเลือกในเมนูหน่วย (ปุ่มไม้บรรทัดตอนนี้เปิดเมนู ไม่ได้ซ่อนตรง ๆ)
 await clickSelector('[data-testid="ruler-toggle"]')
+await waitFor("!!document.querySelector('[data-testid=\"ruler-hide\"]')", 5000)
+await clickSelector('[data-testid="ruler-hide"]')
 await sleep(900)
 
 console.log('\n[4] กด "พอดีหน้า" — ต้องเห็นทั้งหน้า ไม่มี scrollbar แนวตั้ง')

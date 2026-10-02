@@ -106,6 +106,14 @@ export default function DocumentPreview({
   const [unit, setUnit] = useState<RulerUnit>(() =>
     readStored(RULER_UNIT_KEY, 'cm') === 'in' ? 'in' : 'cm',
   )
+  /**
+   * เมนูเลือกหน่วยเปิดอยู่ไหม
+   *
+   * ⚠️ ปุ่ม "ซม./นิ้ว" เดิมถูกซ่อนไปแล้ว (ผู้ใช้สั่ง) — หน่วยเปลี่ยนผ่านเมนูนี้แทน
+   *    ตอนนี้ปุ่มไม้บรรทัดยังเป็นตัวเปิด/ปิดตามเดิม แต่**กดครั้งแรกจะเปิดเมนูนี้ก่อน**
+   *    ไม่ใช่โชว์ไม้บรรทัดทันที เพื่อไม่ให้ผู้ใช้ได้หน่วยค่าเริ่มต้นโดยไม่ได้เลือก
+   */
+  const [unitMenu, setUnitMenu] = useState(false)
   /** ขนาดหน้ากระดาษเป็น pt — มาจาก PDF ไม่เดาเอง */
   const [pagePt, setPagePt] = useState<{ widthPt: number; heightPt: number } | null>(null)
   /** ขนาดจริงบนจอของ canvas (px) — ไม้บรรทัดต้องกว้างเท่านี้เป๊ะ */
@@ -114,6 +122,8 @@ export default function DocumentPreview({
   const mainRef = useRef<HTMLCanvasElement>(null)
   const stripRef = useRef<HTMLDivElement>(null)
   const pageRef = useRef<HTMLDivElement>(null)
+  /** ครอบปุ่มไม้บรรทัด + เมนูหน่วย — ใช้ตั้งตำแหน่งเมนูและจับการคลิกข้างนอก */
+  const rulWrapRef = useRef<HTMLDivElement>(null)
     /**
    * พื้นที่ว่างที่ใช้คำนวณสเกลกระดาษ
    *
@@ -303,6 +313,24 @@ export default function DocumentPreview({
     //    (ผลคือ `stage` ค้างที่ 0 → ไม้บรรทัดไม่โผล่)
   }, [pdf, loading])
 
+  /* ── ปิดเมนูหน่วยเมื่อคลิกที่อื่น / กด Esc ─────────────────────────── */
+  useEffect(() => {
+    if (!unitMenu) return
+    const onDown = (e: MouseEvent) => {
+      if (!rulWrapRef.current?.contains(e.target as Node)) setUnitMenu(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setUnitMenu(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [unitMenu])
+
+
   /**
    * ── ติดตามขนาดกล่องพรีวิว เพื่อให้กระดาษพอดีเสมอ ──
    *
@@ -424,27 +452,44 @@ export default function DocumentPreview({
       return i === -1 ? 1 : next
     })
 
-  const toggleRuler = () =>
-    setRuler((v) => {
-      const next = !v
-      try {
-        window.localStorage.setItem(RULER_KEY, next ? '1' : '0')
-      } catch {
-        /* โหมดส่วนตัว — ใช้แค่รอบนี้ก็พอ */
-      }
-      return next
-    })
+  const setRulerOn = () => {
+    setRuler(true)
+    try {
+      window.localStorage.setItem(RULER_KEY, '1')
+    } catch {
+      /* โหมดส่วนตัว — ใช้แค่รอบนี้ก็พอ */
+    }
+  }
 
-  const toggleUnit = () =>
-    setUnit((u) => {
-      const next: RulerUnit = u === 'cm' ? 'in' : 'cm'
-      try {
-        window.localStorage.setItem(RULER_UNIT_KEY, next)
-      } catch {
-        /* เหมือนข้างบน */
-      }
-      return next
-    })
+  const setRulerOff = () => {
+    setRuler(false)
+    setUnitMenu(false)
+    try {
+      window.localStorage.setItem(RULER_KEY, '0')
+    } catch {
+      /* เหมือนข้างบน */
+    }
+  }
+
+  /**
+   * เลือกหน่วยแล้ว**แสดงไม้บรรทัดทันที**
+   *
+   * ⚠️ กดปุ่มไม้บรรทัดครั้งแรกต้อง**ยังไม่โชว์ไม้บรรทัด**
+   *    แต่เปิดเมนูให้เลือกหน่วยก่อน (ผู้ใช้สั่ง: *"เวลาคลิกที่ ruler จะมี dropdown
+   *    ให้เลือก ซม. กับ นิ้ว คลิกที่ ซม. กับ นิ้ว แล้วค่อยแสดง ruler"*)
+   *    ถ้าโชว์ทันที ผู้ใช้จะได้หน่วยค่าเริ่มต้นโดยไม่ได้ตั้งใจเลือก
+   */
+  const chooseUnit = (id: RulerUnit) => {
+    setUnit(id)
+    setRulerOn()
+    setUnitMenu(false)
+    try {
+      window.localStorage.setItem(RULER_UNIT_KEY, id)
+    } catch {
+      /* เหมือนข้างบน */
+    }
+  }
+
 
   /**
    * ── พิมพ์เอกสารทุกหน้าเป็นรูป ──
@@ -593,36 +638,73 @@ export default function DocumentPreview({
           </button>
 
           {/*
-           * ── ไม้บรรทัด (สลับหน่ายได้ เหมือน Word) ──
-           * ปุ่มหน่วยกดซ้ำเพื่อสลับ ซม. ↔ นิ้ว
-           * หน่วยเป็นนิ้วแต่แสดงเป็น " โดยตรง ไม่ต้องแปลงค่าในปุ่ม
+           * ── ไม้บรรทัด: กดแล้วถามหน่วยก่อน แล้วค่อยแสดง ──
+           *
+           * ผู้ใช้สั่ง: *"ซ่อนไว้ [ปุ่ม ซม.] เวลาคลิกที่ ruler จะมี dropdown ให้เลือก
+           * ซม. กับ นิ้ว คลิกที่ ซม. กับ นิ้ว แล้วค่อยแสดง ruler"*
+           *
+           * ⚠️ ปุ่ม "ซม./นิ้ว" เดิมกดซ้ำเพื่อสลับหน่วย ซึ่งมองไม่ออกว่ากดแล้วได้อะไร
+           *    แถบเครื่องมือก็ยาวขึ้นอีก ตอนนี้หน่วยเป็น**ตัวเลือกในเมนู**
+           *    เห็นชัดว่าตอนนี้ใช้หน่วยอะไร (เครื่องหมาย ✓) และเลือกใหม่ได้โดยไม่ต้องเดา
+           *
+           * ⚠️ ต้องมีทาง**ซ่อนไม้บรรทัด** เหมือนเดิม ไม่งั้นเปิดแล้วปิดไม่ได้
+           *    เลยใส่ตัวเลือก "ซ่อนไม้บรรทัด" ในเมนู ตอนที่มันเปิดอยู่เท่านั้น
            */}
-          <button
-            className="ghost rulbtn"
-            onClick={toggleRuler}
-            aria-pressed={ruler}
-            title={ruler ? 'ซ่อนไม้บรรทัด' : 'แสดงไม้บรรทัด'}
-            data-testid="ruler-toggle"
-          >
-            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
-              <rect x="2" y="7" width="20" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
-              <path
-                d="M7 7v4M11 7v6M15 7v4M19 7v6"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              />
-            </svg>
-            <span className="rulbtn__t">ไม้บรรทัด</span>
-          </button>
-          <button
-            className="ghost rulbtn"
-            onClick={toggleUnit}
-            title="สลับหน่วย เซนติเมตร ↔ นิ้ว"
-            data-testid="ruler-unit"
-          >
-            {UNITS.find((u) => u.id === unit)?.label}
-          </button>
+          <div className="rulwrap" ref={rulWrapRef}>
+            <button
+              className="ghost rulbtn"
+              onClick={() => setUnitMenu((v) => !v)}
+              aria-pressed={ruler}
+              aria-haspopup="menu"
+              aria-expanded={unitMenu}
+              title={ruler ? 'เปลี่ยนหน่วยหรือซ่อนไม้บรรทัด' : 'เลือกหน่วยเพื่อแสดงไม้บรรทัด'}
+              data-testid="ruler-toggle"
+              data-unit={unit}
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+                <rect x="2" y="7" width="20" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                <path
+                  d="M7 7v4M11 7v6M15 7v4M19 7v6"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span className="rulbtn__t">ไม้บรรทัด</span>
+            </button>
+
+            {unitMenu && (
+              <div className="rulpick" role="menu" aria-label="หน่วยของไม้บรรทัด">
+                {UNITS.map((u) => (
+                  <button
+                    key={u.id}
+                    className="rulpick__opt"
+                    role="menuitemradio"
+                    aria-checked={unit === u.id}
+                    data-testid={`ruler-unit-${u.id}`}
+                    onClick={() => chooseUnit(u.id)}
+                  >
+                    {u.label}
+                    {unit === u.id && (
+                      <span className="rulpick__tick" aria-hidden="true">
+                        ✓
+                      </span>
+                    )}
+                  </button>
+                ))}
+                {ruler && (
+                  <button
+                    className="rulpick__opt rulpick__opt--off"
+                    data-testid="ruler-hide"
+                    onClick={setRulerOff}
+                  >
+                    ซ่อนไม้บรรทัด
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
 
           {/*
            * ── พิมพ์รูปเอกสาร ──

@@ -90,9 +90,15 @@ export default function FormFields({
         <fieldset className="fieldset__group" key={g.group} style={{ margin: 0 }}>
           <legend className="fieldset__legend">{g.group}</legend>
           <div className="fieldset">
-            {g.fields.map((f) => (
+            {g.fields.map((f, i) => (
               <Field
-                key={f.key}
+                /**
+                 * ⚠️ `key` ต้องนิ่ง ห้ามใช้ `f.key`
+                 *    ช่องใหม่จะมี `key` ว่างหลายช่องพร้อมกัน → key ซ้ำ
+                 *    และถ้าใช้ `f.key` การแก้ชื่อช่องจะทำให้ React ถอด/ใส่ใหม่ทั้งตัว
+                 *    → ช่องที่กำลังพิมพ์หลุดโฟกัส (IME ไทยพักด้วย)
+                 */
+                key={`${g.group}-${i}`}
                 field={f}
                 value={getPath(data, f.key)}
                 error={errors[f.key]}

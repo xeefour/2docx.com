@@ -38,6 +38,148 @@ const emptyField = (order: number): FieldDef => ({
   ai: { enabled: true },
 })
 
+/**
+ * แปลงข้อความหลายบรรทัดเป็นรายการตัวเลือก — รูปแบบ `ค่า|ป้าย` บรรทัดละหนึ่งค่า
+ *
+ * - ข้ามบรรทัดว่าง
+ * - ไม่มี `|` → ใช้ค่าเดียวกันทั้งค่าและป้าย
+ * - `|` เกินหนึ่งตัว → เอาส่วนที่เหลือไปรวมเป็นป้าย (ป้ายหนังสือราชการมี `|` บ่อย)
+ */
+function parseOptionLines(text: string): NonNullable<FieldDef['options']> {
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [value, ...rest] = line.split('|')
+      return { value, label: rest.join('|') || value }
+    })
+}
+
+/**
+ * ตัวแก้ไขตัวเลือกของช่อง `select` / `multiselect`
+ *
+ * ⚠️ กล่อง "เพิ่มหลายบรรทัดพร้อมกัน" ต้องเป็น **uncontrolled**
+ *
+ *    ถ้าเขียนแบบเดียวกับช่อง key คือ
+ *      `value={options.map(o => `${o.value}|${o.label}`).join('\n')}`
+ *      แล้วยิง onChange ทุกตัวอักษร → พิมพ์ "นาย" กลายเป็น "นาย|นาย" กลางคัน
+ *      ค่ากลับมาเขียนทับสิ่งที่ผู้ใช้พิมพ์ → เคอร์เซอร์กระโดด → พิมพ์ไทยติดขัด
+ *      (อาการเดียวกับที่ผู้ใช้เจอที่ช่อง key พอดี)
+ *
+ *    จึงเก็บข้อความดิบไว้ใน `bulk` เอง แล้วค่อยแปลงเป็น options
+ *    `bulk === null` = ผู้ใช้ยังไม่แตะ → ให้ textarea ใช้ค่าเริ่มต้นจาก options
+ */
+function OptionsEditor({
+  field,
+  index,
+  canEdit,
+  onChange,
+}: {
+  field: FieldDef
+  index: number
+  canEdit: boolean
+  onChange: (options: NonNullable<FieldDef['options']>) => void
+}) {
+  const options = field.options ?? []
+  const [bulk, setBulk] = useState<string | null>(null)
+
+  const setOptions = (next: NonNullable<FieldDef['options']>) => {
+    // รายการเปลี่ยนจากข้างนอก (เพิ่ม/ลบแถว) → ให้กล่องข้อความกลับไปอ่านค่าจาก options ใหม่
+    setBulk(null)
+    onChange(next)
+  }
+
+  const patchOption = (oi: number, p: Partial<{ value: string; label: string }>) => {
+    const next = [...options]
+    next[oi] = { ...next[oi], ...p }
+    setOptions(next)
+  }
+
+  return (
+    <div style={{ gridColumn: '1 / -1' }}>
+      <label style={{ fontWeight: 600 }}>ตัวเลือกที่ให้ผู้ใช้เลือก</label>
+      <div className="muted" style={{ fontSize: 12.5, marginBottom: 8 }}>
+        <strong>ค่า</strong> คือสิ่งที่ต้องตรงกับแท็กในไฟล์แม่แบบ (Carbone จะแทนค่านี้)
+        · <strong>ป้าย</strong> คือข้อความที่ผู้ใช้เห็นในช่องเลือก (เว้นว่างไว้ = ใช้ค่าเดียวกับป้าย)
+      </div>
+
+      {options.length === 0 && (
+        <p className="muted" style={{ margin: '0 0 8px', fontSize: 13 }}>
+          ยังไม่มีตัวเลือก — กด “+ เพิ่มตัวเลือก” ด้านล่าง
+        </p>
+      )}
+
+      <div style={{ display: 'grid', gap: 8 }}>
+        {options.map((o, oi) => (
+          <div key={oi} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 160px', minWidth: 140 }}>
+              <input
+                value={o.value}
+                disabled={!canEdit}
+                placeholder="ค่า เช่น นาย"
+                aria-label={`ค่าตัวเลือกที่ ${oi + 1}`}
+                data-testid={`option-value-${index}-${oi}`}
+                onChange={(e) => patchOption(oi, { value: e.target.value })}
+              />
+            </div>
+            <div style={{ flex: '1 1 160px', minWidth: 140 }}>
+              <input
+                value={o.label}
+                disabled={!canEdit}
+                placeholder="ป้ายที่แสดง (ถ้าว่างใช้ค่าเดียวกัน)"
+                aria-label={`ป้ายตัวเลือกที่ ${oi + 1}`}
+                data-testid={`option-label-${index}-${oi}`}
+                onChange={(e) => patchOption(oi, { label: e.target.value })}
+              />
+            </div>
+            <button
+              className="ghost danger"
+              style={{ padding: '5px 10px', fontSize: 12 }}
+              disabled={!canEdit}
+              data-testid={`option-remove-${index}-${oi}`}
+              onClick={() => setOptions(options.filter((_, x) => x !== oi))}
+              title="เอาตัวเลือกนี้ออก"
+            >
+              ลบ
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <button
+        className="ghost"
+        style={{ marginTop: 10 }}
+        disabled={!canEdit}
+        data-testid={`add-option-${index}`}
+        onClick={() => setOptions([...options, { value: '', label: '' }])}
+      >
+        + เพิ่มตัวเลือก
+      </button>
+
+      <details style={{ marginTop: 10 }}>
+        <summary className="muted" style={{ fontSize: 12.5, cursor: 'pointer' }}>
+          เพิ่มหลายตัวเลือกพร้อมกัน (วางหลายบรรทัด)
+        </summary>
+        <textarea
+          rows={4}
+          disabled={!canEdit}
+          style={{ marginTop: 8, width: '100%' }}
+          placeholder={'นาย\nนาง\nนางสาว'}
+          data-testid={`bulk-options-${index}`}
+          defaultValue={options.map((o) => `${o.value}|${o.label}`).join('\n')}
+          value={bulk ?? undefined}
+          onChange={(e) => {
+            const text = e.target.value
+            setBulk(text)
+            onChange(parseOptionLines(text))
+          }}
+        />
+      </details>
+    </div>
+  )
+}
+
 export default function FieldBuilder({
   fields,
   tags,
@@ -181,7 +323,21 @@ export default function FieldBuilder({
               const i = draft.indexOf(f)
               const open = editing === i
               return (
-                <div key={`${f.key}-${i}`} style={{ borderBottom: '1px solid var(--line)' }}>
+                /**
+                 * ⚠️ `key` ต้อง**นิ่ง** ห้ามผูกกับ `f.key`
+                 *
+                 *   เคยใช้ ``key={`${f.key}-${i}`}`` → พิมพ์อักษรในช่อง key ครั้งเดียว
+                 *   ค่า key เปลี่ยน → React มองว่าเป็น element ใหม่ → **ถอดแล้วใส่ใหม่**
+                 *   ผลคือโฟกัสหลุดทุกตัวอักษร (พิมพ์ "ไ" แล้วต้องคลิกใหม่)
+                 *   และที่แย่กว่านั้น **IME ไทยพังทันที** เพราะ input ที่กำลัง "เรียงพิมพ์"
+                 *   ถูกทำลายกลางคัน (ผู้ใช้รายงานว่า "พิมพ์ 1 ครั้งแล้วต้องรอ")
+                 *
+                 *   ใช้เลข index ของ draft แทน ซึ่งตรงกับตัวตนของโค้ดอยู่แล้ว
+                 *   (`patch(i, …)` · `editing === i` · `draft.indexOf(f)`)
+                 *   กดย้ายขึ้น/ลงแล้วแถวจะสลับ key กัน (React สร้างใหม่) แต่ตอนนั้นโฟกัสอยู่ที่ปุ่ม
+                 *   ไม่กระทบการพิมพ์
+                 */
+                <div key={i} style={{ borderBottom: '1px solid var(--line)' }}>
                   {/* ── แถวสรุป ── */}
                   <div
                     style={{
@@ -268,6 +424,7 @@ export default function FieldBuilder({
                         <input
                           value={f.key}
                           disabled={!canEdit}
+                          data-testid={`field-key-${i}`}
                           onChange={(e) => patch(i, { key: e.target.value })}
                         />
                       </div>
@@ -276,6 +433,7 @@ export default function FieldBuilder({
                         <input
                           value={f.label}
                           disabled={!canEdit}
+                          data-testid={`field-label-${i}`}
                           placeholder={f.key}
                           onChange={(e) => patch(i, { label: e.target.value })}
                         />
@@ -285,6 +443,7 @@ export default function FieldBuilder({
                         <select
                           value={f.type}
                           disabled={!canEdit}
+                          data-testid={`field-type-${i}`}
                           onChange={(e) => patch(i, { type: e.target.value as FieldType })}
                         >
                           {TYPES.map((t) => (
@@ -299,6 +458,7 @@ export default function FieldBuilder({
                         <input
                           value={f.group}
                           disabled={!canEdit}
+                          data-testid={`field-group-${i}`}
                           placeholder="ทั่วไป"
                           onChange={(e) => patch(i, { group: e.target.value })}
                         />
@@ -321,28 +481,12 @@ export default function FieldBuilder({
                       </div>
 
                       {(f.type === 'select' || f.type === 'multiselect') && (
-                        <div style={{ gridColumn: '1 / -1' }}>
-                          <label>ตัวเลือก (บรรทัดละหนึ่งค่า "ค่า|ข้อความที่แสดง")</label>
-                          <textarea
-                            rows={4}
-                            disabled={!canEdit}
-                            value={(f.options ?? [])
-                              .map((o) => `${o.value}|${o.label}`)
-                              .join('\n')}
-                            onChange={(e) =>
-                              patch(i, {
-                                options: e.target.value
-                                  .split('\n')
-                                  .map((line) => line.trim())
-                                  .filter(Boolean)
-                                  .map((line) => {
-                                    const [value, ...rest] = line.split('|')
-                                    return { value, label: rest.join('|') || value }
-                                  }),
-                              })
-                            }
-                          />
-                        </div>
+                        <OptionsEditor
+                          field={f}
+                          index={i}
+                          canEdit={canEdit}
+                          onChange={(options) => patch(i, { options })}
+                        />
                       )}
 
                       <div style={{ gridColumn: '1 / -1' }}>

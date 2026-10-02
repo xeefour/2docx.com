@@ -142,6 +142,18 @@ export interface UploadInput {
   tags?: string[]
   /** ไฟล์ข้อมูลตัวอย่างสำหรับ Studio */
   sampleJson?: string
+  /**
+   * เวลาที่ "ปล่อยใช้งาน" เวอร์ชันนี้ (unix **วินาที**)
+   *
+   * ⚠️ จำเป็นเมื่อเพิ่ม**เวอร์ชันต่อยอด** (`id` ชี้แม่แบบเดิม)
+   *    Carbone จะปฏิเสธด้วย code w124 ถ้าไม่ส่ง:
+   *    `"deployedAt" must be different from the currently deployed template version`
+   *    เพราะเวอร์ชันเดิมถูกสร้างแบบไม่มีค่านี้ (เป็น 0)
+   *
+   * ค่าต้อง**ต่างจากเวอร์ชันที่ปล่อยอยู่** — ใช้ `Math.floor(Date.now() / 1000)` ได้เลย
+   * และค่าที่มากกว่า 42000000000 Carbone จะตีความว่า "ปล่อยเลยตอนนี้"
+   */
+  deployedAt?: number
 }
 
 /** POST /template — อัปโหลดแม่แบบ (multipart/form-data) */
@@ -158,6 +170,7 @@ export async function uploadTemplate(input: UploadInput) {
   if (input.comment) form.set('comment', input.comment)
   if (input.category) form.set('category', input.category)
   if (input.tags?.length) form.set('tags', JSON.stringify(input.tags))
+  if (input.deployedAt !== undefined) form.set('deployedAt', String(input.deployedAt))
   if (input.sampleJson) {
     form.set('data', new Blob([input.sampleJson], { type: 'application/json' }), 'data.json')
   }

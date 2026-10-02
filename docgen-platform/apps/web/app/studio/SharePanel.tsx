@@ -6,8 +6,11 @@
  * ซ้าย: metadata ที่แก้ได้ (ชื่อ/หมวด/แท็ก) — ไปที่ Carbone
  * ขวา: ใครมีสิทธิ์ใช้แม่แบบนี้ — เก็บใน Mongo ของเราเอง
  */
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { api, ApiError, type AccessView, type Template } from './lib/api'
+
+/** ชนิดไฟล์ที่ Carbone รับได้ — ต้องตรงกับ ALLOWED_EXT ของ API */
+const ACCEPT = '.docx,.xlsx,.pptx,.odt,.ods,.odp,.doc,.odf'
 
 export default function SharePanel({
   template,
@@ -26,6 +29,9 @@ export default function SharePanel({
   const [busy, setBusy] = useState(false)
   const [sub, setSub] = useState('')
   const [role, setRole] = useState<'viewer' | 'editor'>('viewer')
+  /** ไฟล์ที่เลือกไว้แต่ยังไม่ยืนยัน — ต้องกดยืนยันอีกครั้ง เพราะการเขียนทับกระทบทุกคน */
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const isOwner = access?.relation === 'owner'
   /**
@@ -68,14 +74,32 @@ export default function SharePanel({
       notify(visibility === 'private' ? 'ตั้งเป็นแบบส่วนตัวแล้ว' : 'เปิดเป็นสาธารณแล้ว')
     })
 
+  /**
+   * อัปโหลดไฟล์ใหม่แทนแม่แบบเดิม
+   *
+   * ส่งชื่อ/หมวด/แท็กของเดิมไปด้วย เพื่อให้เวอร์ชันใหม่ไม่ต้องมากรอก metadata ใหม่
+   */
+  const doReplace = () =>
+    run(async () => {
+      if (!pendingFile) return
+      await api.replaceTemplate(templateKeyOfTemplate(template), pendingFile, {
+        name: template.name ?? '',
+        category: category.trim(),
+        tags: template.tags,
+      })
+      setPendingFile(null)
+      if (fileRef.current) fileRef.current.value = ''
+      notify(
+        'บันทึกเป็นเวอร์ชันใหม่ของแม่แบบนี้แล้ว (ช่องฟอร์มและสิทธิ์เดิมยังอยู่) ' +
+          '— ถ้ารายการยังเปิดไฟล์เดิมอยู่ ให้กดรีเฟรชหน้า',
+      )
+    })
+
   return (
     <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
       {/* ── metadata ── */}
       <div className="card" style={{ padding: 16 }}>
-        <h2 style={{ margin: '0 0 4px', fontSize: 15 }}>ข้อมูลแม่แบบ</h2>
-        <p className="muted" style={{ margin: '0 0 12px', fontSize: 12 }}>
-          เก็บที่ Carbone — เห็นในรายการทุกหน้า
-        </p>
+        <h2 style={{ margin: '0 0 12px', fontSize: 15 }}>ข้อมูลแม่แบบ</h2>
         <div style={{ display: 'grid', gap: 12 }}>
           <div>
             <label>ชื่อ</label>
@@ -106,6 +130,84 @@ export default function SharePanel({
           <button onClick={() => void saveMeta()} disabled={!canEdit || busy}>
             บันทึกข้อมูลแม่แบบ
           </button>
+        </div>
+
+        {/* ── ไฟล์แม่แบบ: ดาวน์โหลด / อัปโหลดแทน ── */}
+        <div
+          style={{
+            marginTop: 16,
+            paddingTop: 14,
+            borderTop: '1px solid var(--line)',
+            display: 'grid',
+            gap: 10,
+          }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 500 }}>ไฟล์แม่แบบ</div>
+
+          <a
+            className="ghost"
+            href={api.templateFileUrl(templateKeyOfTemplate(template))}
+            download
+            data-testid="template-download"
+            style={{ textAlign: 'center', textDecoration: 'none' }}
+          >
+            ⬇️ ดาวน์โหลดแม่แบบ
+          </a>
+
+          {canEdit ? (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                accept={ACCEPT}
+                data-testid="template-file"
+                onChange={(e) => setPendingFile(e.target.files?.[0] ?? null)}
+                style={{ display: 'none' }}
+              />
+              <button
+                className="ghost"
+                disabled={busy}
+                data-testid="template-replace"
+                onClick={() => fileRef.current?.click()}
+              >
+                ⬆️ อัปโหลดแม่แบบใหม่แทน
+              </button>
+
+              {pendingFile && (
+                <div
+                  className="pill warn"
+                  style={{ padding: '10px 12px', display: 'block', lineHeight: 1.5 }}
+                >
+                  <div style={{ marginBottom: 8 }}>
+                    จะแทนไฟล์ <b>{pendingFile.name}</b> (
+                    {(pendingFile.size / 1024).toFixed(0)} KB)
+                    <br />
+                    เป็น<b>เวอร์ชันใหม่</b>ของแม่แบบนี้ — ช่องฟอร์มและสิทธิ์เดิมยังอยู่
+                    แต่ตัวอย่างเอกสารเดิมจะเป็นของเวอร์ชันเก่า
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      className="ghost danger"
+                      disabled={busy}
+                      onClick={() => {
+                        setPendingFile(null)
+                        if (fileRef.current) fileRef.current.value = ''
+                      }}
+                    >
+                      ยกเลิก
+                    </button>
+                    <button disabled={busy} onClick={() => void doReplace()}>
+                      {busy ? 'กำลังอัปโหลด…' : 'ยืนยันแทนไฟล์เดิม'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>
+              คุณมีสิทธิ์แค่ดูอย่างเดียว — จึงดาวน์โหลดได้แต่แทนไฟล์ไม่ได้
+            </p>
+          )}
         </div>
       </div>
 

@@ -67,15 +67,15 @@ try {
   const newId = up.id
   if (newId) {
     ok(`PATCH /api/templates/${newId}`)
-    r = await fetch(`${API}/api/templates/${newId}`, {
+    r = await fetch(`${API}/api/templates/${newId}/purge`, {
       method: 'PATCH',
       headers: { ...headers, 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'เปลี่ยนชื่อแล้ว', tags: ['ทดสอบ'] }),
     })
     console.log(' ', show(r))
 
-    ok(`DELETE /api/templates/${newId}`)
-    r = await fetch(`${API}/api/templates/${newId}`, { method: 'DELETE', headers })
+    ok(`DELETE /api/templates/${newId}/purge`)
+    r = await fetch(`${API}/api/templates/${newId}/purge`, { method: 'DELETE', headers })
     console.log(' ', show(r), '(soft delete — ไฟล์ถูกลบจริงหลัง retention delay)')
   }
 

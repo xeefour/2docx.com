@@ -68,6 +68,14 @@ export const mongoPlugin = fp(async (app) => {
     { key: { owner: 1 }, name: 'owner' },
     { key: { 'sharedWith.sub': 1 }, name: 'shared_with' },
   ])
+  /**
+   * ถังขยะแม่แบบ — ตัวกวาด query `purgeAt <= now` ทุก 15 นาที
+   * ไม่มี index = สแกนทั้ง collection ทุกรอบ (ถึงตอนนี้เล็ก แต่จะโตเมื่อมีการลบจริง)
+   */
+  await db.collection('template_tombstones').createIndexes([
+    { key: { purgeAt: 1 }, name: 'purge_at' },
+    { key: { deletedBy: 1, deletedAt: -1 }, name: 'deleted_by' },
+  ])
 
   app.decorate('mongo', db)
 

@@ -33,7 +33,7 @@ if (victims.length === 0) {
   console.log('ไม่มีแม่แบบทดสอบค้าง — ไม่ต้องลบอะไร')
 } else {
   for (const v of victims) {
-    const r = await fetch(`${API}/api/templates/${v.id}`, { method: 'DELETE', headers: H })
+    const r = await fetch(`${API}/api/templates/${v.id}/purge`, { method: 'DELETE', headers: H })
     console.log(`  ลบ "${v.name}" (${v.id}) → HTTP ${r.status}`)
   }
 }

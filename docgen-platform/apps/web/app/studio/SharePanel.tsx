@@ -18,12 +18,18 @@ export default function SharePanel({
   access,
   onAccess,
   notify,
+  onDeleted,
   part = 'all',
 }: {
   template: Template
   access: AccessView | null
   onAccess: (a: AccessView) => void
   notify: (msg: string) => void
+  /**
+   * ลบแม่แบบเสร็จ → หน้าแรกต้องรีโหลด (แม่แบบหายจากรายการแล้ว)
+   * แยกเป็น prop เพราะ `SharePanel` ไม่รู้ว่าใครเป็นเจ้าของหน้า
+   */
+  onDeleted: () => void
   /**
    * แสดงการ์ดไหนบ้าง
    *
@@ -40,6 +46,7 @@ export default function SharePanel({
   const [category, setCategory] = useState(template.category ?? '')
   const [tagsText, setTagsText] = useState(template.tags.join(', '))
   const [busy, setBusy] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [sub, setSub] = useState('')
   const [role, setRole] = useState<'viewer' | 'editor'>('viewer')
   /** ไฟล์ที่เลือกไว้แต่ยังไม่ยืนยัน — ต้องกดยืนยันอีกครั้ง เพราะการเขียนทับกระทบทุกคน */
@@ -208,6 +215,75 @@ export default function SharePanel({
               >
                 ⬆️ อัปโหลดแม่แบบใหม่แทน
               </button>
+
+              {/**
+               * ── ลบแม่แบบ (เข้าถังขยะ รอ 14 วัน) ──
+               *
+               * ผู้ใช้สั่ง: *"เพิ่ม การลบแม่แบบ ถ้าผู้ใช้ลบไปแล้ว ให้รอก่อน 14 วัน ค่อยลบ
+               *   … ทำให้ restore ภายหลังได้"*
+               *
+               * ⚠️ ปุ่มนี้ต้องกดสองจังหวะ
+               *   ปุ่ม "ลบ" สีแดงติดกันกดพลาดได้ง่าย (คนมักคลิกเมาส์ซ้าตอนเลื่อนหน้า)
+               *   และผลคือแม่แบบหายจากรายการของทุกคน ไม่ใช่แค่ของผู้กด
+               *   รอบแรกแค่เผยกล่องยืนยัน รอบที่สองถึงลบจริง
+               *
+               * ⚠️ เฉพาะเจ้าของเท่านั้นที่เห็นปุ่มนี้ (เหตุผลด้านสิทธิ์อยู่ฝั่ง API)
+               *   `canManage` ครอบการ์ดนี้อยู่แล้ว จึงไม่ต้องเช็คซ้ำ
+               */}
+              {!confirmDelete ? (
+                <button
+                  className="ghost danger"
+                  disabled={busy}
+                  data-testid="template-trash"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  🗑️ ลบแม่แบบ
+                </button>
+              ) : (
+                <div
+                  className="pill err pill--msg"
+                  data-testid="template-trash-confirm"
+                  style={{ padding: '10px 12px', lineHeight: 1.6 }}
+                >
+                  <div style={{ marginBottom: 8 }}>
+                    จะลบ <b>{template.name}</b> ออกจากรายการ
+                    และ<b>ไฟล์จะถูกลบถาวรใน 14 วัน</b>
+                    ระหว่างนี้กู้คืนได้ทุกเมื่อ และคนที่ใช้แม่แบบนี้อยู่
+                    จะเห็นป้ายเตือนให้ clone ไปเก็บเอง
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      className="ghost"
+                      disabled={busy}
+                      onClick={() => setConfirmDelete(false)}
+                    >
+                      ยกเลิก
+                    </button>
+                    <button
+                      className="danger"
+                      disabled={busy}
+                      data-testid="template-trash-confirm-yes"
+                      onClick={() =>
+                        void (async () => {
+                          setBusy(true)
+                          try {
+                            const t = await api.deleteTemplate(templateKeyOfTemplate(template))
+                            notify(`ย้าย "${t.name}" เข้าถังขยะแล้ว — ลบถาวรใน ${t.daysLeft} วัน`)
+                            onDeleted()
+                          } catch (e) {
+                            notify(e instanceof ApiError ? e.message : String(e))
+                            setConfirmDelete(false)
+                          } finally {
+                            setBusy(false)
+                          }
+                        })()
+                      }
+                    >
+                      {busy ? 'กำลังลบ…' : 'ยืนยันเข้าถังขยะ'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {pendingFile && (
                 <div

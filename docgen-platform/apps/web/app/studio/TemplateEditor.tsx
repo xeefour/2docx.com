@@ -26,6 +26,7 @@ import {
   type FieldDef,
   type Template,
   type TemplateTag,
+  type Tombstone,
 } from './lib/api'
 import { validateFormData, withDefaults } from './lib/fields'
 import Tabs from './Tabs'
@@ -34,6 +35,7 @@ import AiChat from './AiChat'
 import FieldBuilder from './FieldBuilder'
 import SharePanel from './SharePanel'
 import HistoryPanel from './HistoryPanel'
+import TrashBanner from './TrashBanner'
 import MyHistoryPanel from './MyHistoryPanel'
 import DocumentPreview from './DocumentPreview'
 import DownloadMenu from './DownloadMenu'
@@ -68,6 +70,11 @@ export default function TemplateEditor({
   const [fields, setFields] = useState<FieldDef[]>([])
   const [tags, setTags] = useState<TemplateTag[]>([])
   const [access, setAccess] = useState<AccessView | null>(null)
+  /**
+   * tombstone ของแม่แบบนี้ (null = ยังปกติ)
+   * ใช้โชว์ป้ายเตือนถังขยะ — ดู `TrashBanner`
+   */
+  const [trash, setTrash] = useState<Tombstone | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
@@ -169,15 +176,25 @@ export default function TemplateEditor({
 
     void (async () => {
       try {
-        const [t, f, a] = await Promise.all([
+        const [t, f, a, tr] = await Promise.all([
           api.templateTags(template.versionId),
           api.getForm(templateKey),
           api.getAccess(templateKey),
+          /**
+           * สถานะถังขยะ — โหลดพร้อมกันเลย
+           * ⚠️ ต้องโหลดตอนเปิดหน้า ไม่ใช่ตอนกดลบ เพราะคนที่**ไม่ใช่คนกดลบ**
+           *   ก็ต้องเห็นป้ายเตือนด้วย (ผู้ใช้สั่งให้แจ้งคนที่ใช้แม่แบบ)
+           *   และ route นี้ไม่เช็คสิทธิ์โดยตั้งใจ
+           */
+          api.trashOf(templateKey)
+            .then((r) => r.item)
+            .catch(() => null),
         ])
         if (!alive) return
         setTags(t.items)
         setFields(f.fields)
         setAccess(a)
+        setTrash(tr)
         // ฟอร์มที่ยังไม่ได้ตั้ง → ใช้แท็กของแม่แบบเป็นช่องกรอก
         const usable = f.fields.length > 0 ? f.fields : autoFieldsFromTags(t.items)
         setData(withDefaults(usable, t.sample))
@@ -375,11 +392,22 @@ export default function TemplateEditor({
         </div>
       )}
 
+      {/* ป้ายเตือนถังขยะ — สำคัญที่สุดของหน้านี้ ต้องอยู่บนสุด
+          เพื่อให้เห็นก่อนเนื้อหาอื่นทุกครั้งที่เปิด (โดยเฉพาะคนที่ไม่ใช่คนกดลบ) */}
+      {trash && (
+        <TrashBanner
+          trash={trash}
+          templateName={template.name}
+          notify={notify}
+          onRestored={() => setTrash(null)}
+        />
+      )}
+
       {/*
        * ── จอหลัก 2 ฝั่ง · แต่ละฝั่งมีแท็บของตัวเอง ──────────────────
        *
        *   ซ้าย  ฟอร์ม · JSON          → สิ่งที่กรอกลงเอกสาร
-       *   ขวา   ตัวอย่าง · แม่แบบ & การแชร์ · ช่องฟอร์ม · ประวัติ
+       *   ขวา   ตัวอย่าง · ข้อมูลแม่แบบ · ช่องฟอร์ม · การแชร์และสิทธิ์
        *
        * เดิมเป็นแท็บเดียวกว้างเต็มหน้า ทำให้ไม่ชัดว่าเนื้อหาอยู่ฝั่งไหน
        * จอแคบกว่า 1080px จะซ้อนเป็นคอลัมน์เดียวอัตโนมัติ
@@ -534,6 +562,7 @@ export default function TemplateEditor({
               access={access}
               onAccess={setAccess}
               notify={notify}
+              onDeleted={onClose}
               part="meta"
             />
           )}
@@ -567,6 +596,7 @@ export default function TemplateEditor({
                 access={access}
                 onAccess={setAccess}
                 notify={notify}
+                onDeleted={onClose}
                 part="access"
               />
               <HistoryPanel templateKey={templateKey} />

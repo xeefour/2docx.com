@@ -82,7 +82,7 @@ const TMP_PREFIX = 'ทดสอบลิงก์สาธารณ-'
 {
   const ghosts = (await (await fetch(`${API}/api/templates`, { headers: H })).json()).items ?? []
   for (const g of ghosts.filter((t) => (t.name ?? '').startsWith(TMP_PREFIX))) {
-    await fetch(`${API}/api/templates/${g.id}`, { method: 'DELETE', headers: H_NO_BODY })
+    await fetch(`${API}/api/templates/${g.id}/purge`, { method: 'DELETE', headers: H_NO_BODY })
     await wipeAccess(g.id)
   }
 }
@@ -108,7 +108,7 @@ check('สร้างแม่แบบชั่วคราวได้', !!ke
 
 const cleanup = async (why) => {
   console.log(`\n[เก็บกวาด] ${why}`)
-  const r = await fetch(`${API}/api/templates/${key}`, { method: 'DELETE', headers: H_NO_BODY })
+  const r = await fetch(`${API}/api/templates/${key}/purge`, { method: 'DELETE', headers: H_NO_BODY })
   console.log(`   ลบแม่แบบ → HTTP ${r.status}`)
   /**
    * ⚠️ ต้อง**ยืนยันว่าลบสำเร็จจริง** ไม่ใช่แค่ดูสถานะแล้วเดินต่อ
@@ -208,9 +208,14 @@ await send('Emulation.setDeviceMetricsOverride', { width: 1600, height: 1000, de
 await send('Network.setCookie', { name: 'docgen_session', value: sid, url: WEB })
 await send('Network.setCacheDisabled', { cacheDisabled: true })
 
-// ── 1. เปิดแท็บแม่แบบ ──────────────────────────────────────────
-console.log('\n[1] เปิดแท็บ "แม่แบบ & การแชร์"')
-await send('Page.navigate', { url: `${WEB}/studio/${key}?tabs=form&pane=template` })
+// ── 1. เปิดแท็บการแชร์และสิทธิ์ ─────────────────────────────────
+console.log('\n[1] เปิดแท็บ "การแชร์และสิทธิ์"')
+/**
+ * ⚠️ ใช้ `pane=history` ไม่ใช่ `pane=template`
+ *   ผู้ใช้สั่งย้ายการ์ดการแชร์ออกจากแท็บ "ข้อมูลแม่แบบ" ไปแท็บของตัวเองแล้ว
+ *   (เคยเขียนผิดแล้ว ทำให้ทั้งชุดตก 12 ข้อ เพราะรอปุ่มที่ย้ายไปแล้ว)
+ */
+await send('Page.navigate', { url: `${WEB}/studio/${key}?tabs=form&pane=history` })
 await waitFor('!document.querySelector(".bootveil")', 45000)
 const opened = await waitFor('!!document.querySelector("[data-testid=\\"share-publish\\"]")', 30000)
 check('เปิดแท็บได้และเห็นปุ่ม "เปิดสาธารณ"', opened)
@@ -297,6 +302,13 @@ await shot('04-back-private.png')
 
 // ── 6. กล่องเตือน "จะแทนไฟล์": มุมต้องไม่โค้งจนเป็นถุง และต้องไม่ล้นการ์ด ──
 console.log('\n[6] กล่องเตือนการอัปโหลดแทน — มุมโค้งและการล้นการ์ด')
+/**
+ * ⚠️ ต้องสลับไปแท็บ "ข้อมูลแม่แบบ" ก่อน
+ *   ช่องเลือกไฟล์อยู่ในการ์ด metadata ซึ่งย้ายแยกจากการ์ดการแชร์แล้ว
+ */
+await send('Page.navigate', { url: `${WEB}/studio/${key}?tabs=form&pane=template` })
+await waitFor('!document.querySelector(".bootveil")', 45000)
+await waitFor('!!document.querySelector("[data-testid=\"template-file\"]")', 25000)
 /**
  * ผู้ใช้รายงาน: *"มันโค้งมากไปไหม Rounded Corners"*
  *

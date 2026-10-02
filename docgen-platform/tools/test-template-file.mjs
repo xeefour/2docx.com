@@ -69,7 +69,7 @@ const TMP_PREFIX = 'ทดสอบดาวน์โหลด-แทนที�
   const ghosts = (await (await fetch(`${API}/api/templates`, { headers: H1 })).json()).items ?? []
   const stale = ghosts.filter((t) => (t.name ?? '').startsWith(TMP_PREFIX))
   for (const g of stale) {
-    await fetch(`${API}/api/templates/${g.id}`, { method: 'DELETE', headers: H1 })
+    await fetch(`${API}/api/templates/${g.id}/purge`, { method: 'DELETE', headers: H1 })
     await wipeAccess(g.id)
   }
   if (stale.length) console.log(`  กวาดแม่แบบชั่วคราวค้างจากรอบก่อน ${stale.length} ตัว`)
@@ -110,7 +110,7 @@ check('ได้ id เป็นเลข 64-bit (ต่อเวอร์ชั
 
 const cleanup = async (why) => {
   console.log(`\n[เก็บกวาด] ${why}`)
-  const r = await fetch(`${API}/api/templates/${key}`, { method: 'DELETE', headers: H1 })
+  const r = await fetch(`${API}/api/templates/${key}/purge`, { method: 'DELETE', headers: H1 })
   console.log(`   ลบแม่แบบ → HTTP ${r.status}`)
   await wipeAccess(key)
   console.log('   ลบเอกสารสิทธิ์ที่อาจค้างแล้ว')

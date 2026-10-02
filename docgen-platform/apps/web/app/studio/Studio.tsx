@@ -22,6 +22,7 @@ import {
   type BookmarkRecord,
   type Template,
   type TemplateTag,
+  type Tombstone,
 } from './lib/api'
 import Tabs from './Tabs'
 import TemplateEditor from './TemplateEditor'
@@ -148,8 +149,43 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
     if (!initialKey || loading || templates.length === 0) return
     openedFromUrl.current = true
     const found = templates.find((t) => templateKeyOf(t) === initialKey)
-    if (found) setOpen(found)
-    else setNotFound(`ไม่พบแม่แบบ key ${initialKey} — แสดงรายการทั้งหมดแทน`)
+    if (found) {
+      setOpen(found)
+      return
+    }
+    /**
+     * ── แม่แบบที่อยู่ถังขยะ: ยังเปิดได้ ──
+     *
+     * ⚠️ ต้องพยายามเปิด ไม่ใช่บอกว่าไม่พบทันที
+     *   เพราะเรา**กรองแม่แบบถังขยะออกจากรายการ** (ไม่งั้นผู้ใช้กดลบแล้วยังเห็นอยู่)
+     *   แต่ผู้ใช้สั่งให้ *"แจ้งเตือนผู้ใช้ว่าจะลบแม่แบบนี้ ใครจะใช้ให้ clone ไปแทน"*
+     *   ถ้าบอก "ไม่พบแม่แบบ" เท่านั้น ป้ายเตือนก็ไม่มีทางโชว์
+     *   และคนที่กดลิงก์ที่แชร์ไว้จะเจอแค่หน้ารายการ — แย่กว่าไม่เตือนเลย
+     *
+     * ไฟล์ยังอยู่ครบ 14 วัน จึงประกอบ `Template` จากข้อมูล tombstone ได้
+     * ฟิลด์ที่ไม่มีใน tombstone (`type`/`size`/`createdAt`) ใส่ค่าโปร่ง ๆ
+     * เพราะหน้าแก้ไขไม่ได้ใช้มันอยู่แล้ว
+     */
+    void api
+      .trashOf(initialKey)
+      .then(({ item }) => {
+        if (!item) {
+          setNotFound(`ไม่พบแม่แบบ key ${initialKey} — แสดงรายการทั้งหมดแทน`)
+          return
+        }
+        setNotFound(null)
+        setOpen({
+          id: item.templateKey,
+          versionId: item.templateKey,
+          name: item.name,
+          category: item.category,
+          tags: item.tags,
+          type: '',
+          size: 0,
+          createdAt: 0,
+        })
+      })
+      .catch(() => setNotFound(`ไม่พบแม่แบบ key ${initialKey} — แสดงรายการทั้งหมดแทน`))
   }, [initialKey, loading, templates])
 
   /**
@@ -398,6 +434,102 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
           </table>
         )}
       </div>
+
+      <TrashPanel notify={setToast} onRestored={load} />
+    </div>
+  )
+}
+
+/**
+ * ── ถังขยะแม่แบบ ────────────────────────────────────────────────────
+ *
+ * ผู้ใช้สั่ง: *"…ทำให้ restore ภายหลังได้"*
+ *
+ * ⚠️ ต้องมีที่ให้ผู้ใช้**กลับมาเจอ**แม่แบบที่ตัวเองเพิ่งลบ
+ *   ไม่งั้นหลังกดลบปุ่ม "กู้คืน" ที่ป้ายเตือนบนหน้าแม่แบบก็เป็นทางเดียว
+ *   แต่พอปิดหน้านั้นไป ก็หาไม่เจออีกเลย แล้วคิดว่ากดลบถาวร
+ *
+ * ⚠️ โหลดซ้ำหลังกู้คืน เพราะแม่แบบกลับมาอยู่ในรายการหลักด้วย
+ */
+function TrashPanel({
+  notify,
+  onRestored,
+}: {
+  notify: (msg: string) => void
+  onRestored: () => void
+}) {
+  const [items, setItems] = useState<Tombstone[]>([])
+  const [busy, setBusy] = useState('')
+
+  const load = useCallback(() => {
+    void api
+      .trashList()
+      .then((r) => setItems(r.items))
+      // โหลดไม่ได้ = ไม่มีถังขยะ ไม่ต้องรบกวนผู้ใช้ด้วยข้อความ error
+      .catch(() => setItems([]))
+  }, [])
+
+  useEffect(load, [load])
+
+  if (items.length === 0) return null
+
+  return (
+    <div
+      data-testid="trash-panel"
+      className="card"
+      style={{ padding: 16, marginTop: 16, borderStyle: 'dashed' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+        <h2 style={{ margin: 0, fontSize: 15, flex: 1 }}>🗑️ ถังขยะ ({items.length})</h2>
+      </div>
+      <p className="muted" style={{ fontSize: 12.5, marginTop: 0, marginBottom: 10 }}>
+        แม่แบบเหล่านี้หายจากรายการแล้ว แต่ไฟล์ยังอยู่ จะถูกลบถาวรใน 14 วัน
+        กู้คืนได้ตลอดช่วงนั้น
+      </p>
+
+      <div style={{ display: 'grid', gap: 8 }}>
+        {items.map((t) => (
+          <div
+            key={t.templateKey}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+              padding: '8px 10px',
+              border: '1px solid var(--line)',
+              borderRadius: 8,
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600 }}>{t.name}</div>
+              <div className="muted" style={{ fontSize: 12 }}>
+                {t.category || 'ไม่มีหมวด'} · เหลืออีก{' '}
+                <b style={{ color: t.daysLeft <= 3 ? 'var(--err)' : undefined }}>{t.daysLeft} วัน</b>
+                {t.deletedByName ? ` · ลบโดย ${t.deletedByName}` : ''}
+              </div>
+            </div>
+            <button
+              disabled={busy === t.templateKey}
+              data-testid={`trash-restore-${t.templateKey}`}
+              onClick={() => {
+                setBusy(t.templateKey)
+                void api
+                  .restoreTemplate(t.templateKey)
+                  .then(() => {
+                    notify(`กู้คืน "${t.name}" แล้ว`)
+                    onRestored()
+                    load()
+                  })
+                  .catch((e) => notify(e instanceof ApiError ? e.message : String(e)))
+                  .finally(() => setBusy(''))
+              }}
+            >
+              {busy === t.templateKey ? 'กำลังกู้คืน…' : 'กู้คืน'}
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -433,8 +565,13 @@ function TemplateRow({
     }
     setBusy(true)
     try {
-      await api.deleteTemplate(tpl.versionId)
-      notify(`ลบ "${tpl.name}" แล้ว`)
+      /**
+       * ลบแล้วเข้าถังขยะ ไม่ได้ลบทิ้งทันที
+       * คืน `daysLeft` มาบอกผู้ใช้ตรง ๆ เพราะกติกา 14 วันเป็นเรื่องสำคัญ
+       * ถ้าบอกแค่ "ลบแล้ว" ผู้ใช้จะเชื่อว่าหายถาวร แล้วไม่กู้คืนทั้งที่ยังทำได้
+       */
+      const t = await api.deleteTemplate(tpl.versionId)
+      notify(`ย้าย "${t.name}" เข้าถังขยะแล้ว — ลบถาวรใน ${t.daysLeft} วัน (กู้คืนได้ก่อนหน้านั้น)`)
       await onChanged()
     } catch (e) {
       onError(e instanceof ApiError ? e.message : String(e))

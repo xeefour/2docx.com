@@ -268,6 +268,27 @@ export type AccessView = {
   sharedWith: Array<{ sub: string; name: string | null; role: 'viewer' | 'editor'; at: string }>
 }
 
+/**
+ * แม่แบบที่อยู่ในถังขยะ (รอก่อนลบจริง 14 วัน)
+ *
+ * `daysLeft` คำนวณมาจากฝั่ง server เสมอ
+ * เพราะเวลาของเบราว์เซอร์กับ server ไม่ตรงกัน และถ้าให้คำนวณเอง
+ * ผู้ใช้จะเห็นจำนวนวันเพี้ยนเวลาเปิดหน้าค้างไว้
+ */
+export type Tombstone = {
+  templateKey: string
+  name: string
+  category: string
+  tags: string[]
+  versionId: string
+  deletedAt: string
+  purgeAt: string
+  daysLeft: number
+  deletedBy: string
+  deletedByName: string | null
+  canRestore: boolean
+}
+
 export type ChatMessage = {
   id: string
   role: 'user' | 'assistant'
@@ -372,8 +393,57 @@ export const api = {
       body: JSON.stringify(patch),
     }),
 
+  /**
+   * ลบแม่แบบ → เข้าถังขยะ (ไฟล์ยังอยู่ รอ 14 วันถึงลบจริง)
+   *
+   * ⚠️ เดิมหน้านี้คืน `void` เพราะ route เดิมตอบ 204
+   *   ตอนนี้ตอบข้อมูล tombstone กลับมา เพื่อให้หน้าเว็บบอกผู้ใช้ได้ว่า
+   *   "จะลบถาวรในอีกกี่วัน" โดยไม่ต้องคำนวณเองที่ฝั่งเบราว์เซอร์
+   */
   deleteTemplate: (versionId: string) =>
-    call<void>(`/templates/${encodeURIComponent(versionId)}`, { method: 'DELETE' }),
+    call<Tombstone>(`/templates/${encodeURIComponent(versionId)}`, { method: 'DELETE' }),
+
+  /** กู้คืนแม่แบบจากถังขยะ — ไฟล์ยังอยู่ครบ จึงใช้ได้ทันที */
+  restoreTemplate: (templateKey: string) =>
+    call<void>(`/templates/${encodeURIComponent(templateKey)}/restore`, { method: 'POST' }),
+
+  /** แม่แบบที่ผู้เรียกเป็นคนลบ — ใช้ทำหน้า "ถังขยะ" */
+  trashList: () => call<{ items: Tombstone[] }>('/templates/trash'),
+
+  /**
+   * สถานะถังขยะของแม่แบบหนึ่งตัว (ใช้โชว์ป้ายเตือนผู้ที่เปิดแม่แบบ)
+   *
+   * ⚠️ คืนเป็น `{ item }` ไม่ใช่ค่าตรง ๆ ให้ตรงกับ schema ของ API
+   */
+  trashOf: (templateKey: string) =>
+    call<{ item: Tombstone | null }>(`/templates/${encodeURIComponent(templateKey)}/trash`),
+
+  /**
+   * clone แม่แบบ — ดึงไฟล์ต้นฉบับมาอัปโหลดเป็นแม่แบบใหม่
+   *
+   * ผู้ใช้สั่ง: *"ใครจะใช้ให้ clone ไปแทน"* ตอนแม่แบบเข้าถังขยะ
+   *
+   * ⚠️ ต้องดึงไฟล์**ก่อน**ครบ 14 วัน
+   *   หลังครบกำหนดตัวกวาดจะลบไฟล์ทิ้งจริง แล้ว clone ไม่ได้อีก
+   *   ปุ่ม clone จึงต้องหายไปพร้อมกับป้ายเตือน
+   */
+  cloneTemplate: async (templateKey: string, meta: { name: string; category: string; tags: string[] }) => {
+    const res = await fetch(`${BASE}/templates/${encodeURIComponent(templateKey)}`, {
+      credentials: 'same-origin',
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => null)
+      throw new ApiError(res.status, body?.code ?? 'ERROR', body?.message ?? 'ดึงไฟล์แม่แบบไม่สำเร็จ')
+    }
+    const blob = await res.blob()
+    // ชื่อไฟล์ต้องมีนามสกุลเดิมไว้ เพราะ API เดาชนิดไฟล์จากนามสกุล
+    //   ถ้าไม่มีจะได้ชื่อแบบ "xxx" ซึ่ง Carbone รับไม่รู้จัก
+    const ext = /\.docx|\.xlsx|\.pptx|\.odt|\.ods|\.odp|\.doc/i.exec(
+      (res.headers.get('content-disposition') ?? '') + blob.type,
+    )
+    const name = ext ? `${meta.name}${ext[0]}` : `${meta.name}.docx`
+    return api.uploadTemplate(new File([blob], name), meta)
+  },
 
   /**
    * อัปโหลดแม่แบบใหม่

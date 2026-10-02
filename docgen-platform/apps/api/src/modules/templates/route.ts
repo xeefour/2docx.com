@@ -9,6 +9,34 @@ import type { App } from '../../types.js'
 import * as carbone from './carbone.js'
 import { readTemplateTags } from './tags.js'
 import { assertCanEdit, assertCanView, who } from '../studio/service.js'
+import {
+  listTombstoneKeys,
+  listTombstones,
+  purgeTemplate,
+  restoreTemplate,
+  getTombstone,
+  startTrashSweeper,
+  toTombstoneView,
+  trashTemplate,
+} from './trash.js'
+
+/**
+ * Schema ของรายการถังขยะ — ประกาศแยกจาก `trash.ts`
+ * เพราะ `trash.ts` ไม่ควรผูกกับ Zod (เป็นโมดูล logic ใช้กับ sweeper ที่ไม่มี request)
+ */
+const TombstoneSchema = z.object({
+  templateKey: z.string(),
+  name: z.string(),
+  category: z.string(),
+  tags: z.array(z.string()),
+  versionId: z.string(),
+  deletedAt: z.string(),
+  purgeAt: z.string(),
+  daysLeft: z.number(),
+  deletedBy: z.string(),
+  deletedByName: z.string().nullable(),
+  canRestore: z.boolean(),
+})
 
 /** ขนาดไฟล์แม่แบบสูงสุด — Carbone/LibreOffice จะพังถ้าใหญ่เกินนี้ */
 const MAX_SIZE = 20 * 1024 * 1024
@@ -47,8 +75,39 @@ export async function templateRoutes(app: App) {
     },
     async (req) => {
       const { items, hasMore } = await carbone.listTemplates(req.query)
-      return { items, hasMore }
+      /**
+       * ตัดแม่แบบที่อยู่ในถังขยะออกจากรายการ
+       *
+       * ⚠️ ต้องกรองที่นี่ ไม่ใช่ที่ Carbone
+       *    เพราะเรายัง**ไม่ได้ลบไฟล์จริง** ตอนผู้ใช้กดลบ (รอ 14 วัน)
+       *    ถ้าไม่กรอง ผู้ใช้จะกดลบแล้วเห็นแม่แบบยังอยู่ในรายการ
+       *    เหมือนปุ่มไม่ทำงาน (ซึ่งเคยเป็นอาการจริงมาก่อนแก้)
+       *
+       * ⚠️ `hasMore` ต้องคำนวณใหม่ ไม่งั้นหน้าเว็บจะโชว์ปุ่ม "โหลดเพิ่ม"
+       *    ทั้งที่กรองออกไปแล้ว แล้วคลิกแล้วไม่มีอะไรเพิ่ม
+       */
+      const hidden = await listTombstoneKeys(app)
+      const kept = items.filter((t) => !hidden.has(String(t.id ?? t.versionId)))
+      return { items: kept, hasMore: hasMore && kept.length === items.length }
     },
+  )
+
+  // GET /api/templates/trash — แม่แบบที่ผู้เรียกเป็นคนลบ รอกู้คืน
+  //
+  // ⚠️ ประกาศก่อน route /:id ไม่งั้น Fastify จะจับ "trash" ไปเป็น :id
+  app.get(
+    '/templates/trash',
+    {
+      schema: {
+        tags,
+        summary: 'แม่แบบที่อยู่ในถังขยะ (คนเดียวกับที่กดลบ)',
+        response: {
+          200: z.object({ items: z.array(TombstoneSchema) }),
+          500: ErrorResponse,
+        },
+      },
+    },
+    async (req) => ({ items: await listTombstones(app, req) }),
   )
 
   // GET /api/templates/:id/tags — แท็ก {d.*} ที่ใช้จริงในไฟล์แม่แบบ
@@ -398,21 +457,85 @@ export async function templateRoutes(app: App) {
     },
   )
 
-  // DELETE /api/templates/:id
+  // GET /api/templates/:id/trash — แม่แบบตัวนี้อยู่ในถังขยะไหม
+  //
+  // ⚠️ ไม่เช็คสิทธิ์ เพราะ**ทุกคนที่เปิดแม่แบบนี้ได้ต้องเห็นป้ายเตือน**
+  //   ผู้ใช้สั่ง: *"แจ้งเตือนผู้ใช้ว่าจะลบแม่แบบนี้ ใครจะใช้ให้ clone ไปแทน"*
+  //   ถ้าเช็คสิทธิ์ คนที่ได้รับการแชร์จะเปิดเจอเอกสารเหมือนปกติ
+  //   แล้วค่อยหายไปเงียบ ๆ ตอนครบ 14 วัน ซึ่งแย่กว่าการเตือนตั้งแต่แรก
+  //   ข้อมูลที่คืนก็จำกัดอยู่แค่ชื่อ/วันที่ ไม่มีเนื้อหาแม่แบบ
+  app.get(
+    '/templates/:id/trash',
+    {
+      schema: {
+        tags,
+        summary: 'สถานะถังขยะของแม่แบบหนึ่งตัว (ใช้โชว์ป้ายเตือนผู้ที่เปิดแม่แบบ)',
+        params: z.object({ id: z.string().min(1) }),
+        response: { 200: z.object({ item: TombstoneSchema.nullable() }) },
+      },
+    },
+    async (req) => {
+      const t = await getTombstone(app, req.params.id)
+      return { item: t ? toTombstoneView(t, who(req).sub) : null }
+    },
+  )
+
+  // DELETE /api/templates/:id — เข้าถังขยะ (รอ 14 วัน ค่อยลบจริง)
   app.delete(
     '/templates/:id',
     {
       schema: {
         tags,
-        summary: 'ลบแม่แบบ (soft delete — ไฟล์ถูกลบจริงหลัง retention delay)',
+        summary: 'ลบแม่แบบ (เข้าถังขยะ — ไฟล์ถูกลบจริงหลัง 14 วัน กู้คืนได้ก่อนหน้านั้น)',
+        params: z.object({ id: z.string().min(1) }),
+        response: { 200: TombstoneSchema, 403: ErrorResponse, 500: ErrorResponse },
+      },
+    },
+    async (req) => trashTemplate(app, req.params.id, req),
+  )
+
+  // POST /api/templates/:id/restore — เอาออกจากถังขยะ
+  app.post(
+    '/templates/:id/restore',
+    {
+      schema: {
+        tags,
+        summary: 'กู้คืนแม่แบบจากถังขยะ (ไฟล์ยังอยู่ครบ จึงใช้ได้ทันที)',
+        params: z.object({ id: z.string().min(1) }),
+        response: { 204: z.null(), 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse },
+      },
+    },
+    async (req, reply) => {
+      await restoreTemplate(app, req.params.id, req)
+      return reply.code(204).send(null)
+    },
+  )
+
+  /**
+   * DELETE /api/templates/:id/purge — ลบถาวรทันที
+   *
+   * ⚠️ **ข้ามช่วง 14 วัน กู้คืนไม่ได้แล้ว** มีไว้ให้
+   *   · ตัวกวาดถังขยะเรียกใช้ในกรณีที่อยากลัดขั้นตอน
+   *   · สคริปต์ทดสอบที่สร้างแม่แบบแล้วต้องการล้างทั้งหมดทันที
+   *   (ถ้าใช้ route ปกติ แม่แบบจะค้างในถังขยะ 14 วัน และรบกวนเทสต์อื่น)
+   *   · ผู้ใช้ที่ลบผิดแล้วอยากลบเด็ดขาด
+   */
+  app.delete(
+    '/templates/:id/purge',
+    {
+      schema: {
+        tags,
+        summary: 'ลบแม่แบบถาวรทันที (ข้ามช่วงรอ 14 วัน — กู้คืนไม่ได้)',
         params: z.object({ id: z.string().min(1) }),
         response: { 204: z.null(), 500: ErrorResponse },
       },
     },
     async (req, reply) => {
-      await carbone.deleteTemplate(req.params.id)
-      app.log.info({ templateId: req.params.id }, 'สั่งลบแม่แบบแล้ว')
+      await purgeTemplate(app, req.params.id)
       return reply.code(204).send(null)
     },
   )
+
+  // เริ่มตัวกวาดถังขยะ — ลบแม่แบบที่ครบ 14 วันอัตโนมัติ
+  startTrashSweeper(app)
 }

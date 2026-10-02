@@ -427,6 +427,63 @@ console.log('\n[8] ซ่อนไม้บรรทัด')
   check('เปิดเมนูได้', await clickTestId('ruler-toggle'))
   const sawHide = await waitFor("!!document.querySelector('[data-testid=\"ruler-hide\"]')", 5000)
   check('เมนูมีตัวเลือก "ซ่อนไม้บรรทัด" ตอนที่มันเปิดอยู่', sawHide)
+  /**
+   * ── ตัวเลือกในเมนูต้องอ่านออกตอนเอาเมาส์ไปวาง ──
+   *
+   * ผู้ใช้รายงาน: *"mouse over เป็นสีม่วง มองไม่เห็นตัวอักษร"*
+   *
+   * สาเหตุคือความสำคัญของ CSS ไม่เท่ากัน ไม่ใช่ค่าสีผิด:
+   *   button:hover:not(:disabled) → (0,2,1)  ชนะ
+   *   .rulpick__opt:hover         → (0,2,0)  แพ้
+   * พื้นหลังจึงเป็นม่วงทึบจากกฎของทั้งระบบ แต่สีตัวอักษรยังม่วงเข้ม → มองไม่เห็น
+   * วัดได้ว่าทั้งสองเป็น `rgb(84, 42, 150)` เป๊ะ (ต่างกัน 0)
+   *
+   * ⚠️ ต้องยิงเมาส์จริงด้วย `Input.dispatchMouseEvent` ชนิด `mouseMoved`
+   *    การอ่าน `:hover` ด้วย `el.matches()` หรือสั่ง `element.click()` ไม่ได้ผล
+   *    เพราะ CSS `:hover` ตอบสนองเฉพาะตำแหน่งเมาส์จริง
+   * ⚠️ ต้องวัดตอน**เมนูมีครบ 3 ราย** (ไม้บรรทัดเปิดอยู่) ไม่งั้นจะพลาด
+   *    บั๊กของ `.rulpick__opt--off` ที่ใช้กฎคนละบรรทัดไปเงียบ ๆ
+   */
+  if (sawHide) {
+    const centers = await evaluate(`(() =>
+      [...document.querySelectorAll('.rulpick__opt')].map((o) => {
+        const r = o.getBoundingClientRect()
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+      }))()`)
+    const readColors = () =>
+      evaluate(`(() => {
+      const parse = (s) => (s.match(/[\\d.]+/g) || []).slice(0, 3).map(Number)
+      return [...document.querySelectorAll('.rulpick__opt')].map((o) => {
+        const cs = getComputedStyle(o)
+        const fg = parse(cs.color)
+        const bg = parse(cs.backgroundColor)
+        /** ต่างกันน้อยกว่า 30 ในช่องสี = ตาแยกไม่ออก = อ่านไม่ออก */
+        return {
+          label: o.textContent.trim().slice(0, 18),
+          fg: cs.color,
+          bg: cs.backgroundColor,
+          dist: Math.max(...fg.map((v, i) => Math.abs(v - bg[i]))),
+        }
+      })
+    })()`)
+    const bad = []
+    for (let i = 0; i < centers.length; i++) {
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: centers[i].x, y: centers[i].y })
+      await sleep(220)
+      const now = await readColors()
+      const cur = now[i]
+      check(
+        `hover "${cur.label}" แล้วอ่านออก`,
+        cur.dist >= 30,
+        `ตัวอักษร ${cur.fg} บนพื้น ${cur.bg} · ต่างกัน ${cur.dist}`,
+      )
+      if (cur.dist < 30) bad.push(cur.label)
+    }
+    if (bad.length) console.log(`  ⚠ อ่านไม่ออกตอน hover: ${bad.join(' · ')}`)
+    // ย้ายเมาส์ออกจากเมนูก่อนกด ไม่งั้นเมนูอาจปิดก่อนคลิกทัน
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 5, y: 5 })
+    await sleep(200)
+  }
   check('กดซ่อนได้', sawHide && (await clickTestId('ruler-hide')))
   await sleep(800)
   check('ไม้บรรทัดหายไป', !(await evaluate("!!document.querySelector('.rul--h')")))

@@ -918,7 +918,21 @@ tbody tr:hover {
   white-space: nowrap;
   cursor: pointer;
 }
-.rulpick__opt:hover {
+/**
+ * ⚠️ **ต้องมี `:not(:disabled)` เสมอ** คิวสำคัญของไฟล์นี้
+ *
+ *   ข้างบนมีกฎของทั้งระบบ: `button:hover:not(:disabled) { background: var(--brand-dark) }`
+ *   ความสำคัญของมัน = (0,2,1) เพราะ `:not()` ไม่เพิ่มอะไร แต่ค่าในวงเล็บ (`:disabled`) = (0,1,0)
+ *
+ *   ถ้าเขียน `.rulpick__opt:hover` เฉย ๆ ได้ (0,2,0) → **แพ้กฎข้างบน**
+ *   ผลคือพื้นหลังกลายเป็นม่วงทึบ แต่สีตัวอักษรยังเป็นม่วงเข้มตามกฎนี้
+ *   → ม่วงบนม่วง **มองไม่เห็นตัวอักษร** (ผู้ใช้เจอและรายงาน — วัดได้ว่าสีทั้งสองเป็น
+ *     `rgb(84, 42, 150)` เป๊ะ ต่างกัน 0)
+ *
+ *   เติม `:not(:disabled)` แล้วเป็น (0,3,0) → ชนะทุกกรณี ไม่ต้องพึ่งลำดับในไฟล์
+ *   ทุกกฎ hover ของคลาสอื่นในไฟล์นี้เขียนแบบนี้อยู่แล้ว ตัวนี้เป็นตัวเดียวที่ตกหล่น
+ */
+.rulpick__opt:hover:not(:disabled) {
   background: var(--brand-soft);
   color: var(--brand-dark);
 }
@@ -953,7 +967,8 @@ tbody tr:hover {
 .rulpick__opt--off {
   color: var(--ink-2);
 }
-.rulpick__opt--off:hover {
+/** เหตุผลที่ต้องมี `:not(:disabled)` เหมือนกัน — ด้านบนของบล็อกนี้ */
+.rulpick__opt--off:hover:not(:disabled) {
   background: var(--err-bg);
   color: var(--err);
 }

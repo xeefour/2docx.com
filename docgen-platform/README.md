@@ -909,7 +909,7 @@ node --env-file=.env tools/inspect-preview-height.mjs            # ค่าเ�
 - เมนูปิดเมื่อคลิกข้างนอก / กด Esc เหมือนกล่องดาวน์โหลด
 
 ```bash
-node --env-file=.env tools/test-ruler-ui.mjs   # 75 ข้อ
+node --env-file=.env tools/test-ruler-ui.mjs   # 78 ข้อ
 ```
 
 > ⚠️ **จอเล็ก: เมนูต้องอยู่ในจอ และชื่อหน่วยต้องตรงกลาง**
@@ -963,8 +963,32 @@ node --env-file=.env tools/test-ruler-ui.mjs   # 75 ข้อ
 
 ```bash
 node --env-file=.env tools/inspect-zoom-gap.mjs 1600 1000   # เครื่องมือวัด (รับขนาดจอเป็น argument)
-node --env-file=.env tools/test-ruler-ui.mjs                 # 75 ข้อ (ชุด [12] คือเรื่องนี้)
+node --env-file=.env tools/inspect-menu-hover.mjs           # เครื่องมือวัดสีตอน hover
+node --env-file=.env tools/test-ruler-ui.mjs                 # 78 ข้อ (ชุด [12] = เรื่องนี้)
 ```
+
+**บั๊ก: hover แล้วตัวอักษรหาย (สีพื้นกับสีตัวอักษรเป็นสีเดียวกัน)**
+
+ผู้ใช้รายงานว่า *"mouse over เป็นสีม่วง มองไม่เห็นตัวอักษร"*
+วัดแล้วตอน hover สีตัวอักษนกับสีพื้นเป็น `rgb(84, 42, 150)` **เป๊ะทั้งคู่** (ต่างกัน 0)
+
+สาเหตุไม่ใช่ค่าสีผิด แต่เป็น **ความสำคัญของ CSS ไม่เท่ากัน**
+
+| กฎ | ความสำคัญ | ผล |
+|---|---|---|
+| `button:hover:not(:disabled)` | **(0,2,1)** | ชนะ → พื้นเป็นม่วงทึบ |
+| `.rulpick__opt:hover` | (0,2,0) | แพ้ → สีตัวอักษรยังเป็นม่วงเข้ม |
+
+> `:not()` ไม่เพิ่มความสำคัญเอง แต่**ค่าในวงเล็บนับ** — `:not(:disabled)` = (0,1,0)
+> ดังนั้น `.rulpick__opt:hover:not(:disabled)` = **(0,3,0)** ชนะทุกกรณี ไม่ต้องพึ่งลำดับในไฟล์
+>
+> ทุกกฎ hover ของคลาสอื่นในไฟล์นี้เขียน `:not(:disabled)` อยู่แล้ว
+> (`.dl__opt` · `.tabs__tab` · `.fieldai__btn` · `.urlbar__toggle` · `button.ghost` · `button.danger`)
+> `.rulpick__opt` กับ `.rulpick__opt--off` เป็น**ตัวเดียวที่ตกหล่น** แก้ให้เข้าข้อตกลงเดียวกับทั้งไฟล์
+>
+> ⚠️ **เทสต์ส่วนนี้ต้องยิงเมาส์จริง** ด้วย `Input.dispatchMouseEvent` ชนิด `mouseMoved`
+> การอ่าน `el.matches(':hover')` หรือสั่ง `element.click()` ไม่ทำให้ CSS `:hover` ทำงาน
+> และต้องวัดตอนเมนูมี**ครบ 3 ราย** (ไม้บรรทัดเปิดอยู่) ไม่งั้นจะพลาดบั๊กของ `.rulpick__opt--off`
 
 **หน้าตาเมนู (รอบแรกโครงไม่สวย — แก้แล้ว)**
 
@@ -1220,7 +1244,7 @@ node --env-file=.env tools/test-download-pages.mjs   # เลือกหน้�
 
 ```bash
 npx.cmd tsx tools/test-ruler.mjs          # 27 ข้อ — จุดขีด/หน่วย (ล้วน)
-node --env-file=.env tools/test-ruler-ui.mjs     # 44 ข้อ — ตรงขอบกระดาษจริง
+node --env-file=.env tools/test-ruler-ui.mjs     # 78 ข้อ — ตรงขอบกระดาษจริง
 ```
 
 > **⚠️ `0` ของไม้บรรทัดต้องตรงขอบกระดาศเป๊ะ** ไม่งั้นผู้ใช้วัดผิด
@@ -1387,8 +1411,8 @@ node --env-file=.env tools/test-ruler-ui.mjs     # 44 ข้อ — ตรงข
 ให้ใช้ `.doctools` (คลาสที่ใส่ไว้เฉพาะแถบ) ไม่ใช่ `.editor-preview` ที่ครอบทั้งการ์ด
 
 ```bash
-node --env-file=.env tools/test-ruler-ui.mjs       # 45 ข้อ
-node --env-file=.env tools/test-preview-layout.mjs  # 34 ข้อ
+node --env-file=.env tools/test-ruler-ui.mjs       # 78 ข้อ
+node --env-file=.env tools/test-preview-layout.mjs  # 37 ข้อ
 ```
 
 > **⚠️ ห้ามคลิกปุ่มไอคอนด้วย `element.click()`** — มันยิงแค่ event `click`

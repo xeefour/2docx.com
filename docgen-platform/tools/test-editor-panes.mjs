@@ -220,9 +220,19 @@ for (const label of ['แม่แบบ & การแชร์', 'ผู้ใ
   check(`เปิดแท็บ "${label}" ได้`, ok && st[1]?.active?.startsWith(label), st[1]?.active ?? 'ไม่พบแท็บ')
 }
 
-console.log('\n[5] sticky — เลื่อนหน้าแล้วแถบแท็บขวาต้องยังอยู่บนจอ')
+console.log('\n[5] sticky — แท็บฝั่งขวาต้องเกาะจอ เว้นแต่แท็บพรีวิว')
+/**
+ * ⚠️ ตอนนี้ `sticky` ใช้**เฉพาะแท็บที่สูงไม่เกินจอ** (ประวัติ/ช่องฟอร์ม/ผู้ใช้แม่แบบนี้)
+ *    ส่วนแท็บพรีวิวถอนออกโดยเจตนา เพราะการ์ดสูงเต็มจอ (`.docpage` = 100vh)
+ *    คอลัมน์ `sticky` ที่สูงเกินจอจะ**กินระยะเลื่อนของตัวเอง**
+ *    → แถบรูปย่อที่อยู่ใต้การ์ดถูกตรึงไว้นอกจอ ผู้ใช้เลื่อนถึงไม่ได้
+ *
+ *    จึงต้องทดสอบทั้งสองแบบ: ต้องเกาะจริงในแท็บที่ควรเกาะ
+ *    และต้อง**ไม่**เกาะในแท็บพรีวิว (ไม่งั้นแถบรูปย่อจะเข้าไม่ถึง)
+ */
 // ต้องทำให้หน้ายาวพอจะเลื่อนก่อน มิฉะนั้นทดสอบผ่านโดยไม่ได้ทดสอบอะไร
 await clickPaneTab('left', 'ฟอร์ม')
+await clickPaneTab('right', 'ช่องฟอร์ม')
 await sleep(600)
 await evaluate('scrollTo(0, document.body.scrollHeight)')
 await sleep(600)
@@ -230,15 +240,41 @@ const rightBar = await evaluate(`(() => {
   const col = document.querySelector('.editor-col--right')
   if (!col) return null
   const r = col.querySelector('.tabs').getBoundingClientRect()
-  return { y: Math.round(r.y), vh: innerHeight, sy: Math.round(scrollY) }
+  return { y: Math.round(r.y), vh: innerHeight, sy: Math.round(scrollY), pos: getComputedStyle(col).position }
 })()`)
 check('หน้าเลื่อนได้จริง (ไม่ใช่ทดสอบกับหน้าที่สั้นเกินจนเลื่อนไม่ได้)', rightBar && rightBar.sy > 0, rightBar ? `scrollY=${rightBar.sy}` : 'ไม่พบ')
 check(
-  'เลื่อนลงแล้วแถบแท็บฝั่งขวายังอยู่ในจอ',
-  rightBar && rightBar.y >= 0 && rightBar.y < rightBar.vh,
-  rightBar ? `scrollY=${rightBar.sy} · แท็บ y=${rightBar.y} / จอสูง ${rightBar.vh}` : 'ไม่พบ',
+  'แท็บที่ไม่ใช่พรีวิว: เลื่อนลงแล้วแถบแท็บยังอยู่ในจอ (sticky ทำงาน)',
+  rightBar && rightBar.pos === 'sticky' && rightBar.y >= 0 && rightBar.y < rightBar.vh,
+  rightBar ? `position=${rightBar.pos} · scrollY=${rightBar.sy} · แท็บ y=${rightBar.y} / จอสูง ${rightBar.vh}` : 'ไม่พบ',
 )
 await shot('04-scrolled.png')
+
+await clickPaneTab('right', 'ตัวอย่างเอกสาร')
+await sleep(600)
+await evaluate('scrollTo(0, 0)')
+await sleep(400)
+const previewCol = await evaluate(`(() => {
+  const col = document.querySelector('.editor-col--preview')
+  if (!col) return null
+  return {
+    pos: getComputedStyle(col).position,
+    h: Math.round(col.getBoundingClientRect().height),
+    vh: innerHeight,
+    hasDoc: !!document.querySelector('.docpage'),
+  }
+})()`)
+/**
+ * ⚠️ เทสต์นี้ไม่ได้กด "เรนเดอร์" → ยังไม่มี `.docpage` การ์ดจึงสั้น (หน้าว่าง)
+ *    เงื่อนไข "สูงกว่าจอ" จึงตรวจเฉพาะตอนที่มีเอกสารวาดจริง
+ */
+check(
+  'แท็บพรีวิว: คอลัมน์ไม่ sticky โดยเจตนา (การ์ดสูงเกินจอ ถ้า sticky แถบรูปย่อจะเลื่อนไม่ถึง)',
+  previewCol && previewCol.pos === 'static' && (!previewCol.hasDoc || previewCol.h > previewCol.vh),
+  previewCol
+    ? `position=${previewCol.pos} · การ์ดสูง ${previewCol.h}px / จอ ${previewCol.vh}px · ยังไม่ได้เรนเดอร์=${!previewCol.hasDoc}`
+    : 'ไม่พบ',
+)
 await evaluate('scrollTo(0, 0)')
 await sleep(300)
 

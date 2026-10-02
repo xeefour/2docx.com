@@ -137,8 +137,7 @@ const viewport = async (w, h) => {
  * คลิกรูปย่อหน้าที่ n
  *
  * ⚠️ ต้องแยก "เลื่อนให้เห็น" กับ "อ่านพิกัด" ออกจากกัน และอ่านพิกัด**หลัง**รอให้นิ่ง
- *    การ์ดพรีวิวสูงขึ้นตอนเลื่อนหน้า (`--editor-top` เปลี่ยนเมื่อคอลัมน์ sticky เกาะ)
- *    → `scrollIntoView` ทำให้เลย์เอาต์ขยับตามอีกรอบ
+ *    การ์ดพรีวิวสูงกว่าหน้าจอ (~1.3 จอ) → `scrollIntoView` ทำให้ทั้งหน้าเว็บขยับ
  *    ถ้าอ่านพิกัดทันทีหลัง `scrollIntoView` จะได้ตำแหน่งที่ล้าสมัย → คลิกไปโดนอย่างอื่น
  *    (เคยตก: hit-test ผ่าน แต่พอกดจริงกลับไม่เปลี่ยนหน้า)
  */
@@ -425,50 +424,67 @@ console.log('\n[3] คลิกรูปย่อ — ต้องเปลี�
 }
 await shot('02b-thumb-clicked.png')
 
-console.log('\n[3b] ความสูงพื้นที่รูป — ต้องได้มากที่สุดเท่าที่ทำได้')
+console.log('\n[3b] ความสูงพื้นที่รูป — ต้องสูงเท่าหน้าจอพอดี')
 {
   const stripH = await evaluate("Math.round(document.querySelector('.docstrip__wrap')?.getBoundingClientRect().height ?? 0)")
-  check('แถบรูปย่อกินความสูงไม่มากเกินไป', stripH > 0 && stripH <= 170, `สูง ${stripH}px (เดิม 201px)`)
+  check('แถบรูปย่อกินความสูงไม่มากเกินไป', stripH > 0 && stripH <= 170, `สูง ${stripH}px (ตอนอยู่ในจอเดิมสูง 161px)`)
 
   const geo = await evaluate(`(() => {
-    const split = document.querySelector('.editor-split')
     const col = document.querySelector('.editor-col--preview')
     const doc = document.querySelector('.docpage')
     return {
-      editorTop: split?.style.getPropertyValue('--editor-top') ?? '(ไม่มี)',
       colH: Math.round(col?.getBoundingClientRect().height ?? NaN),
       docH: Math.round(doc?.clientHeight ?? NaN),
+      vh: innerHeight,
+      colPos: col ? getComputedStyle(col).position : '?',
     }
   })()`)
   /**
-   * ⚠️ `--editor-top` ต้อง**ถูกตั้งจริง** ไม่ใช่ค่า fallback
-   *   ถ้า JavaScript ไม่ได้ตั้ง CSS จะเงียบ ๆ ใช้ `160px` แล้วการ์ดสั้นกว่าที่ควร
-   *   โดยไม่มีอะไรฟ้อง (เจอจริง — ดู `tools/inspect-preview-height.mjs`)
+   * ⚠️ เกณฑ์คือ "เท่าหน้าจอพอดี" ไม่ใช่ "ใหญ่กว่าเดิม"
+   *   ผู้ใช้สั่งให้กล่องรูปเอกสารสูงเท่าความสุดหน้าจอ (เดิมได้แค่ 588px จาก 1000px)
+   *   และแถบรูปย่อต้องถูกดันไปใต้ขอบจอ
    */
-  check('`--editor-top` ถูกตั้งค่าจริง ไม่ใช่กำลังใช้ค่า fallback', /^\d+px$/.test(geo.editorTop), `--editor-top = ${geo.editorTop}`)
   check(
-    'พื้นที่รูปสูงกว่าเดิมมาก (เดิม 515px)',
-    geo.docH >= 560,
-    `พื้นที่รูป ${geo.docH}px · การ์ด ${geo.colH}px`,
+    'กล่องรูปเอกสารสูงเท่าหน้าจอพอดี',
+    Math.abs(geo.docH - geo.vh) <= 1,
+    `พื้นที่รูป ${geo.docH}px / จอ ${geo.vh}px · ทั้งการ์ด ${geo.colH}px`,
+  )
+  /**
+   * ⚠️ การ์ดสูงเกินจอเสมอ คอลัมน์จึง**ต้องไม่ sticky**
+   *   `sticky` ที่สูงเกินจอจะกินระยะเลื่อนของตัวเอง → แถบรูปย่อถูกตรึงไว้นอกจอ
+   *   ผู้ใช้เลื่อนจนสุดก็ไม่เคยเห็น (นี่คือเหตุผลที่ถอน sticky ออก)
+   */
+  check('คอลัมน์พรีวิวไม่ sticky (ไม่งั้นแถบรูปย่อจะเลื่อนไม่ถึง)', geo.colPos === 'static', `position = ${geo.colPos}`)
+
+  /**
+   * ⚠️ ต้อง `scrollTo(0, 0)` ก่อนวัด
+   *    ขั้นก่อนหน้าคลิกรูปย่อด้วย `scrollIntoView` → หน้าเว็บเลื่อนไปแล้ว
+   *    ถ้าไม่รีเซ็ต แถบรูปย่อจะอยู่ในจออยู่แล้ว แล้วผ่านแบบผิดเงื่อนไข
+   */
+  await evaluate('scrollTo(0, 0)')
+  await sleep(600)
+  const beforeScroll = await evaluate(`(() => {
+    const s = document.querySelector('.docstrip__wrap')
+    return s ? { y: Math.round(s.getBoundingClientRect().y), vh: innerHeight } : null
+  })()`)
+  check(
+    'ตอน scroll = 0 แถบรูปย่ออยู่ใต้ขอบจอ (ต้องเลื่อนลงถึงจะเห็น)',
+    beforeScroll && beforeScroll.y >= beforeScroll.vh,
+    beforeScroll ? `แถบรูปย่อ y=${beforeScroll.y} / จอ ${beforeScroll.vh}` : 'ไม่พบแถบรูปย่อ',
   )
 
   await evaluate('scrollTo(0, document.body.scrollHeight)')
   await sleep(900)
-  const stillOnScreen = await evaluate(`(() => {
-    const el = document.querySelector('.editor-preview')
-    if (!el) return null
-    const r = el.getBoundingClientRect()
-    return { bottom: Math.round(r.bottom), vh: innerHeight }
+  const afterScroll = await evaluate(`(() => {
+    const s = document.querySelector('.docstrip__wrap')
+    if (!s) return null
+    const r = s.getBoundingClientRect()
+    return { y: Math.round(r.y), bottom: Math.round(r.bottom), vh: innerHeight, sy: Math.round(scrollY) }
   })()`)
   check(
-    'เลื่อนลงแล้วการ์ดพรีวิวยังอยู่ในจอ ไม่ล้นล่าง',
-    !!stillOnScreen && stillOnScreen.bottom <= stillOnScreen.vh + 1,
-    stillOnScreen ? `ถึง ${stillOnScreen.bottom} / จอ ${stillOnScreen.vh}` : 'วัดไม่ได้',
-  )
-  check(
-    'เลื่อนลงแล้วแถบแท็บขวายังไม่หลุดออกไปด้านบน (การ์ดสูงขึ้นตอน sticky แล้วกินระยะเลื่อนตัวเอง)',
-    await evaluate("(document.querySelector('.editor-col--right .tabs')?.getBoundingClientRect().top ?? -99) >= -1"),
-    `แท็บ y = ${await evaluate("Math.round(document.querySelector('.editor-col--right .tabs')?.getBoundingClientRect().top ?? NaN)")}`,
+    'เลื่อนลงแล้วเห็นแถบรูปย่อได้จริง',
+    afterScroll && afterScroll.y < afterScroll.vh && afterScroll.bottom > 0,
+    afterScroll ? `scrollY=${afterScroll.sy} · แถบรูปย่อ y=${afterScroll.y} ถึง ${afterScroll.bottom} / จอ ${afterScroll.vh}` : 'วัดไม่ได้',
   )
   await shot('02c-scrolled-tall.png')
   await evaluate('scrollTo(0, 0)')
@@ -519,10 +535,18 @@ if (m3) {
     m3.scrollW <= m3.hostW + 2,
     `เนื้อหา ${m3.scrollW} / กล่อง ${m3.hostW}`,
   )
+  /**
+   * ⚠️ เดิมคาดว่าสลับเป็น "พอดีหน้า" แล้วกระดาษ**ต้องเล็กลงเสมอ**
+   *    แต่ตอนนี้กล่องรูปเอกสารสูงเต็มจอ (100vh) กระดาษ A4 แนวตั้งที่กินความกว้าง
+   *    ทั้งหมดสูงราว 577px เท่านั้น → `contain` ถูกจำกัดด้วย**ความกว้าง**เสมอ
+   *    สองโหมดจึงให้ผลเท่ากัน และจะต่างกันจริงเมื่อกระดาษยาวกว่ากล่อง
+   *    (ฟอร์มต่อเนื่อง/กระดาษยาว) เกณฑ์ที่ใช้ได้เสมอจึงเป็น "ต้องไม่ล้นกล่องทั้งสองแนว"
+   *    ซึ่งตรวจแยกอีกสองข้อข้างบนแล้ว
+   */
   check(
-    'กระดาษย่อลงจากโหมดเต็มความกว้าง (แลกความกว้างมาเป็นความสูง)',
-    m3.canvasW < m1.canvasW && m3.canvasH < m1.canvasH,
-    `${m1.canvasW}×${m1.canvasH} → ${m3.canvasW}×${m3.canvasH}`,
+    'โหมดพอดีหน้าไม่ทำให้กระดาษใหญ่ขึ้น และยังอยู่ในกล่อง',
+    m3.canvasW <= m1.canvasW + 2 && m3.scrollH <= m3.hostH + 2,
+    `${m1.canvasW}×${m1.canvasH} → ${m3.canvasW}×${m3.canvasH} (กล่องสูง ${m3.hostH})`,
   )
   check('ป้ายปุ่มเปลี่ยนเป็นทางกลับ', m3.fitLabel === 'เต็มความกว้าง', `ป้าย "${m3.fitLabel}"`)
 }

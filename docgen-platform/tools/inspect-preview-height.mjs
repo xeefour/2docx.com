@@ -1,28 +1,21 @@
 /**
- * วัดความสูงจริงของการ์ดพรีวิว ณ ตอนยังไม่เลื่อน / เลื่อนจนคอลัมน์ sticky เกาะ
+ * วัดความสูงจริงของการ์ดพรีวิว / กล่องรูปเอกสาร / แถบรูปย่อ
  *
  *   node --env-file=.env tools/inspect-preview-height.mjs
  *
  * ── ทำไมต้องมีเครื่องมือนี้ ───────────────────────────────────────
- * การ์ดพรีวิวสูงได้ไม่เกิน `100vh - var(--editor-top) - 8px`
- * และ `--editor-top` ต้องมาจาก JavaScript ที่วัดตำแหน่งคอลัมน์จริง
+ * ผู้ใช้สั่ง "ให้รูป preview สูงเท่าความสูงหน้าจอ แถบรูปย่อต้องเลื่อนลงถึงจะเห็น"
+ * ซึ่งเป็นข้อตกลงที่วัดด้วยตัวเลขได้ ไม่ใช่เรื่องความรู้สึก:
+ *   · กล่องรูปเอกสาร (`.docpage`) ต้องสูงเท่าความสูงหน้าจอ (100vh)
+ *   · แถบรูปย่อ (`.docstrip__wrap`) ต้องอยู่**ใต้ขอบจอ** ตอน scroll = 0
+ *     และต้อง**เลื่อนแล้วเห็นได้จริง** (คอลัมน์ `sticky` สูงเกินจอจะกินระยะเลื่อน
+ *     ของตัวเอง → ข้างล่างการ์ดจะถูกตรึงไว้นอกจอตลอด ผู้ใช้เลื่อนไม่ถึง)
  *
- * ⚠️ **CSS ตัวแปรที่ JavaScript ไม่ได้ตั้ง จะกลายเป็น fallback เงียบ ๆ**
- *   เคยเจอ: effect ถูกเรียกตอน mount ตอนที่ `.editor-split` ยังไม่อยู่ใน DOM
- *   → `if (!el) return` → ไม่มีวันรันซ้ำ → `--editor-top` ไม่เคยถูกตั้ง
- *   → การ์ดใช้ fallback `160px` มาตลอด แล้วดูเหมือน "CSS พัง" ทั้งที่ไม่ได้พัง
- *
- *   เทสต์ (`test-fit-page.mjs`) บอกได้แค่ว่าผ่าน/ไม่ผ่าน
- *   เครื่องมือนี้พิมพ์ค่าจริงทุกตัว เพื่อดูว่าตัวไหนผิด
- *
- * ตัวอย่างผลที่ถูกต้อง:
- *   ก่อนเลื่อน = { inlineTop: "87px", colH: 905, docpageH: 588 }
- *   หลังเลื่อน = { inlineTop: "87px", colH: 905, docpageH: 588 }   ← เท่ากัน
- *   → ความสูงไม่เปลี่ยนตอนเลื่อน คอลัมน์ `sticky` จึงยังเกาะและแท็บไม่หลุด
- *   (เคยให้โตขึ้นตอนเกาะ แล้วคอลัมน์กินระยะเลื่อนตัวเอง → แท็บหาย 28px)
+ * เทสต์ (`test-preview-layout.mjs`) บอกได้แค่ว่าผ่าน/ไม่ผ่าน
+ * เครื่องมือนี้พิมพ์ค่าจริงทุกตัว พร้อมภาพหน้าจอ เพื่อดูว่าตัวไหนผิด
  */
 import { spawn } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Redis } from 'ioredis'
@@ -39,7 +32,7 @@ const redis = new Redis(process.env.VALKEY_URL)
 const sid = `dbgtop-${Date.now()}`
 await redis.set(`session:${sid}`, JSON.stringify({ sub: sid, name: 'วัด top', email: 'dbgtop@test.local', avatar: '' }), 'EX', 1800)
 const H = { cookie: `docgen_session=${sid}`, 'content-type': 'application/json' }
-const tpl = await pickTemplate(H, [TEST_TEMPLATES.onepage])
+const tpl = await pickTemplate(H, [TEST_TEMPLATES.multipage])
 const seedKey = keyOf(tpl)
 const snap = await snapshotForm(H, seedKey)
 await importTags(H, tpl)
@@ -91,6 +84,14 @@ const click = async (expr) => {
     await send('Input.dispatchMouseEvent', { type, x: b.x, y: b.y, button: 'left', clickCount: 1 })
   return true
 }
+/** เก็บภาพหน้าจอไว้ดูด้วยตา — ตัวเลขบอกว่า "ผิด" แต่ภาพบอกว่า "ผิดยังไง" */
+const shot = async (name) => {
+  const { data } = await send('Page.captureScreenshot', { format: 'png' })
+  mkdirSync(join(process.cwd(), 'logs'), { recursive: true })
+  const file = join(process.cwd(), 'logs', `preview-${name}.png`)
+  writeFileSync(file, Buffer.from(data, 'base64'))
+  console.log('  ภาพ:', file)
+}
 await send('Page.enable')
 await send('Runtime.enable')
 await send('Emulation.setDeviceMetricsOverride', { width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false })
@@ -99,8 +100,54 @@ await send('Network.setCacheDisabled', { cacheDisabled: true })
 await send('Page.navigate', { url: `${WEB}/studio` })
 await waitFor("!document.querySelector('.bootveil')", 60000)
 await waitFor("document.querySelectorAll('table tbody tr').length > 0", 45000)
-await click(`[...document.querySelectorAll('table tbody tr')].find(tr => (tr.textContent||'').includes(${JSON.stringify(tpl.name)}))?.querySelector('button.ghost')`)
-await waitFor("[...document.querySelectorAll('.tabs__tab')].length >= 6", 25000)
+/**
+ * เปิดแม่แบบที่เลือกไว้จากหน้ารายการ
+ *
+ * ⚠️ ต้องกดปุ่ม "เปิด" โดยเฉพาะ ไม่ใช่ `button.ghost` ตัวแรกในแถว
+ *    เพราะปุ่มแรกในแถวคือปุ่มดาว (ทำเครื่องหมายส็อค) → กดแล้วไม่เปิดหน้าแก้แม่แบบ
+ *    เคยเจอ: คลิกแล้วเงียบ ๆ ไม่มีอะไรเกิดขึ้น ทั้งที่สคริปต์รายงานว่า "กดแล้ว"
+ *
+ * ⚠️ ต้องยืนยันด้วย `elementFromPoint` ว่าจุดนั้นโดนปุ่มจริง ไม่โดนแผงอื่นบัง
+ *    เพราะการ์ด/แผนซ้อนที่คร่อมอยู่เหนือปุ่ม ทำให้คลิกเงียบโดยไม่มี error ให้เห็น
+ */
+const openTemplate = async (name) => {
+  const target = await evaluate(`(() => {
+    const row = [...document.querySelectorAll('table tbody tr')]
+      .find((tr) => (tr.textContent || '').includes(${JSON.stringify(name)}))
+    if (!row) return { miss: 'ไม่เจอแถว' }
+    const btn = [...row.querySelectorAll('button')].find((b) => (b.textContent || '').trim() === 'เปิด')
+    if (!btn) return { miss: 'ไม่เจอปุ่มเปิด' }
+    btn.scrollIntoView({ block: 'center' })
+    const r = btn.getBoundingClientRect()
+    const x = r.x + r.width / 2
+    const y = r.y + r.height / 2
+    const hit = document.elementFromPoint(x, y)
+    return { x, y, hit: hit ? (hit.tagName + '.' + (hit.className || '')).slice(0, 40) : 'null' }
+  })()`)
+  if (target.miss) return false
+  if (!target.hit?.includes('BUTTON')) {
+    console.log('! จุดคลิกโดน', target.hit, 'ไม่ใช่ปุ่ม — ข้ามการคลิก')
+    return false
+  }
+  for (const type of ['mousePressed', 'mouseReleased'])
+    await send('Input.dispatchMouseEvent', { type, x: target.x, y: target.y, button: 'left', clickCount: 1 })
+  return true
+}
+
+console.log('เปิดแม่แบบ:', tpl.name)
+await openTemplate(tpl.name)
+const opened = await waitFor("[...document.querySelectorAll('.tabs__tab')].length >= 6", 30000)
+if (!opened) {
+  console.log('✗ เปิดหน้าแก้แม่แบบไม่ได้ — วัดต่อไม่ได้')
+  await shot('00-cannot-open.png')
+  await send('Browser.close').catch(() => {})
+  chrome.kill()
+  await restoreForm(H, seedKey, snap)
+  await fetch(`${API}/api/access/${seedKey}`, { method: 'DELETE', headers: H }).catch(() => {})
+  await redis.del(`session:${sid}`)
+  redis.disconnect()
+  process.exit(1)
+}
 await sleep(600)
 await evaluate(FILL_FIELDS_JS)
 await sleep(500)
@@ -108,28 +155,57 @@ await click(`[...document.querySelectorAll('button')].find(b => b.textContent.in
 const ok = await waitFor("(() => { const c = document.querySelector('.docstage__page canvas'); return !!c && c.height > 200 })()", 120000)
 console.log('rendered =', ok)
 
-const probe = () => evaluate(`(() => {
-  const split = document.querySelector('.editor-split')
+/**
+ * พิมพ์ตำแหน่ง/ความสูงของทุกชิ้นที่ข้อตกลง "สูงเต็มจอ" พึ่งไว้
+ *
+ * ⚠️ วัดจาก `getBoundingClientRect()` (พิกัดบนจอจริง) เสมอ
+ *    เพราะคำว่า "อยู่ใต้ขอบจอไหม" คือคำถามเรื่อง**พิกัดบนจอ** ไม่ใช่เรื่องลำดับใน DOM
+ */
+const probe = () =>
+  evaluate(`(() => {
+  const r = (sel) => {
+    const el = document.querySelector(sel)
+    if (!el) return null
+    const b = el.getBoundingClientRect()
+    return { y: Math.round(b.y), bottom: Math.round(b.bottom), h: Math.round(b.height) }
+  }
   const col = document.querySelector('.editor-col--preview')
-  const doc = document.querySelector('.docpage')
+  const strip = r('.docstrip__wrap')
   return {
+    vh: innerHeight,
     scrollY: Math.round(scrollY),
-    docH: Math.round(document.body.scrollHeight),
-    splitTop: Math.round(split?.getBoundingClientRect().top ?? NaN),
-    inlineTop: split?.style.getPropertyValue('--editor-top') ?? '(ไม่มี inline)',
-    computedTop: col ? getComputedStyle(col).getPropertyValue('--editor-top').trim() : '?',
-    colH: Math.round(col?.getBoundingClientRect().height ?? NaN),
+    pageH: Math.round(document.body.scrollHeight),
     colPos: col ? getComputedStyle(col).position : '?',
-    docpageH: Math.round(doc?.clientHeight ?? NaN),
+    colH: Math.round(col?.getBoundingClientRect().height ?? NaN),
+    tools: r('.doctools'),
+    docpage: r('.docpage'),
+    strip,
+    /** แถบรูปย่อต้องอยู่ใต้ขอบจอ → ต้องเลื่อนถึงจะเห็น */
+    stripHiddenAtTop: strip ? strip.y >= innerHeight : null,
+    /** และต้อง**เลื่อนแล้วเห็นได้จริง** (ไม่ใช่ถูก sticky ตรึงไว้นอกจอตลอด) */
+    stripReachable: strip ? strip.y < innerHeight : null,
   }
 })()`)
-console.log('ก่อนเลื่อน =', JSON.stringify(await probe()))
+
+const show = async (label) => {
+  const p = await probe()
+  console.log(label, JSON.stringify(p))
+  return p
+}
+
+const before = await show('scroll = 0 →')
+await shot('01-top')
 await evaluate('scrollTo(0, document.body.scrollHeight)')
 await sleep(1200)
-console.log('หลังเลื่อน =', JSON.stringify(await probe()))
-await evaluate('scrollTo(0, 600)')
-await sleep(1200)
-console.log('เลื่อน 600 =', JSON.stringify(await probe()))
+const after = await show('เลื่อนสุด →')
+await shot('02-bottom')
+await evaluate('scrollTo(0, 0)')
+await sleep(600)
+
+console.log('\nสรุป')
+console.log('  กล่องรูปเอกสารสูงเท่าหน้าจอ :', before.docpage?.h, '/', before.vh)
+console.log('  แถบรูปย่ออยู่ใต้ขอบจอตอนแรก :', before.stripHiddenAtTop)
+console.log('  เลื่อนแล้วเห็นแถบรูปย่อ     :', after.stripReachable)
 
 await restoreForm(H, seedKey, snap)
 await fetch(`${API}/api/access/${seedKey}`, { method: 'DELETE', headers: H }).catch(() => {})

@@ -84,66 +84,20 @@ export default function TemplateEditor({
   }, [busy, status, setAppBusy])
 
   /**
-   * ── บอก CSS ว่าคอลัมน์ขวาเริ่มต้นที่หน้าจอตรงไหน ────────────────
+   * ⚠️ เคยมีการวัด `--editor-top` (ระยะจากขอบบนจอถึงคอลัมน์ตอน `scroll = 0`)
+   *    แล้วเอาไปจำกัดความสูงการ์ดพรีวิวไว้ที่ `100vh - --editor-top`
+   *    เพื่อให้ทั้งการ์ด (รวมแถบรูปย่อ) อยู่ในจอตอน `scroll = 0`
    *
-   * คอลัมน์ขวาเป็น `position: sticky; top: 16px` → พอเลื่อนลงมันจะหยุดที่ 16px
-   * แต่ตอน `scroll = 0` มันยังอยู่ใต้หัวหน้าเว็บ (ประมาณ 145px) ตามปกติ
+   *    ผู้ใช้สั่งเปลี่ยนเป็น "กล่องรูปเอกสารสูงเท่าหน้าจอ
+   *    แถบรูปย่ออยู่ใต้ขอบจอ ต้องเลื่อนลงถึงจะเห็น" → การ์ดสูงเกินจอเสมอ
+   *    ตัวแปรนี้จึงไม่มีใครอ่านอีกต่อไป และการวัดที่ซับซ้อนขนาดนี้
+   *    (callback ref + ResizeObserver ทั้ง `document.body`) กลายเป็นภาระเปล่า
    *
-   * CSS อ่านตำแหน่งของตัวเองไม่ได้ จึงต้องวัดแล้วส่งเป็น `--editor-top`
-   * แล้วให้การ์ดพรีวิวสูงได้ไม่เกิน `100vh - --editor-top`
-   * → ครบทุกระดับการเลื่อน ไม่ต้องเลื่อนหน้าจอถึงจะเห็นท้ายเอกสาร
-   *
-   * ⚠️ ต้องวัดใหม่เมื่อหัวหน้าเว็บสูงขึ้น (เช่นมีแถบแจ้งข้อผิดพลาดโผล่)
-   *    จึงดูความสูง `document.body` ด้วย ResizeObserver
+   *    ข้อควรจำ (เจอมาแล้ว): **CSS ตัวแปรที่ JavaScript ไม่ได้ตั้ง
+   *    จะกลายเป็น fallback เงียบ ๆ** — เคยมี effect ที่รันตอน mount ที่ `.editor-split`
+   *    ยังไม่อยู่ใน DOM แล้ว `return` ทิ้ง → ตัวแปรไม่เคยถูกตั้ง → การ์ดใช้ค่า
+   *    fallback 160px มาตลอด แล้วดูเหมือน CSS พัง ทั้งที่ไม่ได้พัง
    */
-  /**
-   * ⚠️ ต้องเก็บเป็น **state** ไม่ใช่ `useRef`
-   *
-   *   เดิมใช้ `useRef` แล้ว `if (!el) return` ใน effect
-   *   ตอน mount ยังไม่มี `.editor-split` ใน DOM (กำลังโหลดข้อมูลแม่แบบอยู่)
-   *   → effect return ทิ้งทันที และไม่มีวันรันซ้ำ เพราะ dependency ไม่เปลี่ยน
-   *   → `--editor-top` ไม่เคยถูกตั้ง การ์ดทั้งหมดใช้ค่า fallback 160px มาตลอด
-   *   (เจอตอนไล่ว่าทำไมการ์ดไม่สูงขึ้นตอนเลื่อน — ดูด้วย `tools/dbg-top.mjs`)
-   *
-   *   callback ref + state ทำให้ effect ได้รันอีกครั้งตอน element โผล่จริง
-   */
-  const [splitEl, setSplitEl] = useState<HTMLDivElement | null>(null)
-  useEffect(() => {
-    const el = splitEl
-    if (!el) return
-    let raf = 0
-    let last = -1
-    const measure = () => {
-      cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => {
-        /**
-         * ⚠️ วัดตำแหน่งตอน `scroll = 0` เสมอ แล้ว**ห้าม**ปล่อยให้โตขึ้นตอนเลื่อน
-         *
-         *   เคยลองใช้ตำแหน่งตอนนี้ (คอลัมน์ sticky เกาะที่ 16px → ใช้เต็มจอ)
-         *   แล้วแท็บฝั่งขวาหายไป 28px ตอนเลื่อนสุด เพราะคอลัมน์ที่สูงขึ้น
-         *   **กินระยะเลื่อนของตัวเอง** — คอลัมน์ `sticky` ที่สูงเกินช่องที่อยู่
-         *   จะเลื่อนตามหน้าแทนที่จะเกาะ แล้วหัวคอลัมน์เลยหลุดออกไปด้านบน
-         *   (เจอจาก `test-editor-panes` — แท็บ y=-28 เมื่อเลื่อนสุด)
-         *
-         *   ความสูงที่ได้มาจากการย่อแถบรูปย่อแทน ซึ่งปลอดภัยกว่า
-         */
-        const top = Math.round(el.getBoundingClientRect().top + window.scrollY)
-        if (top > 0 && top !== last) {
-          last = top
-          el.style.setProperty('--editor-top', `${top}px`)
-        }
-      })
-    }
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(document.body)
-    window.addEventListener('resize', measure)
-    return () => {
-      cancelAnimationFrame(raf)
-      ro.disconnect()
-      window.removeEventListener('resize', measure)
-    }
-  }, [splitEl, pane, tab])
 
   /**
    * สลับแท็บของฝั่งไหนก็ได้ → URL เปลี่ยนตาม (เขียนทั้งสองค่า ไม่งั้นอีกฝั่งจะหายจาก URL)
@@ -422,7 +376,7 @@ export default function TemplateEditor({
        * เดิมเป็นแท็บเดียวกว้างเต็มหน้า ทำให้ไม่ชัดว่าเนื้อหาอยู่ฝั่งไหน
        * จอแคบกว่า 1080px จะซ้อนเป็นคอลัมน์เดียวอัตโนมัติ
        */}
-      <div className="editor-split" ref={setSplitEl}>
+      <div className="editor-split">
         {/* ───────── ซ้าย ───────── */}
         <div className="editor-col">
           <Tabs tabs={leftTabs} active={tab} onChange={(id) => setTab(id as LeftTabId)} />

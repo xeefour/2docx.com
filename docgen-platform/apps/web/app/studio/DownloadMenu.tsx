@@ -252,52 +252,57 @@ export default function DownloadMenu({
               <span>หน้าที่ต้องการ</span>
               <span className="dl__count">{pageCount > 0 ? describeSelection(pages, pageCount) : 'ยังไม่มีหน้า'}</span>
             </div>
-            {showRange ? (
-              <>
-                <input
-                  className="dl__rangeinput"
-                  value={range}
-                  onChange={(e) => setRange(e.target.value)}
-                  placeholder={`ทั้งหมด เช่น 1-3, 5`}
-                  aria-label="ช่วงหน้าที่ต้องการ"
-                  disabled={busy}
-                />
-                <div className="dl__quick">
-                  <button className="ghost" onClick={() => setRange('')} disabled={busy}>
-                    ทุกหน้า
-                  </button>
-                  <button className="ghost" onClick={() => setRange('1')} disabled={busy}>
-                    หน้าแรก
-                  </button>
-                  <button className="ghost" onClick={() => setRange(`1-${pageCount}`)} disabled={busy}>
-                    1–{pageCount}
-                  </button>
-                  {pageCount > 1 && (
-                    <button
-                      className="ghost"
-                      onClick={() => setRange(`2-${pageCount}`)}
-                      disabled={busy}
-                      title="ตัดหน้าแรก (หน้าปก) ออก"
-                    >
-                      ไม่เอาปก
-                    </button>
-                  )}
-                </div>
-                <p className={`dl__hint${parsed.ok ? '' : ' dl__hint--err'}`}>
-                  {parsed.ok
-                    ? SPEC[peek].pageable
-                      ? `จะได้ ${pages.length} หน้า`
-                      : 'Word ไม่ใช้การเลือกหน้า — Word จัดหน้าใหม่ตอนเปิด'
-                    : parsed.reason}
-                </p>
-              </>
-            ) : (
-              <p className="dl__hint">
-                {SPEC[peek].pageable
+            {/**
+             * ⚠️ **กล่องนี้ต้องอยู่ตลอดเวลา ห้ามซ่อนเมื่อรูปแบบที่เลือกไม่รองรับการตัดหน้า**
+             *
+             *   เคยพั้งมาแล้ว (ผู้ใช้รายงาน): เมื่อเมาส์ไปโดนไอคอน Word/รูปภาพ/ZIP
+             *   `peek` เปลี่ยน → `showRange` กลายเป็น false → กล่องนี้**หายไป**
+             *   เมนูสูงลดลง ~121px → ปุ่มรูปแบบที่อยู่ข้างล่าง**ขยับขึ้นมาทับเมาส์**
+             *   → เมาส์หลุดจากปุ่มเดิม → peek เปลี่ยนกลับ → กล่องกลับมา → ปุ่มขยับลง
+             *   เกิดวนไปมาไม่สิ้นสุด (กระพริบ) และกดช่อง "หน้าที่ต้องการ" ไม่ได้เลย
+             *
+             *   วิธีแก้: คงโครงสร้างไว้เสมอ แต่**ปิดใช้งาน**ช่องกับปุ่มตอนที่ใช้ไม่ได้
+             *   แล้วบอกเหตุผลในบรรทัดใต้ช่อง — ผู้ใช้ยังเห็นช่องอยู่ ยังอ่านข้อความได้
+             *   และความสูงเมนูคงที่ไม่ขยับ
+             */}
+            <input
+              className="dl__rangeinput"
+              value={range}
+              onChange={(e) => setRange(e.target.value)}
+              placeholder={`ทั้งหมด เช่น 1-3, 5`}
+              aria-label="ช่วงหน้าที่ต้องการ"
+              disabled={busy || !showRange}
+            />
+            <div className="dl__quick">
+              <button className="ghost" onClick={() => setRange('')} disabled={busy || !showRange}>
+                ทุกหน้า
+              </button>
+              <button className="ghost" onClick={() => setRange('1')} disabled={busy || !showRange}>
+                หน้าแรก
+              </button>
+              <button className="ghost" onClick={() => setRange(`1-${pageCount}`)} disabled={busy || !showRange}>
+                1–{pageCount}
+              </button>
+              {pageCount > 1 && (
+                <button
+                  className="ghost"
+                  onClick={() => setRange(`2-${pageCount}`)}
+                  disabled={busy || !showRange}
+                  title="ตัดหน้าแรก (หน้าปก) ออก"
+                >
+                  ไม่เอาปก
+                </button>
+              )}
+            </div>
+            <p className={`dl__hint${showRange && !parsed.ok ? ' dl__hint--err' : ''}`}>
+              {!showRange
+                ? SPEC[peek].pageable
                   ? 'ยังไม่มีตัวอย่างบนจอ — ดาวน์โหลดได้ทั้งฉบับเท่านั้น'
-                  : 'Word ไม่ใช้การเลือกหน้า — Word จัดหน้าใหม่ตอนเปิด'}
-              </p>
-            )}
+                  : `${SPEC[peek].name} ไม่ใช้การเลือกหน้า — จัดหน้าใหม่ตอนเปิด`
+                : parsed.ok
+                  ? `จะได้ ${pages.length} หน้า`
+                  : parsed.reason}
+            </p>
           </div>
 
           <div className="dl__grid">

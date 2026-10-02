@@ -466,6 +466,72 @@ check(
   listDownloads().join(', '),
 )
 await shot('04-word-hint.png')
+/**
+ * ⚠️ ชี้ไอคอนรูปแบบที่**ตัดหน้าไม่ได้** (Word/รูปภาพ/ZIP) แล้ว
+ *    กล่อง "หน้าที่ต้องการ" ต้อง**ยังอยู่** และเมนูต้อง**ไม่ขยับ**
+ *
+ *   เคยพั้งมาแล้ว (ผู้ใช้รายงานว่าเมนูกระพริบไม่สิ้นสุด):
+ *   กล่องนี้ถูกซ่อนทิ้งเมื่อ `showRange` เป็น false → เมนูสูงลดลง ~121px
+ *   → ปุ่มรูปแบบที่อยู่ข้างล่างขยับขึ้นมา**ทับเมาส์** → `peek` เปลี่ยนกลับ
+ *   → กล่องกลับมา → ปุ่มขยับลง → วนไปมาไม่สิ้นสุด และกดช่องไม่ได้เลย
+ *
+ *   ต้องเช็คทั้ง "ช่องยังอยู่" และ "ตำแหน่งปุ่มไม่ขยับ"
+ *   เพราะแค่ช่องยังอยู่แต่ปุ่มขยับ 3px ก็ทำให้เมาส์หลุดปุ่มได้เหมือนกัน
+ */
+/**
+ * ⚠️ ชี้ไอคอน **Word** (รูปแบบเดียวที่ตัดหน้าไม่ได้ — PDF/PNG/ZIP ตัดได้ทั้งหมด)
+ *    แล้วกล่อง "หน้าที่ต้องการ" ต้อง**ยังอยู่** และเมนูต้อง**ไม่ขยับ**
+ *
+ *   เคยพั้งมาแล้ว (ผู้ใช้รายงานว่าเมนูกระพริบไม่สิ้นสุด):
+ *   กล่องนี้ถูกซ่อนทิ้งเมื่อ `showRange` เป็น false → เมนูสูงลดลง ~121px
+ *   → ปุ่มรูปแบบที่อยู่ข้างล่างขยับขึ้นมา**ทับเมาส์** → `peek` เปลี่ยนกลับ
+ *   → กล่องกลับมา → ปุ่มขยับลง → วนไปมาไม่สิ้นสุด และกดช่องไม่ได้เลย
+ *
+ * ⚠️ ต้องวัดตำแหน่งปุ่ม**เทียบกับกล่องเมนู** ไม่ใช่พิกัดบนจอ
+ *   `hoverText` เรียก `scrollIntoView` → ถ้าหน้าเลื่อน พิกัดทุกอย่างขยับพร้อมกัน
+ *   ทำให้เทียบผิดแล้วไปโทษแอปว่าเมนูขยับ (เจอตอนรันรอบแรก)
+ */
+const dlGeo = () =>
+  evaluate(`(() => {
+    const pop = document.querySelector('.dl__pop')
+    const input = document.querySelector('.dl__rangeinput')
+    if (!pop) return null
+    const pr = pop.getBoundingClientRect()
+    return {
+      popH: Math.round(pr.height),
+      hasInput: !!input,
+      inputDisabled: !!input?.disabled,
+      /** ระยะจากขอบบนเมนูถึงปุ่มแต่ละปุ่ม — ไม่ขึ้นกับการเลื่อนหน้า */
+      relY: [...document.querySelectorAll('.dl__opt')].map(
+        (o) => Math.round(o.getBoundingClientRect().y - pr.y),
+      ),
+    }
+  })()`)
+
+const geoPdf = await dlGeo()
+const hoveredWord2 = await hoverText('Word')
+const geoWord = await dlGeo()
+check(
+  'ชี้ Word (ตัดหน้าไม่ได้) → ช่อง "หน้าที่ต้องการ" ยังอยู่ ไม่หายไป',
+  hoveredWord2 && geoWord?.hasInput === true,
+  `ยังอยู่=${geoWord?.hasInput} · ปิดใช้งาน=${geoWord?.inputDisabled}`,
+)
+check(
+  'ชี้ Word → ความสูงเมนูเท่าเดิม ไม่หด (กันกระพริบไม่สิ้นสุด)',
+  geoPdf && geoWord && Math.abs(geoWord.popH - geoPdf.popH) <= 1,
+  `สูง ${geoPdf?.popH} → ${geoWord?.popH}px`,
+)
+check(
+  'ชี้ Word → ปุ่มรูปแบบไม่ขยับจากใต้เคอร์เซอร์',
+  geoPdf && geoWord && geoWord.relY.join() === geoPdf.relY.join(),
+  `${geoPdf?.relY.join()} → ${geoWord?.relY.join()}`,
+)
+check(
+  'ช่องที่ตัดหน้าไม่ได้ ต้องถูกปิดใช้งาน (ยังเห็นและอ่านได้ แต่กดไม่ได้)',
+  geoWord?.inputDisabled === true,
+  `disabled=${geoWord?.inputDisabled}`,
+)
+await shot('04b-hover-word.png')
 await hoverText('PDF')
 
 // ── 6. ดาวน์โหลด ZIP ────────────────────────────────────────────

@@ -25,6 +25,15 @@ const RULER_THICK = 18
 /** ระยะขอบของ `.docpage` (px) — ต้องตรงกับ `padding: 16px` */
 const PAGE_PAD = 16
 
+/**
+ * ความกว้างรูปย่อ (px)
+ *
+ * ⚠️ เล็กพอให้แถบรูปย่อกินความสูงน้อย เพราะทุก px ที่แถบนี้สูงขึ้น
+ *    คือ px ที่รูปเอกสารใหญ่**สั้นลง** (กล่องพรีวิวสูงเท่าที่แถบไม่สู้)
+ *    ผู้ใช้ขอให้ "รูป preview สูงเต็มหน้าจอ" → ต้องไม่ให้แถบรูปย่อกินที่
+ */
+const THUMB_W = 76
+
 /** ความละเอียดตอนพิมพ์ — A4 (595pt) × 2 ≈ 1190px ≈ 144 dpi พอกับกระดาษจริง */
 const PRINT_SCALE = 2
 
@@ -279,16 +288,30 @@ export default function DocumentPreview({
     if (!host) return
 
     let alive = true
-    const nodes: HTMLCanvasElement[] = []
+    const nodes: HTMLButtonElement[] = []
 
     void (async () => {
       // วาดทีละหน้าแบบต่อเนื่อง เพื่อไม่ให้ worker ของ pdf.js ค้าง
       for (let n = 1; n <= pdf.count; n++) {
         if (!alive) return
+        /**
+         * ⚠️ ต้องห่อ canvas ด้วย `<button>` ไม่ใช่ผนวก canvas เข้า `.docstrip` ตรง ๆ
+         *    โค้ดเดิมหาหน้าจาก `e.target.parentElement` ซึ่งพอ canvas เป็นลูกตรง
+         *    ของแถบ ตัวนั้นก็คือ `.docstrip` เอง → หา index ได้ `-1` → คลิกแล้วไม่เกิดอะไร
+         *    (ผู้ใช้เจอ: คลิกรูปย่อแล้วรูปใหญ่ไม่เปลี่ยน)
+         *    ใช้ `<button>` เพราะได้คีย์บอร์ดและ Enter ฟรี ๆ ด้วย
+         */
+        const btn = document.createElement('button')
+        btn.type = 'button'
+        btn.className = 'docthumb'
+        btn.dataset.page = String(n)
+        btn.title = `ดูหน้าที่ ${n}`
+        btn.setAttribute('aria-label', `ดูหน้าที่ ${n}`)
         const canvas = document.createElement('canvas')
-        canvas.style.width = '104px'
-        nodes.push(canvas)
-        host.appendChild(canvas)
+        canvas.style.width = `${THUMB_W}px`
+        btn.appendChild(canvas)
+        nodes.push(btn)
+        host.appendChild(btn)
         try {
           await pdf.render(n, canvas)
         } catch {
@@ -299,9 +322,27 @@ export default function DocumentPreview({
 
     return () => {
       alive = false
-      for (const c of nodes) c.remove()
+      for (const b of nodes) b.remove()
     }
   }, [pdf])
+
+  /**
+   * ทำเครื่องหมายหน้าที่กำลังดูบนรูปย่อ
+   *
+   * ⚠️ แถบรูปย่อถูกสร้างด้วย DOM ตรง ๆ ไม่ได้ผ่าน React
+   *    การเปลี่ยนหน้าจึงไม่ทำให้ React วาดใหม่ → ต้องมาอัปเดตเองใน effect นี้
+   *    ไม่งั้นผู้ใช้จะกดหน้า 2 แล้วไม่รู้ว่าตอนนี้กำลังดูหน้าไหน
+   */
+  useEffect(() => {
+    const host = stripRef.current
+    if (!host) return
+    for (const b of Array.from(host.children)) {
+      const on = Number(b.getAttribute('data-page')) === page
+      b.classList.toggle('is-active', on)
+      if (on) b.setAttribute('aria-current', 'true')
+      else b.removeAttribute('aria-current')
+    }
+  }, [pdf, page])
 
   const step = (dir: -1 | 1) =>
     setZoom((z) => {
@@ -587,32 +628,53 @@ export default function DocumentPreview({
 
       {/* ── หน้าที่เหลือ เรียงกันด้านท้าย ── */}
       {pdf.count > 1 && (
-        <div style={{ borderTop: '1px solid var(--line)', padding: '12px 16px' }}>
-          <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
-            ทั้งหมด {pdf.count} หน้า — คลิกเพื่อดู
+        <div className="docstrip__wrap">
+          <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+            ทั้งหมด {pdf.count} หน้า — คลิกรูปย่อเพื่อดูหน้านั้น
           </div>
           <div
             className="docstrip"
             ref={stripRef}
             onClick={(e) => {
-              // หา index ของ canvas ที่ถูกคลิก แล้วเลื่อนไปหน้านั้น
-              const target = (e.target as HTMLElement).parentElement
-              if (!target || !stripRef.current) return
-              const i = Array.from(stripRef.current.children).indexOf(target)
-              if (i >= 0) setPage(i + 1)
+              /**
+               * ⚠️ ต้องใช้ `closest('[data-page]')` ไม่ใช่ `parentElement`
+               *    คลิกอาจโดนตัว `<button>` หรือ `<canvas>` ข้างใน หรือแม้แต่ช่องว่างในปุ่ม
+               *    ถ้านับด้วย `parentElement` จะพลาดทุกกรณีที่คลิกไม่ตรงตัว canvas
+               */
+              const btn = (e.target as HTMLElement).closest('[data-page]')
+              const n = Number(btn?.getAttribute('data-page'))
+              if (n >= 1 && pdf.count) setPage(Math.min(n, pdf.count))
             }}
-            style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}
+            style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}
           />
           <style>{`
-            .docstrip canvas {
+            .docstrip__wrap {
+              border-top: 1px solid var(--line);
+              padding: 8px 16px 10px;
               flex: 0 0 auto;
+            }
+            .docthumb {
+              flex: 0 0 auto;
+              display: block;
+              padding: 2px;
               border: 2px solid var(--line);
-              border-radius: 2px;
+              border-radius: 4px;
               background: #fff;
               cursor: pointer;
-              transition: border-color .12s;
+              line-height: 0;
+              transition: border-color .12s, box-shadow .12s;
             }
-            .docstrip canvas:hover { border-color: var(--brand); }
+            .docthumb:hover { border-color: var(--brand); }
+            .docthumb.is-active {
+              border-color: var(--brand);
+              box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 25%, transparent);
+            }
+            .docthumb canvas {
+              display: block;
+              border: 0;
+              border-radius: 1px;
+              background: #fff;
+            }
           `}</style>
         </div>
       )}

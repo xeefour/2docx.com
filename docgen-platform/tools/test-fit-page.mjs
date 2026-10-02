@@ -133,6 +133,50 @@ const viewport = async (w, h) => {
   await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false })
   await sleep(400)
 }
+/**
+ * คลิกรูปย่อหน้าที่ n
+ *
+ * ⚠️ ต้องแยก "เลื่อนให้เห็น" กับ "อ่านพิกัด" ออกจากกัน และอ่านพิกัด**หลัง**รอให้นิ่ง
+ *    การ์ดพรีวิวสูงขึ้นตอนเลื่อนหน้า (`--editor-top` เปลี่ยนเมื่อคอลัมน์ sticky เกาะ)
+ *    → `scrollIntoView` ทำให้เลย์เอาต์ขยับตามอีกรอบ
+ *    ถ้าอ่านพิกัดทันทีหลัง `scrollIntoView` จะได้ตำแหน่งที่ล้าสมัย → คลิกไปโดนอย่างอื่น
+ *    (เคยตก: hit-test ผ่าน แต่พอกดจริงกลับไม่เปลี่ยนหน้า)
+ */
+const clickThumb = async (n) => {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await evaluate('scrollTo(0, 0)')
+    await sleep(700)
+    const exists = await evaluate(`(() => {
+      const b = document.querySelector('.docstrip [data-page="${n}"]')
+      if (!b) return false
+      b.scrollIntoView({ block: 'center', inline: 'center' })
+      return true
+    })()`)
+    if (!exists) return { ok: false, detail: 'ไม่เจอรูปย่อ' }
+    // รอให้เลย์เอาต์นิ่งก่อนค่อยอ่านพิกัด
+    await sleep(700)
+    const box = await evaluate(`(() => {
+      const b = document.querySelector('.docstrip [data-page="${n}"]')
+      if (!b) return null
+      const r = b.getBoundingClientRect()
+      const x = r.x + r.width / 2, y = r.y + r.height / 2
+      const hit = document.elementFromPoint(x, y)
+      return {
+        ok: !!hit && b.contains(hit),
+        x, y,
+        hitTag: hit ? (hit.tagName + '.' + hit.className) : 'ไม่มีอะไร',
+      }
+    })()`)
+    if (box?.ok) {
+      for (const type of ['mousePressed', 'mouseReleased'])
+        await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 })
+      return { ok: true, detail: `คลิกที่ ${box.hitTag}` }
+    }
+    if (attempt === 3) return { ok: false, detail: `จุดที่คลิกโดน ${box?.hitTag ?? 'ไม่มีอะไร'} ไม่ใช่รูปย่อ` }
+  }
+  return { ok: false, detail: 'ลองครบทุกครั้งแล้ว' }
+}
+
 const clickSelector = async (selector) => {
   const box = await evaluate(`(() => {
     const el = document.querySelector(${JSON.stringify(selector)})
@@ -328,7 +372,110 @@ if (!m1) {
   await shot('01-width-1600x1000.png')
 }
 
-console.log('\n[3] เปิดไม้บรรทัด — ต้องไม่ล้นแนวนอน (ไม้บรรทัดกินความกว้างไป 18px)')
+console.log('\n[3] คลิกรูปย่อ — ต้องเปลี่ยนรูปเอกสารใหญ่ตาม')
+{
+  const thumbs = await evaluate(`(() => {
+    const list = [...document.querySelectorAll('.docstrip [data-page]')]
+    return list.map((b) => ({ page: b.dataset.page, tag: b.tagName, active: b.classList.contains('is-active') }))
+  })()`)
+  check('รูปย่อเป็นปุ่มที่มี data-page (กดได้จริง)', thumbs.length > 1 && thumbs.every((t) => t.tag === 'BUTTON'), JSON.stringify(thumbs))
+  check('หน้าแรกถูกทำเครื่องหมายไว้', thumbs[0]?.active === true, `หน้า ${thumbs[0]?.page}`)
+
+  const pageLabel = () => evaluate("(document.querySelector('.doctools span')||{}).textContent?.trim() ?? ''")
+  /** เนื้อหาจริงของรูปใหญ่ — ใช้พิสูจน์ว่ากระดาษเปลี่ยนจริง ไม่ใช่แค่เปลี่ยนเลขหน้า */
+  const mainShot = () =>
+    evaluate(`(() => {
+      const c = document.querySelector('.docpage .docstage__page canvas')
+      return c ? c.toDataURL('image/png').length + ':' + c.toDataURL('image/png').slice(-64) : ''
+    })()`)
+
+  const label0 = await pageLabel()
+  const shot0 = await mainShot()
+  check('เริ่มต้นอยู่หน้า 1', /หน้า\s*1\s*\//.test(label0), label0)
+
+  const click2 = await clickThumb(2)
+  await sleep(1400)
+  const label1 = await pageLabel()
+  const shot1 = await mainShot()
+  check('คลิกรูปย่อหน้า 2 ได้', click2.ok, click2.detail)
+  check('ตัวบอกหน้าเปลี่ยนเป็นหน้า 2', /หน้า\s*2\s*\//.test(label1), `${label0} → ${label1}`)
+  check('รูปเอกสารใหญ่เปลี่ยนจริง (ไม่ใช่แค่เปลี่ยนเลข)', !!shot0 && !!shot1 && shot0 !== shot1, `ภาพต่างกัน: ${shot0 !== shot1}`)
+  check(
+    'รูปย่อหน้า 2 ถูกทำเครื่องหมายว่ากำลังดู',
+    await evaluate("!!document.querySelector('.docstrip [data-page=\"2\"]')?.classList.contains('is-active')"),
+  )
+
+  const click3 = await clickThumb(3)
+  await sleep(1400)
+  const label2 = await pageLabel()
+  const shot2 = await mainShot()
+  check('คลิกรูปย่อหน้า 3 แล้วเปลี่ยนอีกครั้ง', /หน้า\s*3\s*\//.test(label2) && shot2 !== shot1, `${label1} → ${label2} · ${click3.detail}`)
+
+  // คีย์บอร์ดต้องใช้ได้ด้วย (ปุ่มจริงได้ฟรี)
+  const kbOk = await evaluate(`(() => {
+    const b = document.querySelector('.docstrip [data-page="1"]')
+    if (!b) return false
+    b.focus()
+    return document.activeElement === b
+  })()`)
+  check('รูปย่อโฟกัสด้วยคีย์บอร์ดได้ (ใช้ Enter/Space ได้)', kbOk)
+
+  await clickThumb(1)
+  await sleep(1200)
+}
+await shot('02b-thumb-clicked.png')
+
+console.log('\n[3b] ความสูงพื้นที่รูป — ต้องได้มากที่สุดเท่าที่ทำได้')
+{
+  const stripH = await evaluate("Math.round(document.querySelector('.docstrip__wrap')?.getBoundingClientRect().height ?? 0)")
+  check('แถบรูปย่อกินความสูงไม่มากเกินไป', stripH > 0 && stripH <= 170, `สูง ${stripH}px (เดิม 201px)`)
+
+  const geo = await evaluate(`(() => {
+    const split = document.querySelector('.editor-split')
+    const col = document.querySelector('.editor-col--preview')
+    const doc = document.querySelector('.docpage')
+    return {
+      editorTop: split?.style.getPropertyValue('--editor-top') ?? '(ไม่มี)',
+      colH: Math.round(col?.getBoundingClientRect().height ?? NaN),
+      docH: Math.round(doc?.clientHeight ?? NaN),
+    }
+  })()`)
+  /**
+   * ⚠️ `--editor-top` ต้อง**ถูกตั้งจริง** ไม่ใช่ค่า fallback
+   *   ถ้า JavaScript ไม่ได้ตั้ง CSS จะเงียบ ๆ ใช้ `160px` แล้วการ์ดสั้นกว่าที่ควร
+   *   โดยไม่มีอะไรฟ้อง (เจอจริง — ดู `tools/inspect-preview-height.mjs`)
+   */
+  check('`--editor-top` ถูกตั้งค่าจริง ไม่ใช่กำลังใช้ค่า fallback', /^\d+px$/.test(geo.editorTop), `--editor-top = ${geo.editorTop}`)
+  check(
+    'พื้นที่รูปสูงกว่าเดิมมาก (เดิม 515px)',
+    geo.docH >= 560,
+    `พื้นที่รูป ${geo.docH}px · การ์ด ${geo.colH}px`,
+  )
+
+  await evaluate('scrollTo(0, document.body.scrollHeight)')
+  await sleep(900)
+  const stillOnScreen = await evaluate(`(() => {
+    const el = document.querySelector('.editor-preview')
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { bottom: Math.round(r.bottom), vh: innerHeight }
+  })()`)
+  check(
+    'เลื่อนลงแล้วการ์ดพรีวิวยังอยู่ในจอ ไม่ล้นล่าง',
+    !!stillOnScreen && stillOnScreen.bottom <= stillOnScreen.vh + 1,
+    stillOnScreen ? `ถึง ${stillOnScreen.bottom} / จอ ${stillOnScreen.vh}` : 'วัดไม่ได้',
+  )
+  check(
+    'เลื่อนลงแล้วแถบแท็บขวายังไม่หลุดออกไปด้านบน (การ์ดสูงขึ้นตอน sticky แล้วกินระยะเลื่อนตัวเอง)',
+    await evaluate("(document.querySelector('.editor-col--right .tabs')?.getBoundingClientRect().top ?? -99) >= -1"),
+    `แท็บ y = ${await evaluate("Math.round(document.querySelector('.editor-col--right .tabs')?.getBoundingClientRect().top ?? NaN)")}`,
+  )
+  await shot('02c-scrolled-tall.png')
+  await evaluate('scrollTo(0, 0)')
+  await sleep(500)
+}
+
+console.log('\n[4] เปิดไม้บรรทัด — ต้องไม่ล้นแนวนอน (ไม้บรรทัดกินความกว้างไป 18px)')
 await clickSelector('[data-testid="ruler-toggle"]')
 await sleep(900)
 const mRuler = await measure()

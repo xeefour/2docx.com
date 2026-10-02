@@ -43,8 +43,7 @@ import { useAppBusy } from '../components/AppStatus'
 import type { LoadedPdf } from './lib/pdf'
 
 /** แท็บฝั่งซ้าย — สิ่งที่กรอกลงเอกสาร + ประวัติของฉันเอง */
-type LeftTabId = 'form' | 'json' | 'history'
-/** แท็บฝั่งขวา — เรื่องของตัวแม่แบบ (รวม "ใครใช้แม่แบบนี้") */
+type LeftTabId = 'form' | 'json' | 'history'/** แท็บฝั่งขวา — เรื่องของตัวแม่แบบ (รวม "ใครใช้แม่แบบนี้") */
 type PaneId = 'preview' | 'template' | 'fields' | 'history'
 
 const LEFT_TABS: readonly string[] = ['form', 'json', 'history']
@@ -97,16 +96,42 @@ export default function TemplateEditor({
    * ⚠️ ต้องวัดใหม่เมื่อหัวหน้าเว็บสูงขึ้น (เช่นมีแถบแจ้งข้อผิดพลาดโผล่)
    *    จึงดูความสูง `document.body` ด้วย ResizeObserver
    */
-  const splitRef = useRef<HTMLDivElement | null>(null)
+  /**
+   * ⚠️ ต้องเก็บเป็น **state** ไม่ใช่ `useRef`
+   *
+   *   เดิมใช้ `useRef` แล้ว `if (!el) return` ใน effect
+   *   ตอน mount ยังไม่มี `.editor-split` ใน DOM (กำลังโหลดข้อมูลแม่แบบอยู่)
+   *   → effect return ทิ้งทันที และไม่มีวันรันซ้ำ เพราะ dependency ไม่เปลี่ยน
+   *   → `--editor-top` ไม่เคยถูกตั้ง การ์ดทั้งหมดใช้ค่า fallback 160px มาตลอด
+   *   (เจอตอนไล่ว่าทำไมการ์ดไม่สูงขึ้นตอนเลื่อน — ดูด้วย `tools/dbg-top.mjs`)
+   *
+   *   callback ref + state ทำให้ effect ได้รันอีกครั้งตอน element โผล่จริง
+   */
+  const [splitEl, setSplitEl] = useState<HTMLDivElement | null>(null)
   useEffect(() => {
-    const el = splitRef.current
+    const el = splitEl
     if (!el) return
     let raf = 0
+    let last = -1
     const measure = () => {
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(() => {
+        /**
+         * ⚠️ วัดตำแหน่งตอน `scroll = 0` เสมอ แล้ว**ห้าม**ปล่อยให้โตขึ้นตอนเลื่อน
+         *
+         *   เคยลองใช้ตำแหน่งตอนนี้ (คอลัมน์ sticky เกาะที่ 16px → ใช้เต็มจอ)
+         *   แล้วแท็บฝั่งขวาหายไป 28px ตอนเลื่อนสุด เพราะคอลัมน์ที่สูงขึ้น
+         *   **กินระยะเลื่อนของตัวเอง** — คอลัมน์ `sticky` ที่สูงเกินช่องที่อยู่
+         *   จะเลื่อนตามหน้าแทนที่จะเกาะ แล้วหัวคอลัมน์เลยหลุดออกไปด้านบน
+         *   (เจอจาก `test-editor-panes` — แท็บ y=-28 เมื่อเลื่อนสุด)
+         *
+         *   ความสูงที่ได้มาจากการย่อแถบรูปย่อแทน ซึ่งปลอดภัยกว่า
+         */
         const top = Math.round(el.getBoundingClientRect().top + window.scrollY)
-        if (top > 0) el.style.setProperty('--editor-top', `${top}px`)
+        if (top > 0 && top !== last) {
+          last = top
+          el.style.setProperty('--editor-top', `${top}px`)
+        }
       })
     }
     measure()
@@ -118,7 +143,7 @@ export default function TemplateEditor({
       ro.disconnect()
       window.removeEventListener('resize', measure)
     }
-  }, [pane, tab])
+  }, [splitEl, pane, tab])
 
   /**
    * สลับแท็บของฝั่งไหนก็ได้ → URL เปลี่ยนตาม (เขียนทั้งสองค่า ไม่งั้นอีกฝั่งจะหายจาก URL)
@@ -397,7 +422,7 @@ export default function TemplateEditor({
        * เดิมเป็นแท็บเดียวกว้างเต็มหน้า ทำให้ไม่ชัดว่าเนื้อหาอยู่ฝั่งไหน
        * จอแคบกว่า 1080px จะซ้อนเป็นคอลัมน์เดียวอัตโนมัติ
        */}
-      <div className="editor-split" ref={splitRef}>
+      <div className="editor-split" ref={setSplitEl}>
         {/* ───────── ซ้าย ───────── */}
         <div className="editor-col">
           <Tabs tabs={leftTabs} active={tab} onChange={(id) => setTab(id as LeftTabId)} />

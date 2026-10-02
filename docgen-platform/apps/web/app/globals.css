@@ -1157,3 +1157,42 @@ label {
     animation-delay: 0s;
   }
 }
+
+/* ── พิมพ์รูปเอกสาร ───────────────────────────────────────────
+   ⚠️ กระดาษพิมพ์ (`.printsheet`) เป็น portal ไปอยู่ใต้ `<body>` โดยตรง
+      เพราะ CSS ตรงนี้ซ่อนทุกอย่างด้วย `body > *:not(.printsheet)`
+      ถ้ามันซ้อนอยู่ใต้ต้นไม้ของแอป จะถูกซ่อนไปด้วยและได้กระดาษว่าง
+   ⚠️ ต้อง `display: none` ตอนออนไลน์ ถ้าไม่งั้นกระดาษจะไปกินความสูงของเพจ */
+.printsheet {
+  display: none;
+}
+
+@media print {
+  /* ซ่อนทั้งแอปเหลือแค่กระดาษพิมพ์ — ใช้ display:none ไม่ใช่ visibility
+     เพราะ visibility ยังกินพื้นที่แล้วจะได้กระดาษเปล่าหลายหน้าต่อท้าย */
+  body > *:not(.printsheet) {
+    display: none !important;
+  }
+  .printsheet {
+    display: block !important;
+    margin: 0;
+    padding: 0;
+  }
+  .printsheet img {
+    display: block;
+    width: 100%;
+    height: auto;
+    /* ตัดขอบกระดาษออก เพราะรูปคือเต็มหน้ากระดาษอยู่แล้ว */
+    margin: 0;
+    break-after: page;
+    page-break-after: always;
+  }
+  .printsheet img:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  /* หัว/ท้ายของเบราว์เซอร์จะกินพื้นที่และเหลื่อมบนเอกสารราชการ */
+  @page {
+    margin: 0;
+  }
+}

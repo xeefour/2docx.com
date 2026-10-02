@@ -13,11 +13,15 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { loadPdf, type LoadedPdf } from './lib/pdf'
 import { UNITS, type RulerUnit } from './lib/ruler'
 import Ruler from './Ruler'
 
 const ZOOMS = [0.5, 0.75, 1, 1.5, 2, 3]
+
+/** ความละเอียดตอนพิมพ์ — A4 (595pt) × 2 ≈ 1190px ≈ 144 dpi พอกับกระดาษจริง */
+const PRINT_SCALE = 2
 
 /** คีย์เก็บค่าที่เลือกไว้ — ผู้ใช้เปิดเอกสารเดิมบ่อย ไม่ควรตั้งใหม่ทุกครั้ง */
 const RULER_KEY = 'docgen.preview.ruler'
@@ -68,6 +72,12 @@ export default function DocumentPreview({
   const mainRef = useRef<HTMLCanvasElement>(null)
   const stripRef = useRef<HTMLDivElement>(null)
   const pageRef = useRef<HTMLDivElement>(null)
+  /** กระดาษที่เตรียมไว้พิมพ์ — ต้องอยู่**นอก**ต้นไม้ของแอปถึงจะซ่อนทั้งแอปได้ตอนพิมพ์ */
+  const printRef = useRef<HTMLDivElement>(null)
+  const [printing, setPrinting] = useState(false)
+  /** portal ต้องรอฝั่งเบราว์เซอร์ ไม่งั้น server render จะพังเพราะไม่มี document.body */
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   // ── โหลดไฟล์ใหม่ทุกครั้งที่ URL เปลี่ยน ──
   useEffect(() => {
@@ -237,6 +247,56 @@ export default function DocumentPreview({
       return next
     })
 
+  /**
+   * ── พิมพ์เอกสารทุกหน้าเป็นรูป ──
+   *
+   * ⚠️ ต้องเรนเดอร์ใหม่ที่ความละเอียดสำหรับพิมพ์ **ห้ามแอบเอา canvas ที่วาดไว้บนจอ**
+   *    canvas บนจอถูกย่อให้พอดีคอลัมน์ (~630px) → พิมพ์แล้วจะเป็นเส้นหยัก
+   *    `toPng(n, 2)` ให้ A4 ≈ 1190px กว้าง ≈ 144 dpi พอกับกระดาษจริง
+   *
+   * ⚠️ ต้องรอ `img.decode()` ทุกหน้าให้เสร็จก่อน `window.print()`
+   *    ไม่งั้นเบราว์เซอร์จะพิมพ์ออกมาหน้าว่าง ๆ (เคยเจออาการนี้กับการโหลดรูปช้า)
+   */
+  const printDoc = useCallback(async () => {
+    const host = printRef.current
+    if (!pdf || !host || printing) return
+
+    setPrinting(true)
+    host.replaceChildren()
+    const urls: string[] = []
+    let done = false
+    const cleanup = () => {
+      if (done) return
+      done = true
+      for (const u of urls) URL.revokeObjectURL(u)
+      host.replaceChildren()
+    }
+    // บางเบราว์เซอร์ `print()` ไม่บล็อก → ต้องรอสัญญาณนี้แทน
+    window.addEventListener('afterprint', cleanup, { once: true })
+
+    try {
+      for (let n = 1; n <= pdf.count; n++) {
+        const blob = await pdf.toPng(n, PRINT_SCALE)
+        const url = URL.createObjectURL(blob)
+        urls.push(url)
+        const img = new Image()
+        img.src = url
+        img.alt = `หน้า ${n}`
+        await img.decode()
+        host.appendChild(img)
+      }
+      window.print()
+    } catch (e) {
+      cleanup()
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      // `print()` บล็อกใน Chrome/Edge → ถึงตรงนี้คือพิมพ์เสร็จแล้ว
+      // เบราว์เซอร์ที่ไม่บล็อกจะปล่อยผ่าน `afterprint` แทน
+      if (window.matchMedia('print').matches !== true) cleanup()
+      setPrinting(false)
+    }
+  }, [pdf, printing])
+
   if (loading) {
     return (
       <div className="muted" style={{ padding: '64px 24px', textAlign: 'center' }}>
@@ -336,6 +396,31 @@ export default function DocumentPreview({
           </button>
 
           {/*
+           * ── พิมพ์รูปเอกสาร ──
+           * วางติดกับปุ่มดาวน์โหลด เพราะเป็นคู่กัน (เอาออกจากเครื่อง)
+           */}
+          <button
+            className="ghost rulbtn"
+            onClick={() => void printDoc()}
+            disabled={printing}
+            title={printing ? 'กำลังเตรียมรูป…' : 'พิมพ์เอกสารทุกหน้า'}
+            data-testid="print-doc"
+          >
+            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+              <path
+                d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <rect x="7" y="14" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+            </svg>
+            <span className="rulbtn__t">{printing ? 'กำลังพิมพ์…' : 'พิมพ์'}</span>
+          </button>
+
+          {/*
            * ปุ่มดาวน์โหลดอยู่ตรงนี้ รวมกับแถบซูม
            * เดิมอยู่ในหัวการ์ดพร้อม dropdown — เบียดกันจนหัวการ์ดสูงเปล่า
            */}
@@ -420,6 +505,17 @@ export default function DocumentPreview({
       <p className="muted" style={{ margin: 0, padding: '0 16px 14px', fontSize: 12 }}>
         {label} · กด Ctrl + ลูกกลิ้งเพื่อซูม
       </p>
+
+      {/*
+       * ── กระดาษสำหรับพิมพ์ ──
+       *
+       * ⚠️ ต้องอยู่เป็น**ลูกโดยตรงของ `<body>`** ไม่ใช่ซ้อนอยู่ในการ์ด
+       *    เพราะ CSS ตอนพิมพ์ซ่อนด้วย `body > *:not(.printsheet)`
+       *    ถ้ามันอยู่ใต้ต้นไม้ของแอป จะถูกซ่อนไปด้วยและได้กระดาษว่าง
+       *    → ใช้ portal ไปตรง `document.body`
+       */}
+      {mounted &&
+        createPortal(<div className="printsheet" ref={printRef} aria-hidden="true" />, document.body)}
     </div>
   )
 }

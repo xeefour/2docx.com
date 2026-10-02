@@ -25,12 +25,27 @@ import {
 } from './lib/api'
 import Tabs from './Tabs'
 import TemplateEditor from './TemplateEditor'
-import { readTemplateKey, setUrl, studioPath } from './lib/urlState'
+import { readParam, readTemplateKey, setUrl, studioPath, TAB_PARAM } from './lib/urlState'
 
 const ACCEPT = '.docx,.xlsx,.pptx,.odt,.ods,.odp'
 const MAX_MB = 20
 
 type ListTab = 'all' | 'mine' | 'shared' | 'bookmarks'
+
+/**
+ * แท็บของหน้ารายการใช้ `?tabs=` ตัวเดียวกับฝั่งซ้ายของหน้าแก้ไข
+ *
+ * ⚠️ ค่าใน URL อาจเป็นของ**หน้าแก้ไข** ได้ (เช่นคนกดย้อนกลับมาจาก
+ *    `/studio/<key>?tabs=form` แล้ว URL ยังมี query ติดมา)
+ *    → ต้องตรวจว่าอยู่ในชุดของหน้านี้ก่อน ไม่งั้นจะเปิดแท็บผิด
+ */
+const LIST_TABS: ListTab[] = ['all', 'mine', 'shared', 'bookmarks']
+
+/** อ่านแท็บหน้ารายการจาก URL ได้ — ค่าผิด/ไม่มี = `all` */
+function readListTab(search: string): ListTab {
+  const t = readParam(search, TAB_PARAM)
+  return LIST_TABS.includes(t as ListTab) ? (t as ListTab) : 'all'
+}
 
 /**
  * @param initialKey key ของแม่แบบที่จะเปิดทันที — มาจาก path `/studio/<key>`
@@ -78,19 +93,48 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
     void load()
   }, [load])
 
+  /**
+   * อ่านแท็บหน้ารายการจาก URL ตอน mount
+   *
+   * ⚠️ ต้องอ่านใน effect ไม่ใช่ตอนสร้าง state
+   *    เพราะหน้านี้ถูก SSR ด้วย (server ไม่มี `window`)
+   *    ถ้าอ่านตอน render ฝั่งเบราว์เซอร์จะได้ค่าคนละอันกับ server → hydration mismatch
+   *    (เรื่องเดียวกันนี้เคยเจอใน `TemplateEditor`)
+   */
+  useEffect(() => {
+    setTab(readListTab(window.location.search))
+  }, [])
+
+  /**
+   * สลับแท็บหน้ารายการ → เขียนลง URL เสมอ
+   *
+   * ⚠️ ใช้ `push` ไม่ใช่ `replace` เพราะผู้ใช้ต้องกดย้อนกลับย้อนแท็บได้
+   *    ถ้าใช้ `replace` ปุ่มย้อนกลับของเบราว์เซอร์จะกระโดดข้ามแท็บทั้งหมด
+   *    (หน้าแก้ไขใช้ `replace` เพราะสลับแท็บขณะกรอกฟอร์ม ไม่ต้องย้อน)
+   */
+  const pickListTab = useCallback((next: ListTab) => {
+    setTab(next)
+    // แท็บแรกไม่ต้องเขียน จะได้ URL สะอาดเป็น `/studio`
+    setUrl(studioPath(null, next === 'all' ? null : next), 'push')
+  }, [])
+
   /** เปิดแม่แบบ — URL เปลี่ยนด้วยเสมอ เพื่อให้คัดลอกไปให้คนอื่นเปิดต่อได้ */
   const openTemplate = useCallback((t: Template) => {
     setNotFound(null)
     setOpen(t)
     // ระบุแท็บเริ่มต้นทั้งสองฝั่ง — ไม่งั้น URL จะขาด `pane` ไป
+    // (`?tabs=` ของหน้ารายการถูกแทนที่ไปด้วยแท็บซ้ายของหน้านี้ ไม่ชนกัน)
     setUrl(studioPath(templateKeyOf(t), 'form', 'preview'), 'push')
   }, [])
 
-  /** ปิดกลับไปหน้ารายการ */
+  /**
+   * ปิดกลับไปหน้ารายการ — ต้องคืน**แท็บเดิม** ที่ผู้ใช้อยู่ก่อนเปิดแม่แบบ
+   * ไม่งั้นปิดเสร็จจะหลุดไปแท็บแรกเสมอ (เคยเป็นอาการนี้ตอนยังไม่ผูกกับ URL)
+   */
   const closeTemplate = useCallback(() => {
     setOpen(null)
-    setUrl(studioPath(null), 'push')
-  }, [])
+    setUrl(studioPath(null, tab === 'all' ? null : tab), 'push')
+  }, [tab])
 
   /**
    * เปิดแม่แบบจาก URL ตอนโหลดเสร็จ
@@ -118,6 +162,10 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
     const onPop = () => {
       const key = readTemplateKey(window.location.pathname)
       if (!key) {
+        // ⚠️ ต้องอ่านแท็บจาก URL ตรงนี้ด้วย ไม่งั้นกดย้อนกลับแล้ว URL เปลี่ยนแต่แท็บไม่เปลี่ยน
+        //   เฉพาะตอนที่อยู่**หน้ารายการ**เท่านั้นที่อ่าน — ตอนเปิดแม่แบบ
+        //   `?tabs=form` เป็นแท็บ**ซ้าย**ของหน้าแก้ไข ไม่ใช่แท็บหน้านี้
+        setTab(readListTab(window.location.search))
         setOpen(null)
         return
       }
@@ -261,7 +309,7 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
         />
       </header>
 
-      <Tabs tabs={tabs} active={tab} onChange={(id) => setTab(id as ListTab)} />
+      <Tabs tabs={tabs} active={tab} onChange={(id) => pickListTab(id as ListTab)} />
 
       {/* ตัวกรอง — ไม่ใส่ margin แล้ว ใช้ gap ของพ่อแทน ไม่งั้นจะเป็น 14 + 16 = 30px */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

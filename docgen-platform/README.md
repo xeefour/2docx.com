@@ -1167,7 +1167,10 @@ node --env-file=.env tools/test-preview-layout.mjs   # 18 ข้อ
 
 | URL | หมายถึง |
 |---|---|
-| `/studio` | หน้ารายการแม่แบบ |
+| `/studio` | หน้ารายการแม่แบบ · แท็บแรก (แม่แบบทั้งหมด) — ไม่เขียน query ให้ URL สะอาด |
+| `/studio?tabs=mine` | หน้ารายการ · แท็บ "ที่ฉันเป็นเจ้าของ" |
+| `/studio?tabs=shared` | หน้ารายการ · แท็บ "แชร์กับฉัน" |
+| `/studio?tabs=bookmarks` | หน้ารายการ · แท็บ "ผู้กากรถ" (บุ๊กมาร์ก) |
 | `/studio/1521017978873838468?tabs=form&pane=preview` | เปิดแม่แบบ · ซ้าย=ฟอร์ม · ขวา=ตัวอย่างเอกสาร |
 | `/studio/1521017978873838468?tabs=json&pane=fields` | เปิดแม่แบบ · ซ้าย=JSON · ขวา=ช่องฟอร์ม |
 | `/studio/1521017978873838468?tabs=history&pane=preview` | เปิดแม่แบบ · ซ้าย=ประวัติของฉัน · ขวา=ตัวอย่างเอกสาร |
@@ -1179,6 +1182,13 @@ node --env-file=.env tools/test-preview-layout.mjs   # 18 ข้อ
 | `tabs` | แท็บฝั่ง**ซ้าย** | `form` · `json` · `history` |
 | `pane` | แท็บฝั่ง**ขวา** | `preview` · `template` · `fields` · `history` |
 
+> ⚠️ **`?tabs=` มีสองความหมาย ขึ้นอยู่กับ path**
+> · `/studio` (ไม่มี key) = แท็บของ**หน้ารายการ** — `all` · `mine` · `shared` · `bookmarks`
+> · `/studio/<key>` = แท็บฝั่ง**ซ้าย**ของหน้าแก้ไข — `form` · `json` · `history`
+>
+> path ต่างกันจึงไม่ชนกันจริง แต่ตอนอ่านต้องตรวจชุดค่าให้ตรงหน้าก่อนเสมอ
+> เช่น `/studio?tabs=form` ต้องกลับไปแท็บแรกของหน้ารายการ ไม่ใช่พยายามเปิดแท็บซ้าย
+
 > **⚠️ `history` เป็นชื่อที่ใช้ได้ทั้งสองฝั่ง** (ซ้าย=ประวัติของฉัน · ขวา=ผู้ใช้แม่แบบนี้)
 > โค้ดจึงต้องดูว่า `?tabs=` เป็นแท็บซ้ายที่ถูกต้องก่อน แล้วค่อยตีความแบบ URL รุ่นเก่า
 > ไม่งั้น `?tabs=history` จะไปเปิดฝั่งขวาด้วย (เพราะ `history` เคยเป็นชื่อแท็บชุดเดียว)
@@ -1187,7 +1197,7 @@ node --env-file=.env tools/test-preview-layout.mjs   # 18 ข้อ
 |---|---|
 | `app/studio/lib/urlState.ts` | กติกาอ่าน/เขียน URL จุดเดียว · `studioPath(key, tab, pane)` |
 | `app/studio/[key]/page.tsx` | route สำหรับ `/studio/<key>` — มีเพื่อให้**รีเฟรชแล้วยังเปิดแม่แบบเดิม** |
-| `app/studio/Studio.tsx` | เปิด/ปิดแม่แบบ → เปลี่ยน URL + ฟัง `popstate` |
+| `app/studio/Studio.tsx` | แท็บหน้ารายการ + เปิด/ปิดแม่แบบ → เปลี่ยน URL + ฟัง `popstate` |
 | `app/studio/TemplateEditor.tsx` | สลับแท็บของแต่ละฝั่ง → เขียน `?tabs=` และ `?pane=` |
 
 **ทำไมใช้ history API ตรง ๆ ไม่ใช่ router ของ Next** — ไม่ต้องวนกลับเซิร์ฟเวอร์
@@ -1199,7 +1209,8 @@ node --env-file=.env tools/test-preview-layout.mjs   # 18 ข้อ
 | การกระทำ | โหมด | เหตุผล |
 |---|---|---|
 | เปิด/ปิดแม่แบบ | `push` | กดย้อนกลับต้องกลับไปหน้ารายการได้ |
-| สลับแท็บ | `replace` | ถ้าใช้ `push` ประวัติจะกอง — ผู้ใช้ต้องกดย้อนกลับหลายครั้งถึงจะออกจากแม่แบบ |
+| สลับแท็บ (ภายในหน้าแก้ไข) | `replace` | ถ้าใช้ `push` ประวัติจะกอง — ผู้ใช้ต้องกดย้อนกลับหลายครั้งถึงจะออกจากแม่แบบ |
+| สลับแท็บหน้ารายการ | `push` | ผู้ใช้ต้องกดย้อนกลับย้อนแท็บได้ ถ้าใช้ `replace` ปุ่มย้อนกลับจะข้ามแท็บไปทั้งชุด |
 
 **⚠️ Next ไม่ยิง event เมื่อมี `pushState`/`replaceState`** — ต้องฟัง `popstate` เอง
 ไม่งั้น URL เปลี่ยนแต่หน้าไม่ตาม (กดย้อนกลับแล้วเห็นหน้าเดิม)
@@ -1209,7 +1220,8 @@ node --env-file=.env tools/test-preview-layout.mjs   # 18 ข้อ
 → hydration mismatch
 
 ```bash
-node --env-file=.env tools/test-studio-url.mjs   # 21 ข้อ
+node --env-file=.env tools/test-studio-url.mjs     # 31 ข้อ — URL ของหน้าแก้ไข
+node --env-file=.env tools/test-list-tabs-url.mjs  # 29 ข้อ — URL ของแท็บหน้ารายการ
 ```
 
 ทดสอบทั้ง URL, ปุ่มย้อนกลับ/ไป-กลับ, deep link, และ key ที่ไม่มีอยู่จริง

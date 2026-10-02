@@ -325,9 +325,17 @@ export default function TemplateEditor({
   ]
   const rightTabs = [
     { id: 'preview', label: 'ตัวอย่างเอกสาร' },
-    { id: 'template', label: 'แม่แบบ & การแชร์' },
+    /**
+     * ⚠️ ชื่อแท็บเดิมคือ "แม่แบบ & การแชร์" แต่ผู้ใช้สั่งย้ายการ์ดการแชร์
+     *   ไปแท็บของตัวเอง (แท็บ "การแชร์และสิทธิ์") แล้ว
+     *   → แท็บนี้เหลือแต่ข้อมูลแม่แบบ ชื่อเดิมจึงโกหกผู้ใช้
+     *   `history` เดิมคือแท็บ "ผู้ใช้แม่แบบนี้" ตอนนี้ถูกใช้เป็นที่ของการแชร์แทน
+     *   แต่**ยังโชว์รายชื่อผู้ใช้แม่แบบนี้ต่อ** เพราะเป็นเรื่องเดียวกัน
+     *   (ใครได้สิทธิ์ · ใครเคยใช้) ไม่ใช่การตัดฟีเจอร์ทิ้ง
+     */
+    { id: 'template', label: 'ข้อมูลแม่แบบ' },
     { id: 'fields', label: 'ช่องฟอร์ม', count: fields.length },
-    { id: 'history', label: 'ผู้ใช้แม่แบบนี้' },
+    { id: 'history', label: 'การแชร์และสิทธิ์' },
   ]
 
   return (
@@ -521,7 +529,13 @@ export default function TemplateEditor({
           )}
 
           {pane === 'template' && (
-            <SharePanel template={template} access={access} onAccess={setAccess} notify={notify} />
+            <SharePanel
+              template={template}
+              access={access}
+              onAccess={setAccess}
+              notify={notify}
+              part="meta"
+            />
           )}
 
           {pane === 'fields' && (
@@ -537,7 +551,27 @@ export default function TemplateEditor({
             />
           )}
 
-          {pane === 'history' && <HistoryPanel templateKey={templateKey} />}
+          {/**
+           * แท็บ "การแชร์และสิทธิ์" เดิมชื่อ "ผู้ใช้แม่แบบนี้" (ผู้ใช้สั่งเปลี่ยนชื่อ)
+           * ผู้ใช้สั่งย้ายการ์ดการแชร์เข้ามาอยู่ในแท็บนี้ด้วย
+           *
+           * ⚠️ ยังคงโชว์ `HistoryPanel` ต่อ ไม่ตัดทิ้ง
+           *    เพราะเป็นเรื่องเดียวกัน — ใครได้สิทธิ์ (การ์ดบน)
+           *    และใครเคยใช้ไปแล้ว (การ์ดล่าง) ผู้ใช้ต้องดูทั้งสองอย่างด้วยกัน
+           *    ตัดทิ้งเพราะ "ย้ายการ์ด" เท่านั้น = ทำฟีเจอร์ที่ยังใช้อยู่หายไปเงียบ ๆ
+           */}
+          {pane === 'history' && (
+            <div style={{ display: 'grid', gap: 16 }}>
+              <SharePanel
+                template={template}
+                access={access}
+                onAccess={setAccess}
+                notify={notify}
+                part="access"
+              />
+              <HistoryPanel templateKey={templateKey} />
+            </div>
+          )}
         </div>
       </div>
     </div>

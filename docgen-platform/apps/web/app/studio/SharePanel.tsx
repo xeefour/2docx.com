@@ -18,11 +18,23 @@ export default function SharePanel({
   access,
   onAccess,
   notify,
+  part = 'all',
 }: {
   template: Template
   access: AccessView | null
   onAccess: (a: AccessView) => void
   notify: (msg: string) => void
+  /**
+   * แสดงการ์ดไหนบ้าง
+   *
+   * ⚠️ ผู้ใช้สั่งให้ย้ายการ์ด "การแชร์และสิทธิ์" ไปอยู่ในแท็บของตัวเอง
+   *   เดิมทั้งสองการ์ดอยู่ในแท็บเดียวกัน ("แม่แบบ & การแชร์") ทำให้แท็บนั้นยาวมาก
+   *   และชื่อแท็บก็ไม่ตรงกับเนื้อหาอีกแล้ว
+   *   · `meta`   = การ์ด "ข้อมูลแม่แบบ" (ชื่อ/หมวด/แท็ก/ไฟล์/ลบแม่แบบ)
+   *   · `access` = การ์ด "การแชร์และสิทธิ์" (สิทธิ์/ลิงก์สาธารณ/ผู้ได้รับ)
+   *   · `all`    = ทั้งสองการ์ด (ค่าเริ่มต้น — ใช้ตอนยังไม่ได้แยกแท็บ)
+   */
+  part?: 'all' | 'meta' | 'access'
 }) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState(template.category ?? '')
@@ -121,6 +133,7 @@ export default function SharePanel({
   return (
     <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
       {/* ── metadata ── */}
+      {(part === 'all' || part === 'meta') && (
       <div className="card" style={{ padding: 16 }}>
         <h2 style={{ margin: '0 0 12px', fontSize: 15 }}>ข้อมูลแม่แบบ</h2>
         <div style={{ display: 'grid', gap: 12 }}>
@@ -233,8 +246,10 @@ export default function SharePanel({
           )}
         </div>
       </div>
+      )}
 
       {/* ── การแชร์ ── */}
+      {(part === 'all' || part === 'access') && (
       <div className="card" style={{ padding: 16 }}>
         <h2 style={{ margin: '0 0 4px', fontSize: 15 }}>การแชร์และสิทธิ์</h2>
         <p className="muted" style={{ margin: '0 0 12px', fontSize: 12 }}>
@@ -450,6 +465,7 @@ export default function SharePanel({
             {access?.ownerName ? ` (เจ้าของคือ ${access.ownerName})` : ''}
           </p>        )}
       </div>
+      )}
     </div>
   )
 }

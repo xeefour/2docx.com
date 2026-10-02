@@ -230,7 +230,7 @@ await waitFor("document.querySelectorAll('table tbody tr').length > 0", 30000)
 console.log('\n[1] เปิดแม่แบบ — เลย์เอาต์ก่อนเรนเดอร์')
 const opened = await openTemplateRow(first.name)
 check('เปิดแม่แบบที่เลือกไว้ (ไม่ใช่แถวแรก)', opened.ok, opened.detail)
-// ตอนนี้มีแท็บ 2 ชุด = 3 + 4 = 7 (ซ้าย ฟอร์ม/JSON/ประวัติ · ขวา ตัวอย่าง/แม่แบบ/ช่องฟอร์ม/ผู้ใช้แม่แบบนี้)
+// ตอนนี้มีแท็บ 2 ชุด = 3 + 4 = 7 (ซ้าย ฟอร์ม/JSON/ประวัติ · ขวา ตัวอย่าง/ข้อมูลแม่แบบ/ช่องฟอร์ม/การแชร์และสิทธิ์)
 await waitFor("[...document.querySelectorAll('.tabs__tab')].length >= 6", 25000)
 await sleep(400)
 

@@ -4,7 +4,7 @@
  *   node --env-file=.env tools/test-editor-panes.mjs
  *
  *   ซ้าย  ฟอร์ม · JSON · ประวัติ
- *   ขวา   ตัวอย่างเอกสาร · แม่แบบ & การแชร์ · ช่องฟอร์ม · ผู้ใช้แม่แบบนี้
+ *   ขวา   ตัวอย่างเอกสาร · ข้อมูลแม่แบบ · ช่องฟอร์ม · การแชร์และสิทธิ์
  *
  * ── สิ่งที่ต้องผ่าน ────────────────────────────────────────────
  * 1. มีแถบแท็บ 2 ชุด คนละฝั่งของจอ
@@ -187,7 +187,7 @@ check('ฝั่งซ้ายอยู่ครึ่งซ้ายจริ�
 check('ฝั่งขวาอยู่ครึ่งขวาจริง', tabBars[1] && tabBars[1].x >= tabBars[1].vw / 2, tabBars[1] ? `x=${tabBars[1].x} / จอ ${tabBars[1].vw}` : '')
 check(
   'ชื่อแท็บตรงตามที่กำหนด',
-  tabBars[0]?.tabs.join(',') === 'ฟอร์ม,JSON,ประวัติ' && tabBars[1]?.tabs.join(',') === 'ตัวอย่างเอกสาร,แม่แบบ & การแชร์,ช่องฟอร์ม,ผู้ใช้แม่แบบนี้',
+  tabBars[0]?.tabs.join(',') === 'ฟอร์ม,JSON,ประวัติ' && tabBars[1]?.tabs.join(',') === 'ตัวอย่างเอกสาร,ข้อมูลแม่แบบ,ช่องฟอร์ม,การแชร์และสิทธิ์',
   `ซ้าย=[${tabBars[0]?.tabs.join(' | ')}] ขวา=[${tabBars[1]?.tabs.join(' | ')}]`,
 )
 check('เริ่มต้นเปิดฝั่งซ้าย=ฟอร์ม ขวา=ตัวอย่างเอกสาร', (await param('tabs')) === 'form' && (await param('pane')) === 'preview', await where())
@@ -213,7 +213,7 @@ check('เนื้อหาฝั่งขวาถูกเปลี่ยน�
 await shot('03-right-fields.png')
 
 console.log('\n[4] ทุกแท็บฝั่งขวาต้องเปิดเนื้อหาของตัวเอง')
-for (const label of ['แม่แบบ & การแชร์', 'ผู้ใช้แม่แบบนี้', 'ตัวอย่างเอกสาร']) {
+for (const label of ['ข้อมูลแม่แบบ', 'การแชร์และสิทธิ์', 'ตัวอย่างเอกสาร']) {
   const ok = await clickPaneTab('right', label)
   await sleep(800)
   const st = await sideContent()
@@ -285,7 +285,7 @@ await waitFor("document.querySelectorAll('.editor-split > .editor-col').length =
 await sleep(600)
 const s6 = await sideContent()
 check('เปิดลิงก์ตรง → ซ้าย=JSON', s6[0]?.active?.startsWith('JSON'), s6[0]?.active)
-check('เปิดลิงก์ตรง → ขวา=ผู้ใช้แม่แบบนี้', s6[1]?.active === 'ผู้ใช้แม่แบบนี้', s6[1]?.active)
+check('เปิดลิงก์ตรง → ขวา=การแชร์และสิทธิ์', s6[1]?.active === 'การแชร์และสิทธิ์', s6[1]?.active)
 await shot('05-deeplink.png')
 
 console.log('\n[7] URL รุ่นเก่า ?tabs=fields — ลิงก์ที่แชร์ไว้ต้องยังใช้ได้')

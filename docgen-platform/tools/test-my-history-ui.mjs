@@ -4,7 +4,7 @@
  *   node --env-file=.env tools/test-my-history-ui.mjs
  *
  * ── สิ่งที่ต้องผ่าน ────────────────────────────────────────────
- * 1. แท็บซ้ายมี "ประวัติ" · แท็บขวาเปลี่ยนเป็น "ผู้ใช้แม่แบบนี้" (ไม่มีชื่อ "ประวัติ" ซ้ำ)
+ * 1. แท็บซ้ายมี "ประวัติ" · แท็บขวาเป็น "การแชร์และสิทธิ์" (ไม่มีชื่อ "ประวัติ" ซ้ำ)
  * 2. กดแท็บซ้ายแล้วเห็นรายการประวัติของฉันเอง
  * 3. ค้นด้วย**ชื่อผู้รับ** (ค่าที่กรอก) แล้วเจอ
  * 4. กด "แก้ไข" → กลับไปแท็บฟอร์ม และค่าถูกกู้กลับมาครบ
@@ -207,7 +207,7 @@ const rightLabels = await evaluate(
   `[...document.querySelectorAll(${JSON.stringify(RIGHT_TABS_SEL)})].map((b) => b.textContent.trim())`,
 )
 check('แท็บซ้ายมี "ประวัติ"', leftLabels.includes('ประวัติ'), leftLabels.join(' · '))
-check('แท็บขวาเปลี่ยนเป็น "ผู้ใช้แม่แบบนี้"', rightLabels.includes('ผู้ใช้แม่แบบนี้'), rightLabels.join(' · '))
+check('แท็บขวาชื่อ "การแชร์และสิทธิ์"', rightLabels.includes('การแชร์และสิทธิ์'), rightLabels.join(' · '))
 check('ฝั่งขวาไม่มีชื่อ "ประวัติ" ซ้ำอีก', !rightLabels.includes('ประวัติ'))
 check('แท็บซ้ายเดิมยังอยู่ครบ', leftLabels.includes('ฟอร์ม') && leftLabels.includes('JSON'))
 
@@ -278,7 +278,7 @@ check('แท็บที่ active คือ "ประวัติ"', leftOn =
 const rightOn = await evaluate(
   `document.querySelector(${JSON.stringify(`${RIGHT_TABS_SEL}[aria-selected="true"]`)})?.textContent?.trim()`,
 )
-check('ฝั่งขวาไม่ถูกเปิดผิดเป็นผู้ใช้แม่แบบนี้', rightOn !== 'ผู้ใช้แม่แบบนี้', rightOn ?? '(ไม่มี)')
+check('ฝั่งขวาไม่ถูกเปิดผิดเป็นการแชร์และสิทธิ์', rightOn !== 'การแชร์และสิทธิ์', rightOn ?? '(ไม่มี)')
 
 await send('Browser.close').catch(() => {})
 chrome.kill()

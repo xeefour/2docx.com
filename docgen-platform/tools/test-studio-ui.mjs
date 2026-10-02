@@ -248,8 +248,9 @@ console.log('\n[2] เปิดแม่แบบ — ต้องมีแท�
   check('ฝั่งขวามีครบ 4 แท็บ', right.length === 4, right.join(' | '))
   check('มี "ตัวอย่างเอกสาร"', right.some((l) => l.includes('ตัวอย่างเอกสาร')))
   check('มี "ช่องฟอร์ม"', right.some((l) => l.includes('ช่องฟอร์ม')))
-  check('มี "แม่แบบ & การแชร์"', right.some((l) => l.includes('การแชร์')))
-  check('มี "ผู้ใช้แม่แบบนี้"', right.some((l) => l.includes('ผู้ใช้แม่แบบนี้')))
+  check('มี "ข้อมูลแม่แบบ"', right.some((l) => l.includes('ข้อมูลแม่แบบ')))
+  check('มี "การแชร์และสิทธิ์"', right.some((l) => l.includes('การแชร์และสิทธิ์')))
+  check('ไม่มีชื่อแท็บเก่า "แม่แบบ & การแชร์" และ "ผู้ใช้แม่แบบนี้" แล้ว', !right.some((l) => l.includes('ผู้ใช้แม่แบบนี้') || l.includes('แม่แบบ & การแชร์')))
   check('ฝั่งขวาไม่มีชื่อ "ประวัติ" ซ้ำ (ย้ายไปฝั่งซ้ายแล้ว)', !right.some((l) => l.trim() === 'ประวัติ'))
   check('แสดงช่องกรอกตามแท็กของแม่แบบ', await evaluate("document.querySelectorAll('.fieldset__group').length > 0"))
   await shot('2-editor-form.png')
@@ -339,22 +340,52 @@ console.log('\n[5] แท็บช่องฟอร์ม — ออกแบ�
   await shot('5-fields.png')
 }
 
-// ── 6. การแชร์ ─────────────────────────────────────────────
-console.log('\n[6] แท็บแม่แบบ & การแชร์')
+// ── 6. ข้อมูลแม่แบบ ─────────────────────────────────────────
+console.log('\n[6] แท็บข้อมูลแม่แบบ')
 {
-  await clickText('แม่แบบ & การแชร์', '.editor-col--right .tabs__tab')
-  await waitFor("document.body.textContent.includes('การแชร์และสิทธิ์')")
+  /**
+   * ⚠️ แท็บนี้เดิมชื่อ "แม่แบบ & การแชร์" และมีทั้งสองการ์ดอยู่ด้วยกัน
+   *   ผู้ใช้สั่งย้ายการ์ดการแชร์ไปแท็บ "การแชร์และสิทธิ์" → เหลือการ์ดข้อมูลแม่แบบอย่างเดียว
+   *   ชื่อแท็บจึงต้องตามให้ตรงกับเนื้อหา ไม่งั้นผู้ใช้จะหาไม่เจอ
+   */
+  await clickText('ข้อมูลแม่แบบ', '.editor-col--right .tabs__tab')
+  await waitFor("document.body.textContent.includes('versionId')")
   await sleep(400)
 
   const hasMeta = await evaluate("!!document.querySelector('input[readonly]')")
   check('มีส่วนข้อมูลแม่แบบ', hasMeta)
+  check(
+    'การ์ดการแชร์ไม่อยู่ในแท็บนี้แล้ว (ย้ายไปแท็บของตัวเอง)',
+    !(await evaluate("document.body.textContent.includes('อนุญาตให้ใครใช้ได้')")),
+  )
+  await shot('6-share.png')
+}
+
+// ── 7. การแชร์และสิทธิ์ + ผู้ใช้แม่แบบนี้ ────────────────────────
+console.log('\n[7] แท็บการแชร์และสิทธิ์ — สิทธิ์ + ใครใช้แม่แบบนี้')
+{
+  /**
+   * ⚠️ แท็บนี้เดิมชื่อ "ผู้ใช้แม่แบบนี้" ผู้ใช้สั่งเปลี่ยนเป็น "การแชร์และสิทธิ์"
+   *   และสั่งย้ายการ์ดการแชร์เข้ามาในแท็บนี้
+   *   รายชื่อผู้ใช้แม่แบบนี้ยังอยู่ใต้การ์ดนั้น (เป็นเรื่องเดียวกัน)
+   *   ต้องเช็คว่า**ทั้งสองอย่างอยู่ในแท็บเดียว** ไม่ใช่แค่อันใดอันหนึ่ง
+   */
+  await clickText('การแชร์และสิทธิ์', '.editor-col--right .tabs__tab')
+  await waitFor("document.body.textContent.includes('การแชร์และสิทธิ์')")
+  await sleep(400)
+
+  check(
+    'การ์ดการแชร์ย้ายเข้ามาอยู่ในแท็บนี้แล้ว',
+    await evaluate("document.body.textContent.includes('อนุญาตให้ใครใช้ได้')"),
+  )
+  const loaded = await waitFor("document.body.textContent.includes('ฉบับล่าสุด') || document.body.textContent.includes('ยังไม่มีใครสร้างเอกสาร')", 20000)
+  check('รายชื่อผู้ใช้แม่แบบนี้ยังอยู่ในแท็บเดิม (ไม่ถูกตัดทิ้ง)', loaded)
 
   // คลิกซ้ำได้ถ้าครั้งแรกยังไม่ทัน (หน้ายัง re-render ไม่เสร็จตอน dev)
   const priv =
     (await clickUntil('🔒 แบบส่วนตัว', "document.body.textContent.includes('แบบส่วนตัว — ขอสิทธิ์') || document.body.textContent.includes('คุณเป็นเจ้าของแม่แบบนี้')", 'button', 1)) ||
     (await waitFor("document.body.textContent.includes('แบบส่วนตัว — ขอสิทธิ์') || document.body.textContent.includes('คุณเป็นเจ้าของแม่แบบนี้')", 15000))
   check('สลับเป็นแบบส่วนตัวได้', priv)
-  await shot('6-share.png')
 
   // คืนเป็นสาธารณ ไม่ให้ผลของสคริปต์ไปรบกวนการใช้งานจริง
   await clickText('🌐 เปิดสาธารณ')
@@ -362,16 +393,6 @@ console.log('\n[6] แท็บแม่แบบ & การแชร์')
   await clickText('ล้างการตั้งค่า')
   const cleared = await waitFor("document.body.textContent.includes('เปิดสาธารณ')", 10000)
   check('ล้างการตั้งค่าแล้วกลับเป็นเปิดสาธารณ', cleared)
-}
-
-// ── 7. ผู้ใช้แม่แบบนี้ ──────────────────────────────────────
-console.log('\n[7] แท็บผู้ใช้แม่แบบนี้ — ใครใช้แม่แบบนี้')
-{
-  // ⚠️ ชื่อแท็บฝั่งขวาเปลี่ยนจาก "ประวัติ" เป็น "ผู้ใช้แม่แบบนี้"
-  //    เพราะ "ประวัติ" ถูกย้ายไปเป็นแท็บฝั่งซ้าย (กู้ค่าเดิมมาแก้ต่อได้)
-  await clickText('ผู้ใช้แม่แบบนี้', '.editor-col--right .tabs__tab')
-  const loaded = await waitFor("document.body.textContent.includes('ฉบับล่าสุด') || document.body.textContent.includes('ยังไม่มีใครสร้างเอกสาร')", 20000)
-  check('แท็บผู้ใช้แม่แบบนี้โหลดได้', loaded)
   await shot('7-history.png')
 }
 

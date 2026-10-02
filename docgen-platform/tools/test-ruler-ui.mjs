@@ -569,6 +569,70 @@ console.log('\n[10] ความสูงปุ่มในแถบเครื
     'ต้องเป็น <svg> และไม่มีข้อความข้างใน',
   )
   await shot('05-buttons.png')
+// ── 11. จอเล็ก: เมนูหน่วยต้องไม่ล้นจอและไม่ตัดข้อความ ──────────────
+console.log('\n[11] จอเล็ก — เมนูหน่วยต้องอยู่ในจอและอ่านออก')
+/**
+ * ⚠️ ผู้ใช้รายงานจากภาพหน้าจอเล็ก: เมนูยื่นออกไปโดนขอบจอ
+ *   และข้อความ "ซ่อนไม้บรรทัด" ถูกตัดหายท้าย
+ *
+ *   เดิมใช้ `left: 0` + `width: 186px` ตายตัว
+ *   → ชิดซ้ายของปุ่มที่อยู่ทางขวา เมนูจึงยื่นไปขวาโดนขอบจอ
+ *   → กว้างตายตัว พอฟอนต์เรนเดอร์ใหญ่ขึ้นข้อความยาว ๆ ก็โดนตัด
+ *   แก้เป็น `right: 0` + `min-width` (ให้กล่องกว้างตามเนื้อหาจริง)
+ *
+ *   ⚠️ ต้องวัดที่**จอเล็กจริง** ไม่ใช่จอกว้าง
+ *      ที่ 1600px เมนูไม่มีทางล้นเลย ข้อนี้จะผ่านมั่วตลอด
+ */
+for (const narrow of [390, 579]) {
+  await send('Emulation.setDeviceMetricsOverride', {
+    width: narrow,
+    height: 844,
+    deviceScaleFactor: 1,
+    mobile: false,
+  })
+  await sleep(700)
+  // จอแคบปุ่มไม้บรรทัดยังอยู่ (ซ่อนแค่ข้อความ) — เปิดเมนูได้ตามปกติ
+  await clickTestId('ruler-toggle')
+  const opened = await waitFor("!!document.querySelector('.rulpick')", 5000)
+  check(`จอ ${narrow}px · เปิดเมนูได้`, opened)
+  await sleep(400) // รอ fade-in ก่อนถ่าย
+  const box = await evaluate(`(() => {
+    const el = document.querySelector('.rulpick')
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    const opts = [...el.querySelectorAll('.rulpick__opt')].map((o) => ({
+      id: o.dataset.testid ?? '',
+      // scrollWidth > clientWidth = ข้อความล้นกรอบภายใน
+      clipped: o.scrollWidth - o.clientWidth,
+      cx: Math.round(o.getBoundingClientRect().x + o.getBoundingClientRect().width / 2),
+    }))
+    return { left: Math.round(r.left), right: Math.round(r.right), w: Math.round(r.width), cx: Math.round(r.x + r.width / 2), vw: innerWidth, opts }
+  })()`)
+  check(`จอ ${narrow}px · เมนูอยู่ในจอ (ไม่ล้นขวา)`, box && box.right <= box.vw + 0.5, box ? `ขวา ${box.right} / จอ ${box.vw}px` : 'ไม่พบเมนู')
+  check(`จอ ${narrow}px · เมนูไม่ล้นซ้าย`, box && box.left >= -0.5, box ? `ซ้าย ${box.left}px` : 'ไม่พบเมนู')
+  const clipped = box ? box.opts.filter((o) => o.clipped > 0) : []
+  check(`จอ ${narrow}px · ไม่มีตัวเลือกไหนถูกตัดข้อความ`, clipped.length === 0, box ? box.opts.map((o) => `${o.id}:${o.clipped}px`).join(' ') : '')
+  /**
+   * ชื่อหน่วยต้อง**ตรงกลาง** (ผู้ใช้เลือกแบบนี้จากสองทาง: ชิดซ้าย หรือ ตรงกลาง)
+   * เทียบกึ่งกลางของแต่ละแถวกับกึ่งกลางกล่อง ต่างกันเกิน 2px = ไม่ตรงกลาง
+   * เช็ค**ทุกแถว** เพราะรายที่มีเครื่องหมาย ✓ เคยดูเลื่อนกว่ารายที่ไม่มี
+   */
+  const offCenter = box ? box.opts.filter((o) => Math.abs(o.cx - box.cx) > 2) : []
+  check(`จอ ${narrow}px · ชื่อทุกแถวตรงกลางกล่อง`, offCenter.length === 0, box ? box.opts.map((o) => `${o.id}:${o.cx - box.cx}`).join(' ') : '')
+  await shot(`06-narrow-${narrow}.png`)
+  // ปิดเมนูก่อนวัดจอถัดไป
+  await evaluate("document.querySelector('[data-testid=\"ruler-toggle\"]')?.click()")
+  await sleep(250)
+}
+// คืนความกว้างจอเดิม ไม่งั้นภาพหลังจากนี้จะเล็กไปเรื่อย
+await send('Emulation.setDeviceMetricsOverride', {
+  width: 1600,
+  height: 1000,
+  deviceScaleFactor: 1,
+  mobile: false,
+})
+await sleep(500)
+
 }
 // ── เก็บกวาด — คืนฟอร์มแม่แบบให้เป็นสภาพก่อนสคริปต์นี้ ────────────
 await restoreForm(H, key, formSnap)

@@ -715,7 +715,7 @@ export default function DocumentPreview({
                       data-testid="ruler-hide"
                       onClick={setRulerOff}
                     >
-                      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+                      <svg className="rulpick__lead" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
                         <path
                           d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.7 2.7M9.9 5.2A9.7 9.7 0 0 1 12 5c5 0 9 4.5 9 7 0 .8-.5 1.9-1.4 3M6.3 6.4C4.2 7.7 3 9.4 3 12c0 2.5 4 7 9 7 1 0 2-.2 2.9-.6"
                           fill="none"

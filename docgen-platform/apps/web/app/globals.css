@@ -850,25 +850,30 @@ tbody tr:hover {
  * ครอบปุ่มไม้บรรทัด + เมนูเลือกหน่วย
  *
  * ⚠️ ต้องมี wrapper เพราะเมนูเป็น `position: absolute`
- *   ถ้าผูกกับปุ่มตรง ๆ เมนูจะชนขอบ `.doctools` ที่มี `overflow-x: auto`
- *   แล้วถูกตัดเงียบ ๆ (ตอนจอแคบ) — เจอแบบนี้มาแล้วกับกล่องดาวน์โหลด
+ *   ถ้าผูกกับปุ่มตรง ๆ เมนูจะชนขอบแถบเครื่องมือแล้วถูกตัดเงียบ ๆ (ตอนจอแคบ)
  */
 .rulwrap {
   position: relative;
   display: inline-flex;
 }
 /**
- * ⚠️ กล่องต้องกว้างกว่าปุ่มเสมอ ไม่ใช่ `min-width: 100%`
- *   ค่าเดิมทำให้กล่องกว้างเท่าปุ่ม (85px) แล้วข้อความยาว ๆ
- *   อย่าง "ซ่อนไม้บรรทัด" ล้นออกนอกกล่อง (เห็นเงาตัดตัวหัวข้อความ)
- *   กำหนดเป็นค่าตายตัวแทน เพราะเนื้อหายาวที่สุดคือ 100% ไม่ใช่ปุ่ม
+ * ⚠️ สามข้อนี้แก้ปัญหาจอเล็ก (ผู้ใช้รายงานว่าเมนูล้นขอบจอ)
+ *
+ *   1. `right: 0` ไม่ใช่ `left: 0` — ปุ่มไม้บรรทัดอยู่ทาง**ขวา**ของแถบเครื่องมือ
+ *      ถ้าชิดซ้าย เมนูจะยื่นไปขวาแล้วโดนขอบจอพอดี/ล้น
+ *      ชิดขวาจึงยื่นเข้าหาด้านในเสมอ
+ *   2. กำหนด `min-width` ไม่ใช่ `width` — ให้กล่องกว้างตามเนื้อหอจริง
+ *      ค่า `width` ตายตัวตัดข้อความยาว ๆ เมื่อฟอนต์เรนเดอร์ใหญ่กว่าที่คาด
+ *      (เคยเจอ: "ซ่อนไม้บรรทัด" ถูกตัดหายท้าย)
+ *   3. `max-width: calc(100vw - 16px)` — กันไว้ให้สุดท้าย จอแคบจริง ๆ
  */
 .rulpick {
   position: absolute;
   top: calc(100% + 8px);
-  left: 0;
+  right: 0;
   z-index: 40;
-  width: 186px;
+  min-width: 180px;
+  max-width: calc(100vw - 16px);
   padding: 5px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -890,19 +895,26 @@ tbody tr:hover {
   text-transform: uppercase;
   color: var(--ink-3);
 }
+/**
+ * ชื่อหน่วย**ตรงกลาง** (ผู้ใช้เลือกแบบนี้จากสองทาง: ชิดซ้าย หรือ ตรงกลาง)
+ * เครื่องหมาย ✓ / ไอคอนถูกดึงออกมา `position: absolute` ไม่ใช่ไหลตาม
+ * ไม่งั้นรายที่มี ✓ จะดูนิดซ้ายกว่ารายที่ไม่มี ✓ → หน้าตาไม่ตรงกัน
+ * (เคยเจอ: "ซม." ชิดซ้าย แต่ "นิ้ว" ดูกลาง)
+ */
 .rulpick__opt {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 9px;
+  justify-content: center;
   width: 100%;
-  padding: 8px 9px;
+  padding: 9px 32px;
   border: none;
   border-radius: 8px;
   background: transparent;
   color: var(--ink);
   font: inherit;
   font-size: 13.5px;
-  text-align: left;
+  text-align: center;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -917,8 +929,19 @@ tbody tr:hover {
   font-weight: 600;
 }
 .rulpick__tick {
-  margin-left: auto;
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--brand);
+  flex: 0 0 auto;
+}
+/** ไอคอนนำของตัวเลือก "ซ่อนไม้บรรทัด" — ต้องถูกดึงออกมาเหมือนกัน ไม่งั้นชื่อจะเลื่อน */
+.rulpick__lead {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
   flex: 0 0 auto;
 }
 .rulpick__sep {

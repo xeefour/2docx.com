@@ -633,6 +633,109 @@ await send('Emulation.setDeviceMetricsOverride', {
 })
 await sleep(500)
 
+// ── 12. แถบซูม: แว่นขยายต้องชิดเปอร์เซ็นต์ ไม่ลอย ────────────────────
+console.log('\n[12] แถบซูม — ไอคอนต้องไม่ลอยห่างจากตัวเลข')
+/**
+ * ผู้ใช้สั่ง: *"มี padding ทำให้เครื่องหมายแว่นขยายชิดกว่านี้"*
+ *
+ * วัดจริงก่อนแก้ที่ 1600×1000 (ค่า 101%) ไอคอนห่างจากตัวเลข 25.4px
+ *   และเป็นผลรวมของช่องว่างสามชั้น ไม่ใช่ช่องว่างชั้นเดียว:
+ *     9.5px ข้างในปุ่ม + 4px gap + 11.9px ช่องว่างใน minWidth:52
+ *
+ * ⚠️ ต้องวัดที่**กล่องหมึกของตัวเลข** (Range) ไม่ใช่กล่องของ span
+ *    span กว้างเต็ม min-width เสมอ → วัดแล้วได้ช่องว่างปลอมข้างตัวเลข
+ * ⚠️ ต้องมีทั้งเพดานบนและพื้นล่าง สั้นเกิน = เบียดจนอ่านยาก
+ *    ยาวเกิน = ไอคอนลอยกลับไปเป็นปัญหาเดิม
+ */
+const zoomGap = await evaluate(`(() => {
+  const btns = document.querySelectorAll('button.zoombtn')
+  if (btns.length < 2) return null
+  const span = btns[0].parentElement.querySelector('span.mono')
+  if (!span) return null
+  const range = document.createRange()
+  range.selectNodeContents(span)
+  const ink = range.getBoundingClientRect()
+  return {
+    value: span.textContent.trim(),
+    left: +(ink.left - btns[0].querySelector('svg').getBoundingClientRect().right).toFixed(1),
+    right: +(btns[1].querySelector('svg').getBoundingClientRect().left - ink.right).toFixed(1),
+    boxW: +span.getBoundingClientRect().width.toFixed(1),
+  }
+})()`)
+check('วัดช่องว่างแถบซูมได้', !!zoomGap, zoomGap ? `ค่า ${zoomGap.value} · กล่อง ${zoomGap.boxW}px` : 'ไม่พบปุ่มซูม/เปอร์เซ็นต์')
+if (zoomGap) {
+  check(
+    'แว่นขยายซ้ายชิดเปอร์เซ็นต์ (ไม่ลอย)',
+    zoomGap.left <= 20,
+    `${zoomGap.left}px · ต้อง ≤ 20px (เดิม 25.4px)`,
+  )
+  check(
+    'แว่นขยายขวาชิดเปอร์เซ็นต์ (ไม่ลอย)',
+    zoomGap.right <= 20,
+    `${zoomGap.right}px · ต้อง ≤ 20px (เดิม 25.4px)`,
+  )
+  check(
+    'ยังไม่เบียดจนชิดเกินไป (อย่างน้อย 8px)',
+    zoomGap.left >= 8 && zoomGap.right >= 8,
+    `ซ้าย ${zoomGap.left}px · ขวา ${zoomGap.right}px`,
+  )
+  /**
+   * ⚠️ กันกลับ: ถ้าเอา `minWidth` ออกเพื่อลดช่องว่าง
+   *   ตัวเลขจะเปลี่ยนความยาวจริง (71% = 3 ตัว · 101% = 4 ตัว)
+   *   → ปุ่มซูมทั้งสองขยับซ้ายขวาทุกครั้งที่กดซูม ผู้ใช้ต้องไล่หาปุ่มใหม่
+   *
+   *   พิสูจน์สองชั้น เพราะชั้นเดียวโกหกได้:
+   *     1. **กลไก** — กล่องเปอร์เซ็นต์ต้องกว้างเท่า `min-width` เสมอ
+   *        (ถ้าเท่ากับ min-width = ความกว้างไม่ได้มาจากความยาวตัวเลข)
+   *     2. **ผลลัพธ์** — กดซูมเข้าแล้วตำแหน่งปุ่มซ้ายต้องเท่าเดิม
+   *        และถ้าความยาวตัวเลข**เปลี่ยนจริง** การเทียบนี้ถึงจะมีความหมาย
+   */
+  const zoomState = () =>
+    evaluate(`(() => {
+      const b = document.querySelectorAll('button.zoombtn')[0]
+      const s = b.parentElement.querySelector('span.mono')
+      return {
+        left: Math.round(b.getBoundingClientRect().left * 10) / 10,
+        boxW: +s.getBoundingClientRect().width.toFixed(1),
+        minW: Number.parseFloat(getComputedStyle(s).minWidth),
+        len: s.textContent.trim().length,
+      }
+    })()`)
+  const st0 = await zoomState()
+  check(
+    'กล่องเปอร์เซ็นต์กว้างคงที่ ไม่ขยับตามความยาวตัวเลข',
+    Math.abs(st0.boxW - st0.minW) <= 0.5,
+    `กล่อง ${st0.boxW}px · min-width ${st0.minW}px (ถ้าเท่ากัน = ความกว้างมาจาก min-width ไม่ใช่ตัวเลข)`,
+  )
+  let clicked = 0
+  for (let i = 0; i < 2; i++) {
+    const box = await evaluate(`(() => {
+      const b = document.querySelectorAll('button.zoombtn')[1]
+      if (!b || b.disabled) return null
+      b.scrollIntoView({ block: 'nearest' })
+      const r = b.getBoundingClientRect()
+      const x = r.x + r.width / 2, y = r.y + r.height / 2
+      const hit = document.elementFromPoint(x, y)
+      return { ok: !!hit && (b.contains(hit) || hit === b), x, y }
+    })()`)
+    if (!box?.ok) break
+    for (const type of ['mousePressed', 'mouseReleased'])
+      await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 })
+    clicked++
+    await sleep(1200)
+  }
+  const st1 = await zoomState()
+  const lenChanged = st1.len !== st0.len
+  check(
+    'ปุ่มซูมไม่ขยับเมื่อตัวเลขเปลี่ยนความยาว',
+    clicked > 0 && st0.left === st1.left,
+    lenChanged
+      ? `กด ${clicked} ครั้ง · ความยาว ${st0.len}→${st1.len} ตัว (เปลี่ยนจริง) · ปุ่มซ้าย ${st0.left}px → ${st1.left}px`
+      : `กด ${clicked} ครั้ง · ความยาวยัง ${st1.len} ตัว (ไม่ได้พิสูจน์ด้วยการเทียบตำแหน่ง — ใช้ข้อก่อนหน้าแทน)`,
+  )
+}
+await shot('07-zoom-gap.png')
+
 }
 // ── เก็บกวาด — คืนฟอร์มแม่แบบให้เป็นสภาพก่อนสคริปต์นี้ ────────────
 await restoreForm(H, key, formSnap)

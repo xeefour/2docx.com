@@ -1,4 +1,11 @@
-import { connect, RetentionPolicy, StorageType, DiscardPolicy, AckPolicy } from 'nats'
+import {
+  connect,
+  RetentionPolicy,
+  StorageType,
+  DiscardPolicy,
+  AckPolicy,
+  DeliverPolicy,
+} from 'nats'
 import { MongoClient, type Db } from 'mongodb'
 import { env, natsServers, resolveMongoUrl, now, RenderJob, type DocumentRecord } from '@docgen/shared'
 import { ensureBucket, putObject } from './s3.js'
@@ -109,28 +116,79 @@ async function main() {
 
   // ⚠️ nats v2.29 เปลี่ยน API:
   //   - consumers.add() คืนแค่ ConsumerInfo ไม่ใช่ consumer ที่ consume ได้
-  //   - ต้อง get() กลับมาให้���ึ่งค่อย consume
+  //   - ต้อง get() กลับมาให้ยึงค่อย consume
   //   - durable เปลี่ยนชื่อเป็น name
   //   - consume() เป็น async → ต้อง await
-  await jsm.consumers.add(env.NATS_STREAM, {
-    name: CONSUMER,
-    filter_subject: env.NATS_SUBJECT,
-    ack_policy: AckPolicy.Explicit,
-    max_deliver: MAX_ATTEMPTS,
-    // 30 นาที = 6 เท่าของ DOCSERVER_TIMEOUT_MS (5 นาที)
-    // สั้นเกิน → worker crash แล้ว NATS ส่งงานซ้ำขณะที่งานเดิมยังทำอยู่
-    // ยาวเกิน → งานที่ค้างจะรอนานเกินจำเป็นก่อนถูกส่งซ้ำ
-    ack_wait: 30 * 60_000_000, // หน่วยนาโนวินาที
-  }).catch((err: Error) => {
-    // เคยสร้างไว้แล้ว (restart ครั้งที่สอง) — ไม่ใช่ error จริง
-    if (!/already exists/i.test(err.message)) throw err
-    logger.info('consumer มีอยู่แล้ว ใช้ตัวเดิม', { consumer: CONSUMER })
-  })
+  /**
+   * เตรียม consumer แล้วคืนสถานะล่าสุด
+   *
+   * - มีอยู่แล้ว = ใช้ตัวเดิม ไม่ลบทิ้ง (งานที่ค้างตอน process ตายยังถูกส่งซ้ำ)
+   * - ยังไม่มี = สร้างใหม่ด้วย deliver_policy: new
+   */
+  const ensureConsumer = async () => {
+    const before = await jsm.consumers.info(env.NATS_STREAM, CONSUMER).catch(() => null)
 
+    if (before) {
+      // ของเดิมเป็น ephemeral (ใส่แค่ name) — NATS ลบทิ้งเองเมื่อ worker หยุด
+      // วันสร้างใหม่ NATS จะเริ่มไล่ตั้งแต่ข้อความแรกในสตรีมตามค่า deliver_policy เดิม
+      // → งานเก่าที่เรนเดอร์เสร็จแล้วถูกส่งกลับมาให้เรนเดอร์ซ้ำทั้งสตรีม
+      //   (ต้นเหตุที่ log บวม 22,600 บรรทัด และงานใหม่ต่อคิวหลังของงานตาย)
+      // ทิ้งของเดิมแล้วสร้างใหม่เป็น durable ครั้งเดียว หลังจากนี้ทุก restart ใช้ตัวเดิมต่อ
+      if (!before.config.durable_name) {
+        logger.warn('เจอ consumer แบบ ephemeral ของเดิม — ลบแล้วสร้างใหม่เป็น durable', {
+          consumer: CONSUMER,
+          pending: before.num_pending,
+        })
+        await jsm.consumers.delete(env.NATS_STREAM, CONSUMER).catch(() => undefined)
+      } else {
+        logger.info('ใช้ consumer เดิมที่มีอยู่', {
+          consumer: CONSUMER,
+          pending: before.num_pending,
+          ack_pending: before.num_ack_pending,
+          redelivered: before.num_redelivered,
+        })
+        return before
+      }
+    }
+
+    try {
+      return await jsm.consumers.add(env.NATS_STREAM, {
+        // durable_name = ต้องมีด้วย ถ้าใส่แค่ name จะกลายเป็น ephemeral
+        // แล้ว NATS ลบทิ้งเมื่อ worker หยุด → restart ครั้งถัดไปได้ตำแหน่งเริ่มใหม่
+        durable_name: CONSUMER,
+        name: CONSUMER,
+        filter_subject: env.NATS_SUBJECT,
+        ack_policy: AckPolicy.Explicit,
+        max_deliver: MAX_ATTEMPTS,
+        // ผูกกับตอน "สร้าง" ครั้งแรกเท่านั้น
+        // → ติดตั้งใหม่ไม่ต้องไล่งานเก่าทั้งสตรีม เริ่มรับเฉพาะงานที่เข้ามาหลังจากนี้
+        // → หลังจากนี้ restart ก็ยังได้งานที่ค้างอยู่ตามปกติ (consumer ตัวเดิมจำตำแหน่งได้)
+        deliver_policy: DeliverPolicy.New,
+        // 30 นาที = 6 เท่าของ DOCSERVER_TIMEOUT_MS (5 นาที)
+        // สั้นเกิน → worker crash แล้ว NATS ส่งงานซ้ำขณะที่งานเดิมยังทำอยู่
+        // ยาวเกิน → งานที่ค้างจะรอนานเกินจำเป็นก่อนถูกส่งซ้ำ
+        ack_wait: 30 * 60_000_000, // หน่วยนาโนวินาที
+      })
+    } catch (err) {
+      // มีคนสร้าง consumer พร้อมกัน — ไม่ใช่ error จริง
+      if (!/already exists/i.test(String(err))) throw err
+      logger.info('consumer มีอยู่แล้ว ใช้ตัวเดิม', { consumer: CONSUMER })
+      return jsm.consumers.info(env.NATS_STREAM, CONSUMER)
+    }
+  }
+
+  const ready = await ensureConsumer()
   const consumer = await js.consumers.get(env.NATS_STREAM, CONSUMER)
   const messages = await consumer.consume()
 
-  logger.info('consumer พร้อมรับงาน', { consumer: CONSUMER, max_attempts: MAX_ATTEMPTS })
+  logger.info('consumer พร้อมรับงาน', {
+    consumer: CONSUMER,
+    max_attempts: MAX_ATTEMPTS,
+    deliver_policy: ready.config.deliver_policy,
+    pending: ready.num_pending,
+    waiting: ready.num_waiting,
+    redelivered: ready.num_redelivered,
+  })
 
   const shutdown = async (signal: string) => {
     logger.info('กำลังหยุด worker...', { signal })
@@ -149,6 +207,9 @@ async function main() {
   process.on('SIGTERM', () => void shutdown('SIGTERM'))
 
   // ── ลูปหลัก ────────────────────────────────────────────────
+  // นับงานที่เอกสารถูกลบไปแล้ว — กัน log บวมตอนเจอกองเก่าหมื่นข้อความ
+  let missingDocs = 0
+
   for await (const msg of messages) {
     // ⚠️ v2.29: msg.data เป็น Uint8Array — ต้องใช้ msg.json<T>() ไม่ใช่ JSON.parse(data)
     const { documentId, templateId, outputFormat, data } = msg.json<RenderJob>()
@@ -162,14 +223,24 @@ async function main() {
         { $set: { status: 'rendering', error: null, updatedAt: now() } },
       )
       if (updated.matchedCount === 0) {
-        // ไม่พบ = อาจเป็น race (API insert ยังไม่จบ) ไม่ใช่แปลว่างานเสีย
-        // → nak ให้ NATS ส่งซ้ำแทนการ ack ทิ้ง
-        // ครบ MAX_ATTEMPTS แล้ว NATS จะเลิกส่งเอง (ไม่มีเอกสารให้ mark failed)
-        logger.warn('ยังไม่เจอเอกสารใน Mongo — ขอ NATS ส่งซ้ำ', {
-          documentId,
-          attempt: msg.info?.deliveryCount ?? 1,
-        })
-        msg.nak(2_000)
+        // ไม่พบเอกสาร = ถูกลบไปแล้ว ไม่ใช่ race
+        //
+        //   API เขียน Mongo ก่อน publish เสมอ (ดู apps/api/src/modules/documents/service.ts)
+        //   → worker ดึงงานมาได้ยังไงก็ insert ต้องเสร็จไปแล้ว
+        //   → matchedCount 0 แปลว่าเอกสารถูกลบหลังเข้าคิว (คนกดลบเอง หรือสคริปต์ล้างข้อมูลทดสอบ)
+        //
+        //   เดิม nak(2_000) ให้ NATS ส่งซ้ำ → งานตายวนกลับมาทั้งสตรีม
+        //   งานใหม่เลยต่อคิวหลังของเก่า (เคยสะสม 22,600 รอบจนเทสต์เรนเดอร์ตกเป็นครั้งคราว)
+        //   งานนี้ไม่มีอะไรให้ทำอยู่แล้ว → ack ทิ้งเป็นการวาง
+        missingDocs += 1
+        // พิมพ์ 5 บรรทัดแรก แล้วเหลือทุก ๆ 1,000 บรรทัด — กองเก่าหมื่นข้อความจะไม่ทำให้ log บวม
+        if (missingDocs <= 5 || missingDocs % 1000 === 0) {
+          logger.info('ไม่พบเอกสารใน Mongo — ทิ้งงานนี้ (เอกสารถูกลบแล้ว)', {
+            documentId,
+            missing: missingDocs,
+          })
+        }
+        msg.ack()
         continue
       }
 

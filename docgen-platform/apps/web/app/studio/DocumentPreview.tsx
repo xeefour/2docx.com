@@ -55,6 +55,30 @@ function readStored(key: string, fallback: string): string {
   }
 }
 
+/**
+ * ไอคอนแว่นขยายสำหรับปุ่มซูมออก/ซูมเข้า
+ *
+ * ⚠️ เดิมใช้ตัวอักษร `−` / `+` แล้วผู้ใช้สั่งให้เปลี่ยนเป็นแว่นขยาย
+ *   · ดูจากภาพไม่ออกว่าเป็นปุ่มซูม (เหมือนปุ่มลบ/บวกทั่วไป)
+ *   · ตัวอักษรสูงตาม line-height ของฟอนต์ ทำให้ปุ่มซูมสูงกว่าปุ่มอื่นในแถบ
+ *     (วัดจริงก่อนแก้: ซูม 42px · ปุ่มข้อความ 29px · ดาวน์โหลด 36px)
+ *   ความสูงให้เท่ากันตอนนี้จัดที่ `.doctools button` ใน `globals.css`
+ *
+ * ⚠️ เทสต์เคยหาปุ่มนี้ด้วย `textContent === '+'`
+ *   พอเป็น SVG แล้ว `textContent` จะว่างเปล่า → หาไม่เจอทันที
+ *   ต้องใช้ `aria-label` แทน (ซึ่งถูกต้องกว่าอยู่แล้ว เพราะเป็นปุ่มไอคอนไม่มีคำให้อ่าน)
+ */
+function ZoomIcon({ minus = false }: { minus?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+      <circle cx="10.5" cy="10.5" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M15.3 15.3 20.5 20.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M7.6 10.5h5.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      {!minus && <path d="M10.5 7.6v5.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />}
+    </svg>
+  )
+}
+
 export default function DocumentPreview({
   fileUrl,
   label,
@@ -477,13 +501,13 @@ export default function DocumentPreview({
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <button
-            className="ghost"
+            className="ghost zoombtn"
             onClick={() => step(-1)}
             disabled={zoom <= ZOOMS[0]}
             title="ย่อลง"
             aria-label="ซูมออก"
           >
-            −
+            <ZoomIcon minus />
           </button>
           <span className="muted mono" style={{ fontSize: 12, minWidth: 52, textAlign: 'center' }}>
             {/**
@@ -494,13 +518,13 @@ export default function DocumentPreview({
             {fitScale ? `${Math.round(fitScale * zoom * 100)}%` : '—'}
           </span>
           <button
-            className="ghost"
+            className="ghost zoombtn"
             onClick={() => step(1)}
             disabled={zoom >= ZOOMS[ZOOMS.length - 1]}
             title="ขยายเข้า"
             aria-label="ซูมเข้า"
           >
-            +
+            <ZoomIcon />
           </button>
           {/**
            * ⚠️ ปุ่มนี้คือทางออกหลัก ไม่ใช่ของแถบ ๆ

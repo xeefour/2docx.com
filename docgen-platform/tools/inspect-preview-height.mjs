@@ -178,6 +178,15 @@ const probe = () =>
     colPos: col ? getComputedStyle(col).position : '?',
     colH: Math.round(col?.getBoundingClientRect().height ?? NaN),
     tools: r('.doctools'),
+    /**
+     * ⚠️ ความสูงปุ่มในแถบเครื่องมือ — ผู้ใช้ต้องการให้**สูงเท่ากันทุกปุ่ม**
+     *   (เคยมีปุ่มซูมสูงกว่าปุ่มไม้บรรทัด/หน่วย ทำให้แถบดูไม่เรียบ)
+     */
+    btnH: [...document.querySelectorAll('.doctools button')].map(
+      (b) =>
+        (b.getAttribute('aria-label') || b.textContent.trim().slice(0, 8)) +
+        '=' + Math.round(b.getBoundingClientRect().height),
+    ),
     docpage: r('.docpage'),
     strip,
     /** แถบรูปย่อต้องอยู่ใต้ขอบจอ → ต้องเลื่อนถึงจะเห็น */

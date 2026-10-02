@@ -13,6 +13,7 @@
  * 7. จำค่าไว้ข้ามการรีเฟรช
  * 8. ซ่อนไม้บรรทัดแล้ว canvas ไม่เลื่อน (กลับเป็นกลางจอเหมือนเดิม)
  * 9. ซูมแล้วไม้บรรทัดยังตรงขอบกระดาษ
+ * 10. ปุ่มทุกปุ่มในแถบเครื่องมือสูงเท่ากัน และปุ่มซูมเป็นไอคอนแว่นขยาย (ไม่ใช่ตัวอักษร + / −)
  */
 import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -412,7 +413,10 @@ console.log('\n[9] ซูมแล้วไม้บรรทัดยังต�
   const before = await zoomNow()
   for (let i = 0; i < 2; i++) {
     const box = await evaluate(`(() => {
-      const b = [...document.querySelectorAll('.doctools button')].find((x) => x.textContent.trim() === '+')
+      // ⚠️ หาด้วย aria-label ไม่ใช่ข้อความ "+"
+      //   ปุ่มซูมเปลี่ยนจากตัวอักษรเป็นไอคอนแว่นขยายแล้ว → textContent ว่างเปล่า
+      //   เคยหาด้วยข้อความแล้วพังทันทีตอนเปลี่ยนเป็น SVG
+      const b = document.querySelector('.doctools [aria-label="ซูมเข้า"]')
       if (!b || b.disabled) return null
       b.scrollIntoView({ block: 'nearest' })
       const r = b.getBoundingClientRect()
@@ -421,7 +425,7 @@ console.log('\n[9] ซูมแล้วไม้บรรทัดยังต�
       return { ok: !!hit && (b.contains(hit) || hit === b), x, y }
     })()`)
     if (!box?.ok) {
-      check('กดปุ่มซูมได้', false, box ? 'มีอะไรบังปุ่ม +' : 'หาปุ่ม + ไม่เจอ')
+      check('กดปุ่มซูมได้', false, box ? 'มีอะไรบังปุ่มซูมเข้า' : 'หาปุ่มซูมเข้าไม่เจอ')
       break
     }
     for (const type of ['mousePressed', 'mouseReleased'])
@@ -453,6 +457,55 @@ console.log('\n[9] ซูมแล้วไม้บรรทัดยังต�
   await shot('04-zoomed.png')
 }
 
+// ── 10. ปุ่มในแถบเครื่องมือต้องสูงเท่ากัน ───────────────────────
+console.log('\n[10] ความสูงปุ่มในแถบเครื่องมือ — ต้องเท่ากันทุกปุ่ม')
+{
+  /**
+   * ⚠️ ผู้ใช้สั่ง "ทำให้ปุ่มต่างๆมีขนาดความสูงเท่ากัน"
+   *   วัดจริงก่อนแก้: ซูม 42px · พอดีหน้า/ไม้บรรทัด/ซม./พิมพ์ 29px · ดาวน์โหลด 36px
+   *
+   *   ต้องวัดจากทุกปุ่มใน `.doctools` รวมปุ่มที่มาจาก component อื่น
+   *   (ดาวน์โหลดถูกส่งเข้ามาเป็น `toolbarExtra`) ไม่งั้นการแก้แค่ปุ่มซูม
+   *   จะผ่านทั้งที่ปุ่มอื่นยังสูงไม่เท่ากัน
+   */
+  const btns = await evaluate(`[...document.querySelectorAll('.doctools button')].map((b) => {
+    const r = b.getBoundingClientRect()
+    return {
+      name: b.getAttribute('aria-label') || b.textContent.trim().slice(0, 10),
+      h: Math.round(r.height * 10) / 10,
+      w: Math.round(r.width * 10) / 10,
+    }
+  })`)
+  const heights = btns.map((b) => b.h)
+  const min = Math.min(...heights)
+  const max = Math.max(...heights)
+  check('วัดปุ่มได้ครบ (อย่างน้อย 6 ปุ่ม)', btns.length >= 6, JSON.stringify(btns))
+  check(
+    'ทุกปุ่มในแถบสูงเท่ากัน',
+    max - min <= 1,
+    `ต่ำสุด ${min}px · สูงสุด ${max}px · ${btns.map((b) => b.name + ':' + b.h).join(' ')}`,
+  )
+  /**
+   * ⚠️ ปุ่มไอคอน(ซูม/ดาวน์โหลด) ต้องเป็น**สี่เหลี่ยมจัตุรัส**
+   *   ถ้าสูงเท่ากันแล้วกว้างไม่เท่า จะเป็นวงรี/วงรีแบน ดูเหมือนปุ่มคนละชนิด
+   */
+  const iconBtns = btns.filter((b) => /ซูม|ดาวน์โหลด/.test(b.name))
+  check(
+    'ปุ่มไอคอนเป็นสี่เหลี่ยมจัตุรัส (กว้าง = สูง)',
+    iconBtns.length >= 3 && iconBtns.every((b) => Math.abs(b.w - b.h) <= 1),
+    iconBtns.map((b) => b.name + ' ' + b.w + '×' + b.h).join(' '),
+  )
+  check(
+    'ปุ่มซูมเป็นไอคอนแว่นขยาย ไม่ใช่ตัวอักษร + / −',
+    await evaluate(`(() => {
+      const out = document.querySelector('.doctools [aria-label="ซูมเข้า"]')
+      const inn = document.querySelector('.doctools [aria-label="ซูมออก"]')
+      return !!out?.querySelector('svg') && !!inn?.querySelector('svg') && out.textContent.trim() === '' 
+    })()`),
+    'ต้องเป็น <svg> และไม่มีข้อความข้างใน',
+  )
+  await shot('05-buttons.png')
+}
 // ── เก็บกวาด — คืนฟอร์มแม่แบบให้เป็นสภาพก่อนสคริปต์นี้ ────────────
 await restoreForm(H, key, formSnap)
 await send('Browser.close').catch(() => {})

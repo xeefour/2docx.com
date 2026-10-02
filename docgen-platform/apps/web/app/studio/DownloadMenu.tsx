@@ -53,15 +53,21 @@ interface Spec {
   badge: string
   /** ชื่อที่ผู้ใช้เห็น */
   name: string
-  /** คำอธิบายสั้น ๆ ใต้ชื่อ */
+  /**
+   * คำอธิบายสั้น ๆ ใต้ชื่อ — **เว้นว่างได้** แล้วจะไม่แสดง `<small>` เลย
+   *
+   * ⚠️ PDF / Word ตั้งเป็นค่าว่าง เพราะผู้ใช้สั่งว่าไม่ต้องแสดงข้อความนี้
+   *    เหลือเฉพาะรูปภาพที่ต้องบอกว่า "เลือกหน้าที่ต้องการ" เพราะเป็นตัวเดียวที่ต้องเลือกหน้า
+   *    (ก่อนหน้านี้เขียนว่า "ฉบับส่งมอบ ทั้งเล่ม" / "แก้ต่อได้ ทั้งเล่ม" แล้วผู้ใช้สั่งตัดออก)
+   */
   hint: string
   /** สีเครื่องหมาย (ตรงกับสีจริงของโปรแกรมนั้น) */
   color: string
 }
 
 const SPEC: Record<Format, Spec> = {
-  pdf: { badge: 'PDF', name: 'PDF', hint: 'ฉบับส่งมอบ ทั้งเล่ม', color: '#d64545' },
-  docx: { badge: 'DOC', name: 'Word', hint: 'แก้ต่อได้ ทั้งเล่ม', color: '#2b579a' },
+  pdf: { badge: 'PDF', name: 'PDF', hint: '', color: '#d64545' },
+  docx: { badge: 'DOC', name: 'Word', hint: '', color: '#2b579a' },
   png: { badge: 'PNG', name: 'รูปภาพ', hint: 'เลือกหน้าที่ต้องการ', color: '#2e8b57' },
 }
 
@@ -276,7 +282,7 @@ export default function DownloadMenu({
                 </span>
                 <span>
                   {SPEC[f].name}
-                  <small>{SPEC[f].hint}</small>
+                  {SPEC[f].hint && <small>{SPEC[f].hint}</small>}
                 </span>
               </button>
             ))}

@@ -346,6 +346,18 @@ const opts = await evaluate("[...document.querySelectorAll('.dl__opt')].map((b) 
 check('มี 3 ตัวเลือก (PDF · Word · รูปภาพ)', opts.length === 3, `${opts.length}: ${opts.join(' | ')}`)
 check('ไม่มีตัวเลือก ZIP แยกแล้ว', !opts.some((o) => o.includes('ZIP')), opts.join(' | '))
 /**
+ * ⚠️ PDF / Word ต้อง**ไม่มีคำอธิบายใต้ชื่อ**
+ *   ผู้ใช้สั่ง "ไม่ต้องแสดงข้อความนี้ ทั้ง pdf word" (เคยเขียนว่า
+ *   "ฉบับส่งมอบ ทั้งเล่ม" กับ "แก้ต่อได้ ทั้งเล่ม")
+ *   เหลือเฉพาะรูปภาพที่ต้องบอกว่า "เลือกหน้าที่ต้องการ" เพราะเป็นตัวเดียวที่ต้องเลือกหน้า
+ *   เช็คที่ element `<small>` จริง ไม่ใช่แค่ข้อความ เพราะข้อความชื่อไฟล์ก็อยู่ในปุ่มเดียวกัน
+ */
+const hints = await evaluate("[...document.querySelectorAll('.dl__opt')].map((b) => b.querySelector('small')?.textContent?.trim() ?? '')")
+check('PDF ไม่มีคำอธิบายใต้ชื่อ', hints[0] === '', JSON.stringify(hints[0]))
+check('Word ไม่มีคำอธิบายใต้ชื่อ', hints[1] === '', JSON.stringify(hints[1]))
+check('รูปภาพยังบอกว่าให้เลือกหน้า', hints[2] === 'เลือกหน้าที่ต้องการ', JSON.stringify(hints[2]))
+
+/**
  * ⚠️ กติกาใหม่: กล่อง "หน้าที่ต้องการ" ซ่อนไว้จนกว่าผู้ใช้จะ**คลิกรูปภาพ**
  *   ต้องไม่มีทั้งช่องพิมพ์และปุ่มยืนยันตั้งแต่เปิดเมนู
  */

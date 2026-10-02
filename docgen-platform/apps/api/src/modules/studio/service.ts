@@ -15,6 +15,8 @@ import {
   type ChatMessage,
   type BookmarkRecord,
   type TemplateHistory,
+  type MyTemplateHistory,
+  type MyHistoryItem,
 } from '@docgen/shared'
 import type { App } from '../../types.js'
 import * as carbone from '../templates/carbone.js'
@@ -48,7 +50,8 @@ const MAX_MESSAGES = 200
 
 type Req = { user?: { sub: string; name?: string } | null }
 
-function who(req: Req): { sub: string; name: string | null } {
+/** ผู้เรียกปัจจุบัน — export ให้โมดูลอื่น (เช่น templates) ใช้ตรวจสิทธิ์ */
+export function who(req: Req): { sub: string; name: string | null } {
   const u = req.user
   if (!u?.sub) throw new AppError('AUTH_REQUIRED', 'ยังไม่ได้เข้าสู่ระบบ', 401)
   return { sub: u.sub, name: u.name ?? null }
@@ -225,8 +228,13 @@ export async function getAccessView(
   return toView(await loadAccess(app, templateKey), templateKey, sub)
 }
 
-/** ตรวจว่าแก้สิทธิ์/ฟอร์มของแม่แบบนี้ได้ไหม */
-async function assertCanEdit(app: App, templateKey: string, sub: string): Promise<void> {
+/**
+ * ตรวจว่าแก้สิทธิ์/ฟอร์มของแม่แบบนี้ได้ไหม
+ *
+ * export ให้โมดูล `templates` ใช้ตรวจก่อนอัปโหลดไฟล์แทนแม่แบบ
+ * (การเขียนทับแม่แบบกระทบคนทุกคน จึงต้องเข้มกว่าแก้ metadata)
+ */
+export async function assertCanEdit(app: App, templateKey: string, sub: string): Promise<void> {
   const view = toView(await loadAccess(app, templateKey), templateKey, sub)
   if (!view.canEdit) {
     throw new AppError(
@@ -236,6 +244,19 @@ async function assertCanEdit(app: App, templateKey: string, sub: string): Promis
         : 'คุณมีสิทธิ์แค่ดูอย่างเดียวสำหรับแม่แบบนี้',
       403,
     )
+  }
+}
+
+/**
+ * ตรวจว่า**เห็น**แม่แบบนี้ได้ไหม (ใช้กับการดาวน์โหลดไฟล์แม่แบบ)
+ *
+ * ⚠️ แม่แบบส่วนตัวที่ไม่ได้แชร์ให้เรา = ห้ามดาวน์โหลด
+ *    ไม่งั้นใครก็กด URL ได้ แม้หน้าเว็บจะไม่โชว์ปุ่ม
+ */
+export async function assertCanView(app: App, templateKey: string, sub: string): Promise<void> {
+  const view = toView(await loadAccess(app, templateKey), templateKey, sub)
+  if (view.visibility === 'private' && view.relation !== 'owner' && view.relation !== 'shared') {
+    throw new AppError('FORBIDDEN', 'แม่แบบนี้เป็นแบบส่วนตัว — ขอสิทธิ์จากเจ้าของก่อน', 403)
   }
 }
 
@@ -767,6 +788,108 @@ export async function templateHistory(
     })),
     total,
   }
+}
+
+/**
+ * ประวัติของฉันเองกับแม่แบบหนึ่งตัว — เอาไว้กู้ค่ามาแก้ต่อ
+ *
+ * ── ต่างจาก `templateHistory` ยังไง ──────────────────────────
+ *   `templateHistory` = มุมมองรวมทุกคน (ใครใช้บ้าง) → **ไม่** คืนค่าที่กรอก
+ *   `myTemplateHistory` = เฉพาะของฉัน → คืน `data` เพื่อกู้ค่ามาแก้
+ *
+ * ⚠️ กรอง `createdBy` เสมอ ค่าที่กรอกของคนอื่นเป็นข้อมูลส่วนตัว
+ *    (ชื่อผู้รับ เลขบัตร ที่อยู่) ห้ามหลุดออกไปกับการค้นหา
+ */
+export async function myTemplateHistory(
+  app: App,
+  templateKey: string,
+  query: { limit: number; q: string },
+  req: Req,
+): Promise<MyTemplateHistory> {
+  const { sub } = who(req)
+  const versionIds = await versionIdsOf(app, templateKey)
+  if (versionIds.length === 0) return { items: [], total: 0 }
+
+  const base = {
+    templateId: { $in: versionIds },
+    createdBy: sub,
+  } as never
+  const col = app.mongo.collection<Record<string, unknown>>('documents')
+  const q = query.q.trim()
+
+  /**
+   * ── ไม่ค้น: ทำแบบเดิม ให้ Mongo นับและตัดให้ (เร็ว) ──
+   */
+  if (!q) {
+    const [rows, total] = await Promise.all([
+      col.find(base).sort({ createdAt: -1 }).limit(query.limit).toArray(),
+      col.countDocuments(base),
+    ])
+    return { items: rows.map(toHistoryItem), total }
+  }
+
+  /**
+   * ── ค้น: กรองฝั่ง Node เพราะ Mongo หาค่าข้างใน object ไม่ได้ ──
+   *
+   * ⚠️ เคยลองใช้ `{ data: { $regex } }` และ `{ 'data.$**': { $regex } }`
+   *    ผลคือ **ไม่เจอแม้แต่เอกสารที่ค่าตรงเป๊ะ** เพราะ key ของเราเป็น
+   *    dot path ของแม่แบบ Carbone เช่น `ผู้รับ.ชื่อ`
+   *    → Mongo แปลง `data.ผู้รับ.ชื่อ` เป็น "ดูใน data แล้วลงไป ผู้รับ แล้วลงไป ชื่อ"
+   *      ซึ่งไม่มีอยู่จริง (จุดอยู่ในชื่อ key ไม่ใช่โครงสร้าง)
+   *    wildcard `$**` ก็ช่วยไม่ได้ในเคสนี้
+   *
+   * เป็นการสแกนฝั่งแอป จึงต้องจำกัดจำนวนที่อ่าน
+   * ประวัติส่วนตัวของคนเดียวมีจำนวนจำกัด จึงยอมรับข้อแลกเปลี่ยนนี้
+   * (ถ้าวันหนึ่งต้องค้นทั้งระบบ ให้เพิ่มคอลัมน์ "ข้อความค้นหา" แยก + text index)
+   */
+  const scan = await col
+    .find(base)
+    .sort({ createdAt: -1 })
+    .limit(SEARCH_SCAN_LIMIT)
+    .toArray()
+
+  const needle = q.toLocaleLowerCase('th')
+  const hit = scan.filter((d) => {
+    if (String(d.label ?? '').toLocaleLowerCase('th').includes(needle)) return true
+    return searchableText(d.data).includes(needle)
+  })
+
+  return { items: hit.slice(0, query.limit).map(toHistoryItem), total: hit.length }
+}
+
+/** จำนวนฉบับสูงสุดที่ยอมสแกนตอนค้นหา */
+const SEARCH_SCAN_LIMIT = 500
+
+/** แปลงเอกสารใน Mongo เป็นรายการประวัติ (เอกสารเก่าที่ไม่มี `data` → `{}`) */
+function toHistoryItem(d: Record<string, unknown>): MyHistoryItem {
+  return {
+    _id: String(d._id),
+    label: (d.label as string | null) ?? null,
+    status: String(d.status ?? ''),
+    outputFormat: String(d.outputFormat ?? ''),
+    createdAt: d.createdAt as Date,
+    data: (d.data as Record<string, unknown> | undefined) ?? {},
+  }
+}
+
+/**
+ * รวม**ค่า**ทั้งหมดใน `data` เป็นข้อความเดียว เพื่อให้ค้นด้วยชื่อผู้รับเจอ
+ *
+ * รวมทั้ง key ด้วย เพราะบางครั้งผู้ใช้จำชื่อฟิลด์มากกว่าค่า
+ */
+function searchableText(data: unknown, depth = 0): string {
+  if (data === null || data === undefined) return ''
+  if (depth > 6) return '' // กันวนถ้า data มีโครงสร้างเป็นวง/ลึกผิดปกติ
+  if (typeof data === 'string' || typeof data === 'number' || typeof data === 'boolean') {
+    return String(data)
+  }
+  if (Array.isArray(data)) return data.map((v) => searchableText(v, depth + 1)).join(' ')
+  if (typeof data === 'object') {
+    return Object.entries(data as Record<string, unknown>)
+      .map(([k, v]) => `${k} ${searchableText(v, depth + 1)}`)
+      .join(' ')
+  }
+  return ''
 }
 
 /** หา versionId ทุกเวอร์ชันของแม่แบบหนึ่งตัว */

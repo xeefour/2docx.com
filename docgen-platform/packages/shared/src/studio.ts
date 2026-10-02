@@ -308,6 +308,38 @@ export const TemplateHistory = z.object({
 })
 export type TemplateHistory = z.infer<typeof TemplateHistory>
 
+/**
+ * ประวัติของ **ฉันเอง** กับแม่แบบหนึ่งตัว — เอาไว้กู้ค่ามาแก้ต่อ
+ *
+ * ⚠️ ต่างจาก `TemplateHistory` ตรงที่คืน `data` ด้วย
+ *    จึง**ต้อง**กรองด้วย `createdBy = ผู้เรียก` เสมอ
+ *    ค่าที่กรอกของคนอื่น (ชื่อ เลขบัตร ที่อยู่) ห้ามหลุดออกไป
+ */
+export const MyHistoryItem = z.object({
+  _id: z.string(),
+  label: z.string().nullable(),
+  status: z.string(),
+  outputFormat: z.string(),
+  createdAt: z.date(),
+  /** ค่าที่กรอกตอนสั่งเรนเดอร์ครั้งนั้น — เอกสารเก่าจะเป็น `{}` */
+  data: z.record(z.string(), z.unknown()),
+})
+export type MyHistoryItem = z.infer<typeof MyHistoryItem>
+
+export const MyTemplateHistory = z.object({
+  items: z.array(MyHistoryItem),
+  total: z.number(),
+})
+export type MyTemplateHistory = z.infer<typeof MyTemplateHistory>
+
+/** ค้นหาในประวัติ — คำค้นว่าง = ไม่กรอง */
+export const MyHistoryQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+  /** ค้นทั้งชื่อฉบับและค่าที่กรอกไว้ (เช่น ชื่อผู้รับ) */
+  q: z.string().max(200).default(''),
+})
+export type MyHistoryQuery = z.infer<typeof MyHistoryQuery>
+
 // ── ตัวช่วยจัดการฟอร์ม ────────────────────────────────────────
 
 /** อ่านค่าแบบ dot path — `ผู้รับ.ชื่อ` */

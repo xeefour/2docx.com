@@ -55,6 +55,11 @@ export async function createDocument(
     outputFormat: body.outputFormat,
     label: body.label ?? null,
     error: null,
+    /**
+     * เก็บค่าที่กรอกไว้ด้วย เพื่อให้ "คลิกแก้ไข" ในแท็บประวัติกู้ค่าเดิมมาได้
+     * (เอกสารเก่าที่ไม่มี field นี้ → `toRecord` แปลงเป็น `{}` ให้เอง)
+     */
+    data: body.data,
     createdBy: owner,
     createdByName: currentUserName(req),
     createdAt: timestamp,

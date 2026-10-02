@@ -3,16 +3,20 @@
 /**
  * หน้าแก้ไขแม่แบบหนึ่งตัว — แบ่งเป็นแท็บเพื่อไม่ให้หน้ากว้างเกินไป
  *
- *   ฟอร์ม            · กรอกข้อมูล + ให้ AI ช่วย (แผงข้าง) + เรนเดอร์เห็นผล
- *   JSON ข้อมูลดิบ   · แก้ data ตรง ๆ (สำหรับค่าที่ฟอร์มยังไม่รองรับ)
- *   ช่องฟอร์ม        · ออกแบบช่องกรอกเอง (ชนิด/กติกา/กลุ่ม/ลำดับ)
- *   แม่แบบ & แชร์    · metadata + ใครมีสิทธิ์ใช้
- *   ประวัติ           · ใครใช้แม่แบบนี้บ้าง
+ *   ซ้าย  ฟอร์ม            · กรอกข้อมูล + ให้ AI ช่วย (แผงข้าง) + เรนเดอร์เห็นผล
+ *         JSON ข้อมูลดิบ   · แก้ data ตรง ๆ (สำหรับค่าที่ฟอร์มยังไม่รองรับ)
+ *         ประวัติ          · ฉันเคยสั่งเรนเดอร์แม่แบบนี้เมื่อไร · ค้นแล้วกด "แก้ไข" เพื่อกู้ค่าเดิม
+ *
+ *   ขวา   ตัวอย่างเอกสาร · แม่แบบ & การแชร์ · ช่องฟอร์ม · ผู้ใช้แม่แบบนี้
+ *
+ * ── ประวัติสองฝั่งต่างกันตรงไหน ─────────────────────────────
+ *   ซ้าย "ประวัติ"        = ของฉันเอง มีค่าที่กรอก → เอามาแก้ต่อได้
+ *   ขวา  "ผู้ใช้แม่แบบนี้" = ทุกคน · ดูภาพรวม · อ่านอย่างเดียว (ไม่คืนค่าที่กรอกของคนอื่น)
  *
  * ข้อมูล `data` มีที่เดียวจริง ทั้งฟอร์มและ JSON แก้ชุดเดียวกัน
  * ทำให้สลับแท็บไปมาสลับแล้วข้อมูลไม่หาย
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   api,
   ApiError,
@@ -30,6 +34,7 @@ import AiChat from './AiChat'
 import FieldBuilder from './FieldBuilder'
 import SharePanel from './SharePanel'
 import HistoryPanel from './HistoryPanel'
+import MyHistoryPanel from './MyHistoryPanel'
 import DocumentPreview from './DocumentPreview'
 import DownloadMenu from './DownloadMenu'
 import { JsonEditor } from './lib/JsonEditor'
@@ -37,12 +42,12 @@ import { readParam, setUrl, studioPath, PANE_PARAM, TAB_PARAM } from './lib/urlS
 import { useAppBusy } from '../components/AppStatus'
 import type { LoadedPdf } from './lib/pdf'
 
-/** แท็บฝั่งซ้าย — สิ่งที่กรอกลงเอกสาร */
-type LeftTabId = 'form' | 'json'
-/** แท็บฝั่งขวา — เรื่องของตัวแม่แบบ */
+/** แท็บฝั่งซ้าย — สิ่งที่กรอกลงเอกสาร + ประวัติของฉันเอง */
+type LeftTabId = 'form' | 'json' | 'history'
+/** แท็บฝั่งขวา — เรื่องของตัวแม่แบบ (รวม "ใครใช้แม่แบบนี้") */
 type PaneId = 'preview' | 'template' | 'fields' | 'history'
 
-const LEFT_TABS: readonly string[] = ['form', 'json']
+const LEFT_TABS: readonly string[] = ['form', 'json', 'history']
 const PANE_IDS: readonly string[] = ['preview', 'template', 'fields', 'history']
 
 export default function TemplateEditor({
@@ -80,6 +85,42 @@ export default function TemplateEditor({
   }, [busy, status, setAppBusy])
 
   /**
+   * ── บอก CSS ว่าคอลัมน์ขวาเริ่มต้นที่หน้าจอตรงไหน ────────────────
+   *
+   * คอลัมน์ขวาเป็น `position: sticky; top: 16px` → พอเลื่อนลงมันจะหยุดที่ 16px
+   * แต่ตอน `scroll = 0` มันยังอยู่ใต้หัวหน้าเว็บ (ประมาณ 145px) ตามปกติ
+   *
+   * CSS อ่านตำแหน่งของตัวเองไม่ได้ จึงต้องวัดแล้วส่งเป็น `--editor-top`
+   * แล้วให้การ์ดพรีวิวสูงได้ไม่เกิน `100vh - --editor-top`
+   * → ครบทุกระดับการเลื่อน ไม่ต้องเลื่อนหน้าจอถึงจะเห็นท้ายเอกสาร
+   *
+   * ⚠️ ต้องวัดใหม่เมื่อหัวหน้าเว็บสูงขึ้น (เช่นมีแถบแจ้งข้อผิดพลาดโผล่)
+   *    จึงดูความสูง `document.body` ด้วย ResizeObserver
+   */
+  const splitRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = splitRef.current
+    if (!el) return
+    let raf = 0
+    const measure = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        const top = Math.round(el.getBoundingClientRect().top + window.scrollY)
+        if (top > 0) el.style.setProperty('--editor-top', `${top}px`)
+      })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(document.body)
+    window.addEventListener('resize', measure)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [pane, tab])
+
+  /**
    * สลับแท็บของฝั่งไหนก็ได้ → URL เปลี่ยนตาม (เขียนทั้งสองค่า ไม่งั้นอีกฝั่งจะหายจาก URL)
    *
    * ใช้ `replace` ไม่ใช่ `push` — สลับแท็บไม่ควรกองประวัติจนกดย้อนกลับหลายครั้ง
@@ -115,15 +156,24 @@ export default function TemplateEditor({
    *    เพราะ component นี้ถูก SSR ด้วย (server ไม่มี `window`)
    *    ถ้าอ่านตอน render ฝั่งเบราว์เซอร์จะได้ค่าคนละอันกับ server → hydration mismatch
    *
-   * รองรับ URL เก่าที่ใช้ `?tabs=fields|template|history` ฝั่งเดียว
+   * รองรับ URL เก่าที่ใช้ `?tabs=fields|template|preview` ฝั่งเดียว
    * ลิงก์ที่คนอื่นคัดลอกไว้แล้วจะได้ไม่ต้องแก้
+   *
+   * ⚠️ `?tabs=history` เป็น**แท็บซ้าย**ตามความหมายปัจจุบัน
+   *    ต้องตรวจว่าเป็นแท็บซ้ายก่อน แล้วค่อยตีความแบบ URL รุ่นเก่า
+   *    ไม่งั้น `?tabs=history` จะไปเปิดฝั่งขวาด้วย (เพราะ `history` เคยเป็นชื่อแท็บเดียว)
    */
   useEffect(() => {
     const q = window.location.search
     const t = readParam(q, TAB_PARAM)
     const p = readParam(q, PANE_PARAM)
 
-    if (t && LEFT_TABS.includes(t)) setTabState(t as LeftTabId)
+    if (t && LEFT_TABS.includes(t)) {
+      setTabState(t as LeftTabId)
+      // `?pane=` ยังมีผลถ้ามี แต่ถ้าไม่มีให้คงค่าเริ่มต้น (ไม่ตีความรุ่นเก่า)
+      if (p && PANE_IDS.includes(p)) setPaneState(p as PaneId)
+      return
+    }
     if (p && PANE_IDS.includes(p)) setPaneState(p as PaneId)
     else if (t && PANE_IDS.includes(t)) setPaneState(t as PaneId) // URL รุ่นเก่า
   }, [])
@@ -167,6 +217,39 @@ export default function TemplateEditor({
   const errors = useMemo(() => validateFormData(fields, data), [fields, data])
   const errorCount = Object.keys(errors).length
   const canEdit = access?.canEdit ?? true
+
+  /**
+   * กู้ค่าจากประวัติกลับเข้าฟอร์ม
+   *
+   * ⚠️ `withDefaults(fields, ...)` สำคัญมาก
+   *    ค่าที่เก็บมาอาจเก่ากว่าช่องฟอร์มปัจจุบัน (เพิ่มช่องใหม่ทีหลัง)
+   *    ถ้าแทนที่ทั้งก้อน ช่องใหม่จะหายไปและ validation จะพัง
+   *
+   * ⚠️ ค่าที่กู้มาบางค่าอาจไม่มีช่องในฟอร์มปัจจุบัน (เช่น ตอนนั้นยังเป็น JSON อย่างเดียว)
+   *    ต้องบอกผู้ใช้ ไม่งั้นเขากด "แก้ไข" แล้วเห็นฟอร์มเหมือนเดิม
+   *    จะเข้าใจว่ากู้ไม่ได้
+   */
+  const restoreFromHistory = useCallback(
+    (saved: Record<string, unknown>) => {
+      setData((cur) => withDefaults(fields, { ...cur, ...saved }))
+      setShowErrors(false)
+      setErr(null)
+      setPreviewDoc(null)
+      setTab('form')
+
+      const known = new Set(fields.map((f) => f.key))
+      const orphan = Object.keys(saved).filter((k) => !known.has(k))
+      if (orphan.length > 0) {
+        notify(
+          `กู้ค่ากลับเข้าฟอร์มแล้ว — อีก ${orphan.length} ค่าไม่มีช่องในฟอร์มนี้ ` +
+            `ดูที่แท็บ JSON ได้ (${orphan.slice(0, 3).join(', ')}${orphan.length > 3 ? ' …' : ''})`,
+        )
+      } else {
+        notify('กู้ค่าจากประวัติกลับเข้าฟอร์มแล้ว — ตรวจแล้วกดเรนเดอร์ใหม่ได้เลย')
+      }
+    },
+    [fields, notify, setTab],
+  )
 
   // ── เรนเดอร์ ─────────────────────────────────────────────
   const render_ = useCallback(async () => {
@@ -259,12 +342,13 @@ export default function TemplateEditor({
   const leftTabs = [
     { id: 'form', label: 'ฟอร์ม' },
     { id: 'json', label: 'JSON' },
+    { id: 'history', label: 'ประวัติ' },
   ]
   const rightTabs = [
     { id: 'preview', label: 'ตัวอย่างเอกสาร' },
     { id: 'template', label: 'แม่แบบ & การแชร์' },
     { id: 'fields', label: 'ช่องฟอร์ม', count: fields.length },
-    { id: 'history', label: 'ประวัติ' },
+    { id: 'history', label: 'ผู้ใช้แม่แบบนี้' },
   ]
 
   return (
@@ -313,7 +397,7 @@ export default function TemplateEditor({
        * เดิมเป็นแท็บเดียวกว้างเต็มหน้า ทำให้ไม่ชัดว่าเนื้อหาอยู่ฝั่งไหน
        * จอแคบกว่า 1080px จะซ้อนเป็นคอลัมน์เดียวอัตโนมัติ
        */}
-      <div className="editor-split">
+      <div className="editor-split" ref={splitRef}>
         {/* ───────── ซ้าย ───────── */}
         <div className="editor-col">
           <Tabs tabs={leftTabs} active={tab} onChange={(id) => setTab(id as LeftTabId)} />
@@ -407,6 +491,9 @@ export default function TemplateEditor({
               </div>
             </div>
           )}
+          {tab === 'history' && (
+            <MyHistoryPanel templateKey={templateKey} onRestore={restoreFromHistory} />
+          )}
         </div>
 
         {/* ───────── ขวา ───────── */}
@@ -415,7 +502,9 @@ export default function TemplateEditor({
          *    เพราะตอนนี้แท็บถูกย้ายเข้ามาอยู่ในคอลัมน์เดียวกัน
          *    ถ้า sticky เฉพาะการ์ด แท็บจะเลื่อนหายไปทั้งที่เนื้อหายังอยู่ → ผู้ใช้สับสน
          */}
-        <div className="editor-col editor-col--right">
+        <div
+          className={`editor-col editor-col--right${pane === 'preview' ? ' editor-col--preview' : ''}`}
+        >
           <Tabs tabs={rightTabs} active={pane} onChange={(id) => setPane(id as PaneId)} />
 
           {pane === 'preview' && (

@@ -11,6 +11,8 @@ import {
   BookmarkRecord,
   ChatSession,
   TemplateHistory,
+  MyTemplateHistory,
+  MyHistoryQuery,
 } from '@docgen/shared'
 import type { App } from '../../types.js'
 import { readTemplateTags } from '../templates/tags.js'
@@ -34,6 +36,7 @@ import {
   addBookmark,
   removeBookmark,
   templateHistory,
+  myTemplateHistory,
 } from './service.js'
 
 /**
@@ -261,12 +264,43 @@ export async function studioRoutes(app: App) {
       schema: {
         tags,
         summary: 'ใครใช้แม่แบบนี้บ้าง',
+        description: [
+          'มุมมองรวมทุกคน — ใช้ดูว่าแม่แบบนี้ถูกใช้แค่ไหน',
+          '⚠️ ไม่คืนค่าที่กรอกไว้ เพราะเป็นข้อมูลส่วนตัวของผู้อื่น',
+          'ถ้าจะกู้ค่ามาแก้ต่อ ใช้ `/history/:key/mine` แทน',
+        ].join('\n'),
         params: z.object({ key: z.string().min(1).max(200) }),
         querystring: z.object({ limit: z.coerce.number().int().min(1).max(100).default(30) }),
         response: { 200: TemplateHistory, 500: ErrorResponse },
       },
     },
     async (req) => templateHistory(app, req.params.key, req.query.limit),
+  )
+
+  /**
+   * ประวัติของฉันเอง — เอาค่าเดิมมาแก้ต่อได้
+   *
+   * ไม่ชนกับ `/history/:key` เพราะคนละจำนวน path segment
+   * (2 กับ 3) — `find-my-way` จับได้ถูกต้องโดยไม่ต้องสนใจลำดับประกาศ
+   */
+  app.get(
+    '/history/:key/mine',
+    {
+      schema: {
+        tags,
+        summary: 'ประวัติของฉันเอง (เอาค่าเดิมมาแก้ต่อได้)',
+        description: [
+          'คืนเฉพาะเอกสารที่ผู้เรียกสร้างเอง พร้อมค่าที่กรอกไว้ในครั้งนั้น',
+          'เพื่อให้ "ค้นหาในประวัติ แล้วคลิกแก้ไข" ทำงานได้',
+          '',
+          '`?q=` ค้นทั้งชื่อฉบับและค่าที่กรอก (เช่น ชื่อผู้รับ)',
+        ].join('\n'),
+        params: z.object({ key: z.string().min(1).max(200) }),
+        querystring: MyHistoryQuery,
+        response: { 200: MyTemplateHistory, 401: ErrorResponse, 500: ErrorResponse },
+      },
+    },
+    async (req) => myTemplateHistory(app, req.params.key, req.query, req),
   )
 
   // ── แชทกับ AI ────────────────────────────────────────────

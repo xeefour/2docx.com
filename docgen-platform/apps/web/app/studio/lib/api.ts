@@ -285,6 +285,23 @@ export type TemplateHistory = {
   total: number
 }
 
+/**
+ * ประวัติของฉันเอง — มาพร้อมค่าที่กรอกไว้ เพื่อกู้มาแก้ต่อ
+ *
+ * ⚠️ API กรอง `createdBy` ให้เสมอ ค่าของคนอื่นจึงไม่มีทางหลุดมา
+ */
+export type MyHistory = {
+  items: Array<{
+    _id: string
+    label: string | null
+    status: string
+    outputFormat: string
+    createdAt: string
+    data: Record<string, unknown>
+  }>
+  total: number
+}
+
 /** key ที่ใช้ผูกข้อมูลทั้งหมดของแม่แบบหนึ่งตัว */
 export const templateKeyOf = (t: Template): string => String(t.id ?? t.versionId)
 
@@ -331,6 +348,47 @@ export const api = {
         return body
       })
   },
+
+  /**
+   * อัปโหลดไฟล์ใหม่**แทนแม่แบบเดิม** → เป็นเวอร์ชันถัดไปของแม่แบบนั้น
+   *
+   * ⚠️ ต่างจาก `uploadTemplate` ตรงที่ส่ง `id` = templateKey
+   *    คนละเรื่องกัน: อันนี้คือแก้ตัวเดิม (สิทธิ์/ประวัติ/ช่องฟอร์มยังอยู่)
+   *    อีกอันคือสร้างแม่แบบใหม่จากศูนย์
+   *
+   * ⚠️ field ข้อความต้องมาก่อน field ไฟล์ — Carbone บังคับลำดับนี้ (code w131)
+   *    และห้ามใส่ header `Expect` เด็ดขาด
+   */
+  replaceTemplate: (
+    templateKey: string,
+    file: File,
+    meta: { name: string; category: string; tags: string[] },
+  ) => {
+    const form = new FormData()
+    form.set('versioning', 'true')
+    form.set('id', templateKey)
+    if (meta.name) form.set('name', meta.name)
+    if (meta.category) form.set('category', meta.category)
+    if (meta.tags.length) form.set('tags', JSON.stringify(meta.tags))
+    form.set('template', file, file.name)
+
+    return fetch(`${BASE}/templates/${encodeURIComponent(templateKey)}/replace`, {
+      method: 'POST',
+      body: form,
+      credentials: 'same-origin',
+    }).then(async (res) => {
+      const body = await res.json().catch(() => null)
+      if (!res.ok) throw new ApiError(res.status, body?.code ?? 'ERROR', body?.message ?? 'อัปโหลดไม่สำเร็จ')
+      return body as { versionId: string; templateId?: string | null }
+    })
+  },
+
+  /**
+   * URL ไฟล์แม่แบบต้นฉบับ — ใช้กับ `<a download>`
+   * (cookie เดินไปด้วยเพราะ same-origin · API ตรวจสิทธิ์ให้อยู่แล้ว)
+   */
+  templateFileUrl: (templateKey: string) =>
+    `/api/templates/${encodeURIComponent(templateKey)}`,
 
   createDocument: (body: {
     templateId: string
@@ -420,6 +478,14 @@ export const api = {
   // ── ประวัติการสร้างเอกสารของแม่แบบ ────────────────────────
   history: (templateKey: string) =>
     call<TemplateHistory>(`/history/${encodeURIComponent(templateKey)}`),
+
+  /**
+   * ประวัติส่วนตัว — เอาไว้กู้ค่าเดิมมาแก้ต่อ
+   *
+   * @param q คำค้น ค้นทั้งชื่อฉบับและค่าที่กรอก (เช่น ชื่อผู้รับ)
+   */
+  myHistory: (templateKey: string, q = '') =>
+    call<MyHistory>(`/history/${encodeURIComponent(templateKey)}/mine?q=${encodeURIComponent(q)}`),
 
   // ── AI ช่วยกรอกข้อมูล ────────────────────────────────────
   llmStatus: () => call<LlmStatus>('/llm/status'),

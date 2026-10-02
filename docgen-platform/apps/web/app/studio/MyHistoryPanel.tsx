@@ -1,0 +1,193 @@
+'use client'
+
+/**
+ * แท็บ "ประวัติ" ฝั่งซ้าย — ฉันสั่งเรนเดอร์แม่แบบนี้ไปแล้วครั้งไหนบ้าง
+ *
+ * ── ต่างจาก "ผู้ใช้แม่แบบนี้" (ฝั่งขวา) ยังไง ──────────────────
+ *   ขวา  ผู้ใช้แม่แบบนี้ = ใครใช้บ้าง (ทุกคน) → ดูภาพรวม อ่านอย่างเดียว
+ *   ซ้าย ประวัติ        = ของฉันเอง          → ค้นหาแล้วคลิก "แก้ไข" เพื่อกู้ค่าเดิมมา
+ *
+ * ── ทำไมต้องค้นได้ ────────────────────────────────────────────
+ *   ชื่อฉบับคือ `studio: <ชื่อแม่แบบ>` ซึ่งเหมือนกันหมดทุกฉบับ
+ *   คนทำงานจำชื่อฉบับไม่ได้ แต่จำ**ชื่อผู้รับ** ได้
+ *   จึงค้นทั้งชื่อฉบับและค่าที่กรอกไว้ แล้วโชว์ตัวอย่างค่าให้เห็นก่อนกดแก้ไข
+ */
+import { useEffect, useRef, useState } from 'react'
+import { api, type MyHistory } from './lib/api'
+
+const STATUS_TONE: Record<string, string> = {
+  done: 'pill ok',
+  failed: 'pill err',
+  rendering: 'pill warn',
+  queued: 'pill',
+}
+
+const STATUS_TH: Record<string, string> = {
+  done: 'สำเร็จ',
+  failed: 'ล้มเหลว',
+  rendering: 'กำลังเรนเดอร์',
+  queued: 'รอคิว',
+}
+
+function when(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+/** ค่าที่กรอกไว้ → บรรทัด "ชื่อ: ค่า" สั้น ๆ ให้เห็นว่าเป็นฉบับไหน */
+function previewOf(data: Record<string, unknown>, limit = 3): string[] {
+  const out: string[] = []
+  for (const [k, v] of Object.entries(data)) {
+    if (out.length >= limit) break
+    if (v === null || v === undefined || v === '') continue
+    const text = typeof v === 'object' ? JSON.stringify(v) : String(v)
+    if (!text) continue
+    out.push(text.length > 48 ? `${text.slice(0, 48)}…` : text)
+  }
+  return out
+}
+
+export default function MyHistoryPanel({
+  templateKey,
+  onRestore,
+}: {
+  templateKey: string
+  /**
+   * กู้ค่าเดิมกลับเข้าฟอร์ม — พ่อเป็นคนสลับแท็บและขึ้นข้อความบอกผล
+   * (พ่อรู้ว่าค่าไหนไม่มีช่องในฟอร์ม จึงต้องเป็นคนบอก)
+   */
+  onRestore: (data: Record<string, unknown>) => void
+}) {
+  const [data, setData] = useState<MyHistory | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [q, setQ] = useState('')
+  /**
+   * คำค้นที่ยิง API ไปแล้ว — ใช้กันยิงซ้ำ
+   *
+   * ⚠️ ต้องเริ่มเป็น `null` ไม่ใช่ `''`
+   *    ถ้าเริ่มเป็นค่าว่าง เงื่อนไข `next === sentQ.current` จะเป็นจริงตั้งแต่แรก
+   *    → effect return ทันที → **ไม่ยิง API เลยตอนเปิดหน้า** รายการว่างตลอด
+   *    (เคยเจอ: พิมพ์คำค้นแล้วถึงจะมีข้อมูลปรากฏ)
+   */
+  const sentQ = useRef<string | null>(null)
+  const seq = useRef(0)
+
+  /**
+   * ค้นเมื่อหยุดพิมพ์ 350ms
+   *
+   * ⚠️ ต้องมี `seq` กันผลค้าย้อนหลัง
+   *    ถ้าไม่มี การพิมพ์เร็ว ๆ แล้ว request เก่าตอบทีหลังจะทับของใหม่
+   *    ผู้ใช้จะเห็นรายการไม่ตรงกับที่พิมพ์
+   */
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const next = q.trim()
+      if (next === sentQ.current) return
+      sentQ.current = next
+      const mine = ++seq.current
+      setLoading(true)
+      setError(null)
+      void api
+        .myHistory(templateKey, next)
+        .then((r) => {
+          if (mine === seq.current) setData(r)
+        })
+        .catch((e) => {
+          if (mine === seq.current) setError(e instanceof Error ? e.message : String(e))
+        })
+        .finally(() => {
+          if (mine === seq.current) setLoading(false)
+        })
+    }, 350)
+    return () => clearTimeout(t)
+  }, [q, templateKey])
+
+  const items = data?.items ?? []
+
+  if (error) return <p className="field-error" style={{ padding: 16 }}>{error}</p>
+
+  return (
+    <div className="card" style={{ overflow: 'hidden' }}>
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line)' }}>
+        <h2 style={{ margin: '0 0 2px', fontSize: 15 }}>ประวัติของฉัน</h2>
+        <p className="muted" style={{ margin: '0 0 10px', fontSize: 12 }}>
+          ค้นด้วยชื่อผู้รับหรือคำในเอกสาร แล้วกด “แก้ไข” เพื่อเอาค่าเดิมกลับมา
+        </p>
+        <input
+          type="search"
+          className="myhist__q"
+          placeholder="ค้นหาในประวัติ…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          data-testid="myhistory-search"
+        />
+      </div>
+
+      {loading && items.length === 0 && (
+        <p className="muted" style={{ padding: 20, textAlign: 'center', margin: 0 }}>
+          กำลังโหลดประวัติ…
+        </p>
+      )}
+
+      {!loading && items.length === 0 && (
+        <p className="muted" style={{ padding: 28, textAlign: 'center', margin: 0 }}>
+          {q.trim() ? `ไม่พบประวัติที่ตรงกับ “${q.trim()}”` : 'ยังไม่เคยสั่งเรนเดอร์แม่แบบนี้'}
+        </p>
+      )}
+
+      {items.length > 0 && (
+        <ul className="myhist" data-testid="myhistory-list">
+          {items.map((d) => {
+            const lines = previewOf(d.data)
+            const canRestore = Object.keys(d.data).length > 0
+            return (
+              <li key={d._id} className="myhist__row">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="myhist__top">
+                    <span className="myhist__label">{d.label ?? '(ไม่มีชื่อฉบับ)'}</span>
+                    <span className={STATUS_TONE[d.status] ?? 'pill'}>
+                      {STATUS_TH[d.status] ?? d.status}
+                    </span>
+                    <span className="pill mono">{d.outputFormat}</span>
+                  </div>
+                  <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                    {when(d.createdAt)}
+                  </div>
+                  {lines.length > 0 && (
+                    <div className="myhist__peek">
+                      {lines.map((t, i) => (
+                        <span key={i}>{t}</span>
+                      ))}
+                    </div>
+                  )}
+                  {!canRestore && (
+                    <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                      เอกสารเก่า — ยังไม่ได้เก็บค่าที่กรอกไว้ กู้ค่าไม่ได้
+                    </div>
+                  )}
+                </div>
+                <button
+                  className="ghost"
+                  data-testid="myhistory-restore"
+                  disabled={!canRestore}
+                  onClick={() => onRestore(d.data)}
+                >
+                  แก้ไข
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {data && items.length > 0 && (
+        <div className="muted" style={{ padding: '10px 16px', fontSize: 12, borderTop: '1px solid var(--line)' }}>
+          ทั้งหมด {data.total} ฉบับ
+          {q.trim() ? ` · ค้นหา “${q.trim()}” เจอ ${items.length}` : ''}
+        </div>
+      )}
+    </div>
+  )
+}

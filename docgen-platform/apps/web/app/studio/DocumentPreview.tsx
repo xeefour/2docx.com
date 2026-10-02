@@ -20,6 +20,11 @@ import Ruler from './Ruler'
 
 const ZOOMS = [0.5, 0.75, 1, 1.5, 2, 3]
 
+/** ความหนาไม้บรรทัด (px) — ต้องตรงกับ `gridTemplate` ของ `.docstage` ใน globals.css */
+const RULER_THICK = 18
+/** ระยะขอบของ `.docpage` (px) — ต้องตรงกับ `padding: 16px` */
+const PAGE_PAD = 16
+
 /** ความละเอียดตอนพิมพ์ — A4 (595pt) × 2 ≈ 1190px ≈ 144 dpi พอกับกระดาษจริง */
 const PRINT_SCALE = 2
 
@@ -80,6 +85,20 @@ export default function DocumentPreview({
    *    ครั้งเดียวตอน mount จะได้ค่าเก่า → กระดาษไม่พอดีกล่อง
    */
   const [box, setBox] = useState({ w: 0, h: 0 })
+
+  /**
+   * ── วิธีจัดขนาดกระดาษบนจอ (ผู้ใช้เลือกเองได้) ──
+   *
+   * · `width` — **เต็มความกว้างที่มี** (ค่าเริ่มต้น) อ่านตัวอักษรได้จริง
+   *   ถ้ากระดาษสูงเกินกล่องก็เลื่อนลงได้ ตามที่ Word/Docs ทำ
+   * · `page` — **พอดีทั้งหน้า** เห็นครบไม่ต้องเลื่อน แต่กระดาษจะเล็กลง
+   *   จอกว้างแต่ต่ำ (กล่องสูง 461px บนจอ 1000px) กระดาษ A4 จะเหลือราว 53%
+   *
+   * ⚠️ ต้องให้ผู้ใช้สลับเองได้ ไม่ใช่กำหนดฝ่ายเดียว
+   *    คนหนึ่งอยากอ่านตัวอักษร อีกคนอยากเห็นภาพรวมทั้งหน้า
+   *    และความเหมาะกันขึ้นกับขนาดจอ ซึ่งผู้ใช้เท่านั้นที่รู้ว่าจะทำอะไรกับเอกสารต่อ
+   */
+  const [fit, setFit] = useState<'width' | 'page'>('width')
 
   /** กระดาษที่เตรียมไว้พิมพ์ — ต้องอยู่**นอก**ต้นไม้ของแอปถึงจะซ่อนทั้งแอปได้ตอนพิมพ์ */
   const printRef = useRef<HTMLDivElement>(null)
@@ -144,19 +163,22 @@ export default function DocumentPreview({
 
   // ── วาดหน้าหลัก ──
   /**
-   * สเกลที่ "พอดีทั้งหน้า" — คำนวณจากกระดาษที่วัดได้จริง ไม่เดา
+   * สเกลที่กระดาษจะถูกวาด — คำนวณจากพื้นที่ว่างจริง ไม่เดา
    *
-   * ⚠️ ต้องคิดทั้ง**ความกว้างและความสูง** (contain) ไม่ใช่แค่ความกว้าง
-   *    คิดแค่ความกว้าง → กระดาษ A4 สูงกว่ากล่อง → ต้องเลื่อนแนวตั้ง
-   *    ผู้ใช้จึงดูไม่ครบหน้า แต่เอาไปตัดสินใจว่าจะใช้แม่แบบนี้ไหมไม่ได้
+   * ⚠️ ต้องหักทั้งไม้บรรทัด**แนวตั้งและแนวนอน**
+   *    `.docstage` เป็นกริด `18px auto / 18px auto` → ไม้บรรทัดแนวนอนกินความสูงไป 18px
+   *    ถ้าหักแต่แนวตั้ง (เดิม) กระดาษจะสูงเกินกล่องไป 18px ตอนเปิดไม้บรรทัด
+   *    → scrollbar แนวตั้งโผล่มาทั้งที่บอกว่า "พอดีหน้า" (เจอจริงตอนทดสอบ)
    */
   const fitScale = useMemo(() => {
     if (!pagePt || !box.w || !box.h) return null
-    const availW = box.w - 32 - (ruler ? 18 + 10 : 0)
-    const availH = box.h - 32
-    if (availW <= 0 || availH <= 0) return null
+    const availW = box.w - PAGE_PAD * 2 - (ruler ? RULER_THICK + 10 : 0)
+    const availH = box.h - PAGE_PAD * 2 - (ruler ? RULER_THICK : 0)
+    if (availW <= 0) return null
+    if (fit === 'width') return availW / pagePt.widthPt
+    if (availH <= 0) return null
     return Math.min(availW / pagePt.widthPt, availH / pagePt.heightPt)
-  }, [pagePt, box.w, box.h, ruler])
+  }, [pagePt, box.w, box.h, ruler, fit])
 
   const drawMain = useCallback(async () => {
     if (!pdf || !mainRef.current) return
@@ -169,22 +191,21 @@ export default function DocumentPreview({
     const host = pageRef.current
     if (!host) return
     // เว้นที่ให้ไม้บรรทัดแนวตั้ง + ระยะขอบ ไม่งั้นหน้าจอแคบแล้วกระดาษล้นแนวนอน
-    const aside = ruler ? 18 + 10 : 0
+    const aside = ruler ? RULER_THICK + 10 : 0
     /**
      * ⚠️ ค่านี้คือ**ความกว้าง CSS ของกระดาษบนจอ**
      *    `pdf.render()` จะอ่าน `canvas.clientWidth` แล้วแปลงเป็นสเกลของ pdf.js เอง
      *    ถ้าไม่ใส่ `zoom` ค่านี้ไว้ ผู้ใช้จะเลื่อนดูกระดาษไม่ได้เลย
      *
-     * ⚠️ ตอนพอดีหน้า**ห้ามมีเพดานความกว้างต่ำ** เช่นเดิมที่ใช้ 160px
-     *    กล่องสั้น (จอเตี้ย / จอแคบ) คำนวณได้กระดาษแค่ ~115px กว้าง
-     *    แต่เพดาน 160px ดันกลับให้สูงเกินกล่อง → scrollbar แนวตั้งกลับมา
-     *    และกล่องจะ "ตรึง" ที่กระดาษเล็ก ๆ เพราะกล่องสูงตามกระดาษ (วงจรป้อนกลับ)
+     * ⚠️ ห้ามมีเพดานความกว้างต่ำ (เช่นเดิมที่ใช้ 160px)
+     *    กล่องแคบมากคำนวณได้กระดาษแค่ ~115px แต่เพดานดันให้สูงเกินกล่อง
+     *    → scrollbar กลับมา และกล่องตรึงที่กระดาษเล็กจากวงจรป้อนกลับ
      */
     const widthPx = fitScale
       ? pagePt
         ? Math.max(24, Math.round(pagePt.widthPt * fitScale * zoom))
         : 24
-      : Math.max(160, Math.round((host.clientWidth - 32 - aside) * zoom))
+      : Math.max(160, Math.round((host.clientWidth - PAGE_PAD * 2 - aside) * zoom))
     canvas.style.width = `${widthPx}px`
     try {
       await pdf.render(page, canvas)
@@ -198,6 +219,12 @@ export default function DocumentPreview({
       setError(e instanceof Error ? e.message : String(e))
     }
   }, [pdf, page, zoom, ruler, fitScale, pagePt])
+
+  /** สลับวิธีจัดขนาด แล้วรีเซ็ตซูม — ไม่งั้นซูมค้างจากโหมดเดิมแล้วได้กระดาษที่ล้นทั้งที่เพิ่งกดสลับ */
+  const toggleFit = () => {
+    setZoom(1)
+    setFit((f) => (f === 'width' ? 'page' : 'width'))
+  }
 
   useEffect(() => {
     void drawMain()
@@ -413,10 +440,9 @@ export default function DocumentPreview({
           </button>
           <span className="muted mono" style={{ fontSize: 12, minWidth: 52, textAlign: 'center' }}>
             {/**
-             * ⚠️ ต้องโชว์**เปอร์เซ็นต์จริงเทียบขนาดกระดาษจริง**
-             *    ไม่ใช่ตัวคูณของ "พอดีหน้า" — ไม่งั้นค่า 100% จะหลอกว่าเป็นขนาดจริง
-             *    ทั้งที่จริงอาจกำลังย่ออยู่ที่ 64% เพราะกล่องเตี้ยกว่ากระดาษ
-             *    ผู้ใช้ที่จะตัดสินใจว่าจะพิมพ์หรือไม่ ต้องเห็นตัวเลขจริง
+             * ⚠️ ต้องโชว์**เปอร์เซ็นต์จริงเทียบขนาดกระดาษจริง** ไม่ใช่ตัวคูณของโหมดพอดีหน้า
+             *    โหมดพอดีหน้าบนจอเตี้ยได้แค่ ~50% แต่โหมดเต็มความกว้างได้ 130%
+             *    ผู้ใช้ที่จะตัดสินใจว่าจะพิมพ์หรือไม่ ต้องเห็นตัวเลขจริงของสิ่งที่กำลังดู
              */}
             {fitScale ? `${Math.round(fitScale * zoom * 100)}%` : '—'}
           </span>
@@ -431,18 +457,25 @@ export default function DocumentPreview({
           </button>
           {/**
            * ⚠️ ปุ่มนี้คือทางออกหลัก ไม่ใช่ของแถบ ๆ
-           *   ผู้ใช้ที่ซูมเข้าไปอ่านแล้วอยากกลับไปดูทั้งหน้าในพริบตา
-           *   ต้องกดได้ในคลิกเดียว ไม่ต้องกดลบทีละครั้ง
+           *   ผู้ใช้ที่ซูมเข้าไปอ่านแล้วอยากกลับมาที่ขนาดมาตรฐาน
+           *   หรือสลับดูว่าเอกสารหน้าตามั้น ต้องได้ในคลิกเดียว
+           *
+           *   ป้ายบอก**สิ่งที่จะเกิดเมื่อกด** ไม่ใช่สถานะปัจจุบัน
+           *   เพราะสองคำนี้ยาวและคล้ายกัน ถ้าโชว์สถานะจะเข้าใจผิดว่ากดแล้วได้โหมดนั้น
            */}
           <button
             className="ghost rulbtn"
-            onClick={() => setZoom(1)}
-            disabled={zoom === 1}
+            onClick={toggleFit}
             style={{ fontSize: 12 }}
-            title="ย่อให้เห็นทั้งหน้าพอดีกล่อง"
+            title={
+              fit === 'width'
+                ? 'ตอนนี้เต็มความกว้าง — กดเพื่อย่อให้เห็นทั้งหน้าพอดีกล่อง'
+                : 'ตอนนี้พอดีทั้งหน้า — กดเพื่อขยายเต็มความกว้าง'
+            }
             data-testid="zoom-fit"
+            data-mode={fit}
           >
-            พอดีหน้า
+            {fit === 'width' ? 'พอดีหน้า' : 'เต็มความกว้าง'}
           </button>
 
           {/*

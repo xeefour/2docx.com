@@ -285,6 +285,18 @@ tbody tr:hover {
   padding: 16px;
   background: var(--surface);
   overflow: auto;
+  /**
+   * ⚠️ ต้องกันช่อง scrollbar ไว้เสมอ ไม่งั้นกระดาษจะ"สั่น"ไปมา
+   *
+   *   กระดาษถูกวาดให้เต็มความกว้างที่ใช้ได้ ซึ่งวัดจาก `clientWidth`
+   *   แต่ `clientWidth` **หดลง** เมื่อ scrollbar แนวตั้งโผล่
+   *   → กระดาษที่วาดจากค่าก่อนหน้าจะล้น → โผล่ scrollbar แนวนอน → กล่องหดอีก → วนไป
+   *   (สังเกตได้จากกระดาษสลับระหว่างกว้าง 634px กับ 619px ไปเรื่อย)
+   *
+   *   `scrollbar-gutter: stable both-edges` จองช่องไว้**ทั้งสองข้าง** ทำให้ `clientWidth` นิ่ง
+   *   และกระดาษยังอยู่กลางกล่องพอดี (ถ้าจองข้างเดียว กระดาษจะเยื้องไป 15px)
+   */
+  scrollbar-gutter: stable both-edges;
   display: flex;
   justify-content: center;
   align-items: flex-start;

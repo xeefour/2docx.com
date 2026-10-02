@@ -1,20 +1,24 @@
 /**
- * ตรวจว่าหน้าพรีวิว "เห็นทั้งหน้ากระดาษพอดีกล่อง" — ผู้ใช้ต้องตัดสินใจได้โดยไม่ต้องเลื่อน
+ * ตรวจว่าหน้าพรีวิว "เต็มความกว้าง" และสลับไป "พอดีทั้งหน้า" ได้ — ผู้ใช้ต้องเลือกเองได้
  *
  *   node --env-file=.env tools/test-fit-page.mjs
  *
  * ── ปัญหาที่ต้องการแก้ ────────────────────────────────────────
- * เดิมกระดาษคำนวณจาก**ความกว้าง**อย่างเดียว (`host.clientWidth`)
- * พอกล่องพรีวิวสูงไม่ถึงสัดส่วน A4 (สูงกว่ากว้าง ~1.41 เท่า) กระดาษก็ล้นลง
- * → มี scrollbar ทั้งสองทาง ผู้ใช้เห็นไม่ครบหน้า แล้วตัดสินใจไม่ได้ว่าเอกสารหน้าตาย
+ * รอบแรกกระดาษคำนวณจาก**ความกว้าง**อย่างเดียว พอกล่องสูงไม่ถึงสัดส่วน A4 กระดาษก็ล้นลง
+ * → มี scrollbar ทั้งสองทาง ผู้ใช้เห็นไม่ครบหน้า
+ *
+ * แก้เป็น "พอดีทั้งหน้า" (contain) แล้วกระดาษเล็กลงมาก
+ * → บนจอกว้างแต่ต่ำ กระดาษเหลือราว 53% ของกว้าง อ่านไม่ออก เสียพื้นที่ข้างทิ้ง
+ *
+ * สุดท้ายเลยให้**ผู้ใช้เป็นคนเลือก** เพราะคนหนึ่งอยากอ่านตัวอักษร
+ * อีกคนอยากเห็นภาพรวมทั้งหน้า และความเหมาะกันขึ้นกับขนาดจอด้วย
  *
  * ── สิ่งที่ต้องผ่าน ────────────────────────────────────────────
- * 1. เรนเดอร์แล้ว `.docpage` ไม่มี scrollbar ทั้งแนวตั้งและแนวนอน → เห็นทั้งหน้า
- * 2. กระดาษไม่เล็กจนอ่านไม่ออก (ต้องกินพื้นที่ส่วนใหญ่ของกล่อง)
- * 3. เปอร์เซ็นต์ที่แสดงเป็น**ของจริงเทียบกระดาษจริง** ไม่ใช่ 100% หรือ 200% ปลอม ๆ
- * 4. ซูมเข้าแล้วกระดาษใหญ่ขึ้นจริง จนเลื่อนดูได้ (ฟีเจอร์เดิมต้องไม่หาย)
- * 5. ปุ่ม "พอดีหน้า" กลับเป็นพอดีกล่องใน**คลิกเดียว** (เดิมต้องกดลบทีละขั้น)
- * 6. จอเตี้ยกว่า (1280×720) ยังเห็นทั้งหน้า → พิสูจน์ว่าคิดทั้งความกว้างและความสูง
+ * 1. ค่าเริ่มต้น = เต็มความกว้างที่มี (ไม่ล้นแนวนอน)
+ * 2. กด "พอดีหน้า" → เห็นทั้งหน้า ไม่มี scrollbar แนวตั้ง (รวมตอนเปิดไม้บรรทัด)
+ * 3. กดกลับ → กลับเป็นเต็มความกว้าง
+ * 4. ซูมเข้า/ออกยังทำงาน และเปอร์เซ็นต์ตรงกับขนาดจริง
+ * 5. จอเตี้ย/จอแคบต้องไม่มีกระดาษล้นแนวนอน
  */
 import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -166,6 +170,7 @@ const measure = () =>
     const host = document.querySelector('.docpage')
     const c = document.querySelector('.docpage .docstage__page canvas')
     const pct = document.querySelector('.doctools .mono')
+    const fit = document.querySelector('[data-testid="zoom-fit"]')
     if (!host || !c) return null
     const hr = host.getBoundingClientRect()
     const cr = c.getBoundingClientRect()
@@ -175,6 +180,9 @@ const measure = () =>
       canvasW: Math.round(cr.width), canvasH: Math.round(cr.height),
       bmpW: c.width, bmpH: c.height,
       pct: (pct?.textContent || '').trim(),
+      mode: fit?.dataset.mode ?? '',
+      fitLabel: (fit?.textContent || '').trim(),
+      ruler: !!document.querySelector('.rul--h'),
     }
   })()`)
 
@@ -260,48 +268,135 @@ if (openRow) {
   check('เรนเดอร์สำเร็จและ pdf.js วาดเสร็จ', ok)
 }
 
-console.log('\n[2] จอ 1600×1000 — ต้องเห็นทั้งหน้ากระดาษ ไม่มี scrollbar สองทาง')
+console.log('\n[2] จอ 1600×1000 — ค่าเริ่มต้นต้อง "เต็มความกว้าง"')
 const m1 = await measure()
 if (!m1) {
   check('วัดกล่องพรีวิวได้', false, 'ไม่มี .docpage / canvas')
 } else {
-  check('วัดกล่องพรีวิวได้', true, `กล่อง ${m1.hostW}×${m1.hostH} · กระดาษ ${m1.canvasW}×${m1.canvasH}`)
+  check('วัดกล่องพรีวิวได้', true, `กล่อง ${m1.hostW}×${m1.hostH} · กระดาษ ${m1.canvasW}×${m1.canvasH} · ${m1.pct}`)
+  check('เริ่มต้นเป็นโหมดเต็มความกว้าง', m1.mode === 'width', `โหมด "${m1.mode}" · ปุ่มขึ้น "${m1.fitLabel}"`)
   check(
     'ไม่มี scrollbar แนวนอน (กระดาษไม่ล้นความกว้างกล่อง)',
     m1.scrollW <= m1.hostW + 2,
     `เนื้อหา ${m1.scrollW} / กล่อง ${m1.hostW}`,
   )
   check(
-    'ไม่มี scrollbar แนวตั้ง (เห็นครบทั้งหน้า) ← ปัญหาที่แก้',
-    m1.scrollH <= m1.hostH + 2,
-    `เนื้อหา ${m1.scrollH} / กล่อง ${m1.hostH}`,
-  )
-  check(
     /**
-     * ⚠️ วัดกับ**ความสูง**ของกล่อง ไม่ใช่ความกว้าง
-     *    กระดาษ A4 แนวตั้ง สูงกว่ากว้าง ~1.41 เท่า
-     *    ถ้ากล่องกว้างแต่ต่ำ กระดาษจะเต็ม**ความสูง**เสมอ แล้วเหลือความกว้างข้าง
-     *    นั่นถูกต้อง ไม่ใช่ย่อผิด — การไปบังคับว่าต้องกิน 50% ความกว้าง
-     *    จะทำให้เทสต์ตกทั้งที่หน้าจอถูกต้อง (เคยตกแบบนี้)
+     * ⚠️ "เต็มความกว้าง" แปลว่ากินพื้นที่**ที่ว่างได้** ไม่ใช่กินทั้งกล่อง
+     *    ใน `.docpage` ยังมีระยะขอบ 16px ข้าง และเผื่อไม้บรรทัดแนวตั้งอีก 18px
+     *    เทียบกับ *พื้นที่ใช้ได้จริง* (กล่อง − ระยะขอบ − ช่อง scrollbar)
      */
-    'กระดาษเต็มความสูงกล่อง (ย่อจนพอดี ไม่ใช่เหลือที่ว่าง)',
-    m1.canvasH >= m1.hostH * 0.8,
-    `สูง ${Math.round((m1.canvasH / m1.hostH) * 100)}% ของกล่อง · กระดาษ ${m1.canvasW}×${m1.canvasH}`,
+    'กระดาษกินพื้นที่ใช้ได้เกือบทั้งหมด (ไม่เหลือช่องว่างข้างที่ควรเต็ม)',
+    m1.canvasW >= m1.hostW - 32 - 28 - 12,
+    `กระดาษ ${m1.canvasW}px / ใช้ได้ ~${m1.hostW - 32 - (m1.ruler ? 28 : 0)}px`,
   )
+  /**
+   * ⚠️ กันกระดาษ "สั่น" ระหว่างสองขนาด
+   *   ต้นเหตุ: กระดาษวาดเต็ม `clientWidth` → ล้น → scrollbar โผล่ → `clientWidth` หด
+   *   → กระดาษแคบลง → scrollbar หาย → กล่องกว้างอีก → วนไป
+   *   แก้ที่ CSS ด้วย `scrollbar-gutter: stable both-edges` ต้องวัดซ้ำแล้วได้ค่าเดิม
+   */
+  await sleep(700)
+  const m1b = await measure()
   check(
-    'กระดาษยังใหญ่พออ่านออก (ไม่ย่อจนเป็นตัวอักษรจิ๋ว)',
-    m1.canvasW >= 200,
-    `กว้าง ${m1.canvasW}px (กล่องกว้าง ${m1.hostW}px · เหลือข้างเพราะกระดาษสูงกว่ากว้าง)`,
+    'กระดาษนิ่ง ไม่สั่นไปมอระหว่างสองขนาด (กัน scrollbar ชนกันเอง)',
+    !!m1b && Math.abs(m1b.canvasW - m1.canvasW) <= 2,
+    `${m1.canvasW}px → ${m1b?.canvasW}px`,
+  )
+  /**
+   * ⚠️ ช่อง scrollbar ที่จองไว้ต้องอยู่**ทั้งสองข้าง**
+   *    ถ้าจองข้างเดียว (ค่าเริ่มต้นของ `scrollbar-gutter`) กระดาษจะเยื้องไป ~15px
+   *    เห็นได้ชัดตอนกระดาษเต็มความกว้าง เพราะไม่เหลือช่องข้างให้กลบ
+   */
+  const gapLR = await evaluate(`(() => {
+    const host = document.querySelector('.docpage')
+    const c = document.querySelector('.docpage .docstage__page canvas')
+    if (!host || !c) return null
+    const hr = host.getBoundingClientRect(), cr = c.getBoundingClientRect()
+    return { left: Math.round(cr.x - hr.x), right: Math.round(hr.right - cr.right) }
+  })()`)
+  check(
+    'กระดาษอยู่กลางกล่องพอดี (ช่อง scrollbar จองสองข้าง)',
+    !!gapLR && Math.abs(gapLR.left - gapLR.right) <= 2,
+    `ซ้าย ${gapLR?.left}px · ขวา ${gapLR?.right}px`,
   )
   check(
     'เปอร์เซ็นต์ที่แสดงเป็นตัวเลขจริง ไม่ใช่ 100% ปลอม',
-    /^\d{1,3}%$/.test(m1.pct),
+    /^\d{1,3}%$/.test(m1.pct) && m1.pct !== '100%',
     `แสดง "${m1.pct}"`,
   )
-  await shot('01-fit-1600x1000.png')
+  await shot('01-width-1600x1000.png')
 }
 
-console.log('\n[3] ซูมเข้า 2 ครั้ง — ต้องใหญ่ขึ้นจริงจนเลื่อนดูได้')
+console.log('\n[3] เปิดไม้บรรทัด — ต้องไม่ล้นแนวนอน (ไม้บรรทัดกินความกว้างไป 18px)')
+await clickSelector('[data-testid="ruler-toggle"]')
+await sleep(900)
+const mRuler = await measure()
+if (mRuler) {
+  check('ไม้บรรทัดแสดงจริง', mRuler.ruler, '')
+  check(
+    'เปิดไม้บรรทัดแล้วยังไม่ล้นแนวนอน',
+    mRuler.scrollW <= mRuler.hostW + 2,
+    `เนื้อหา ${mRuler.scrollW} / กล่อง ${mRuler.hostW} · กระดาษ ${mRuler.canvasW}px`,
+  )
+  check(
+    'กระดาษย่อลงให้เหลือที่ให้ไม้บรรทัด',
+    mRuler.canvasW < m1.canvasW,
+    `${m1.canvasW}px → ${mRuler.canvasW}px`,
+  )
+}
+await shot('02-ruler-on.png')
+await clickSelector('[data-testid="ruler-toggle"]')
+await sleep(900)
+
+console.log('\n[4] กด "พอดีหน้า" — ต้องเห็นทั้งหน้า ไม่มี scrollbar แนวตั้ง')
+check('มีปุ่มสลับโหมด', await evaluate('!!document.querySelector(\'[data-testid="zoom-fit"]\')'))
+check(
+  'ป้ายปุ่มบอกสิ่งที่จะเกิดเมื่อกด ไม่ใช่สถานะปัจจุบัน',
+  m1?.fitLabel === 'พอดีหน้า',
+  `ป้าย "${m1?.fitLabel}"`,
+)
+const fitOk = await clickSelector('[data-testid="zoom-fit"]')
+check('กดปุ่มพอดีหน้าได้', fitOk)
+await sleep(1200)
+const m3 = await measure()
+if (m3) {
+  check('สลับเป็นโหมดพอดีทั้งหน้าแล้ว', m3.mode === 'page', `โหมด "${m3.mode}"`)
+  check(
+    'ไม่มี scrollbar แนวตั้ง ← หัวใจของโหมดนี้',
+    m3.scrollH <= m3.hostH + 2,
+    `เนื้อหา ${m3.scrollH} / กล่อง ${m3.hostH}`,
+  )
+  check(
+    'ไม่มี scrollbar แนวนอน',
+    m3.scrollW <= m3.hostW + 2,
+    `เนื้อหา ${m3.scrollW} / กล่อง ${m3.hostW}`,
+  )
+  check(
+    'กระดาษย่อลงจากโหมดเต็มความกว้าง (แลกความกว้างมาเป็นความสูง)',
+    m3.canvasW < m1.canvasW && m3.canvasH < m1.canvasH,
+    `${m1.canvasW}×${m1.canvasH} → ${m3.canvasW}×${m3.canvasH}`,
+  )
+  check('ป้ายปุ่มเปลี่ยนเป็นทางกลับ', m3.fitLabel === 'เต็มความกว้าง', `ป้าย "${m3.fitLabel}"`)
+}
+await shot('03-fit-page.png')
+
+console.log('\n[5] กดกลับ — ต้องกลับเป็นเต็มความกว้าง')
+await clickSelector('[data-testid="zoom-fit"]')
+await sleep(1200)
+const mBack = await measure()
+if (mBack && m1) {
+  check('กลับเป็นโหมดเต็มความกว้าง', mBack.mode === 'width', `โหมด "${mBack.mode}"`)
+  check(
+    'กระดาษกลับมากว้างเท่าเดิม',
+    Math.abs(mBack.canvasW - m1.canvasW) <= 2,
+    `${m1.canvasW}px → ${mBack.canvasW}px`,
+  )
+  check('ป้ายปุ่มกลับเป็น "พอดีหน้า"', mBack.fitLabel === 'พอดีหน้า', `ป้าย "${mBack.fitLabel}"`)
+}
+await shot('04-back-to-width.png')
+
+console.log('\n[6] ซูมเข้า 2 ครั้ง — ต้องใหญ่ขึ้นจริงและเลื่อนดูได้')
 const hasZoomIn = await evaluate('!!document.querySelector(\'[aria-label="ซูมเข้า"]\')')
 check('ปุ่มซูมเข้ามี aria-label (กดด้วยการอ่านหน้าจอได้)', hasZoomIn)
 const beforeZoom = await measure()
@@ -323,70 +418,54 @@ if (m2 && beforeZoom) {
     `เนื้อหา ${m2.scrollW}×${m2.scrollH} / กล่อง ${m2.hostW}×${m2.hostH}`,
   )
 }
-await shot('02-zoomed.png')
-
-console.log('\n[4] ปุ่ม "พอดีหน้า" — กลับเป็นพอดีกล่องในคลิกเดียว')
-check('มีปุ่มพอดีหน้า', await evaluate('!!document.querySelector(\'[data-testid="zoom-fit"]\')'))
-const fitOk = await clickSelector('[data-testid="zoom-fit"]')
-check('กดปุ่มพอดีหน้าได้ (ตอนซูมอยู่ ปุ่มต้องไม่ถูก disable)', fitOk)
-await sleep(1200)
-const m3 = await measure()
-if (m3) {
-  check(
-    'หลังกด "พอดีหน้า" ไม่มี scrollbar เหลือ',
-    m3.scrollH <= m3.hostH + 2 && m3.scrollW <= m3.hostW + 2,
-    `เนื้อหา ${m3.scrollW}×${m3.scrollH} / กล่อง ${m3.hostW}×${m3.hostH}`,
-  )
-  check('เปอร์เซ็นต์กลับเป็นค่าพอดีหน้าเดิม', m3.pct === m1?.pct, `${m1?.pct} → ${m3.pct}`)
-  check(
-    'ปุ่มพอดีหน้าถูก disable เมื่ออยู่ที่พอดีหน้าอยู่แล้ว',
-    await evaluate('!!document.querySelector(\'[data-testid="zoom-fit"]\')?.disabled'),
-  )
+await shot('05-zoomed.png')
+/**
+ * ⚠️ คืนซูมด้วยปุ่ม "ซูมออก" ห้าครั้ง 2 ครั้ง **อย่ากดปุ่มสลับโหมด**
+ *    ปุ่มนั้นเปลี่ยนโหมดด้วย → ถ้ากดเพื่อคืนซูม ขั้นถัดไปจะวัดผิดโหมด
+ *    แล้วไปตั้งข้อความว่า "พอดีหน้าต้องไม่ล้น" ทั้งที่กำลังอยู่โหมดเต็มความกว้าง
+ */
+for (let i = 0; i < 2; i++) {
+  await clickSelector('[aria-label="ซูมออก"]')
+  await sleep(900)
 }
-await shot('03-fit-again.png')
 
-console.log('\n[5] จอเตี้ยกว่า 1280×720 — ต้องยังเห็นทั้งหน้า (คิดทั้งกว้างและสูง)')
+console.log('\n[7] จอเตี้ยกว่า 1280×720 — ทั้งสองโหมดต้องไม่ล้นแนวนอน')
 await viewport(1280, 720)
 await sleep(900)
 const m4 = await measure()
 if (m4) {
-  check('วัดได้หลังเปลี่ยนขนาดจอ', !!m4, m4 ? `กล่อง ${m4.hostW}×${m4.hostH} · กระดาษ ${m4.canvasW}×${m4.canvasH}` : '')
-  check(
-    'จอเตี้ย: ไม่มี scrollbar แนวตั้ง',
-    m4.scrollH <= m4.hostH + 2,
-    `เนื้อหา ${m4.scrollH} / กล่อง ${m4.hostH}`,
-  )
-  check(
-    'จอเตี้ย: ไม่มี scrollbar แนวนอน',
-    m4.scrollW <= m4.hostW + 2,
-    `เนื้อหา ${m4.scrollW} / กล่อง ${m4.hostW}`,
-  )
-  check(
-    'จอเตี้ย: ย่อจนพอดีจริง ๆ ไม่ใช่แค่ครอบให้เตี้ย',
-    m4.canvasH < (m1?.canvasH ?? Infinity),
-    `กระดาษ ${m1?.canvasH}px → ${m4.canvasH}px`,
-  )
+  check('จอเตี้ย: วัดได้', true, `กล่อง ${m4.hostW}×${m4.hostH} · กระดาษ ${m4.canvasW}×${m4.canvasH} · ${m4.pct} · โหมด ${m4.mode}`)
+  check('จอเตี้ย: ยังอยู่โหมดเต็มความกว้าง (ไม่ถูกสลับโดยไม่ตั้งใจ)', m4.mode === 'width', `โหมด "${m4.mode}"`)
+  check('จอเตี้ย: โหมดเต็มความกว้างไม่ล้นแนวนอน', m4.scrollW <= m4.hostW + 2, `เนื้อหา ${m4.scrollW} / กล่อง ${m4.hostW}`)
+  await clickSelector('[data-testid="zoom-fit"]')
+  await sleep(1200)
+  const m4b = await measure()
+  if (m4b) {
+    check('จอเตี้ย: สลับเป็นพอดีหน้าได้', m4b.mode === 'page', `โหมด "${m4b.mode}"`)
+    check(
+      'จอเตี้ย: โหมดพอดีหน้าไม่ล้นสองทาง',
+      m4b.scrollW <= m4b.hostW + 2 && m4b.scrollH <= m4b.hostH + 2,
+      `เนื้อหา ${m4b.scrollW}×${m4b.scrollH} / กล่อง ${m4b.hostW}×${m4b.hostH} · กระดาษ ${m4b.canvasW}×${m4b.canvasH}`,
+    )
+  }
+  await clickSelector('[data-testid="zoom-fit"]')
+  await sleep(900)
 }
-await shot('04-fit-1280x720.png')
+await shot('06-narrow-height-1280x720.png')
 
-console.log('\n[6] จอแคบ 900×1000 — ต้องไม่ล้นสองทาง และกล่องต้องมีความสูงตายตัว')
+console.log('\n[8] จอแคบ 900×1000 — ต้องไม่ล้นสองทาง และกล่องต้องมีความสูงตายตัว')
 await viewport(900, 1000)
 await sleep(900)
 const m5 = await measure()
 if (m5) {
   check('จอแคบ: ไม่มี scrollbar แนวนอน', m5.scrollW <= m5.hostW + 2, `เนื้อหา ${m5.scrollW} / กล่อง ${m5.hostW}`)
   check(
-    'จอแคบ: ไม่มี scrollbar แนวตั้ง',
-    m5.scrollH <= m5.hostH + 2,
-    `เนื้อหา ${m5.scrollH} / กล่อง ${m5.hostH}`,
-  )
-  check(
     'จอแคบ: กล่องสูงตายตัว ไม่ใช่สูงตามกระดาษ (กันวงจรกระดาษย่อตัวเอง)',
     m5.hostH >= 200,
     `กล่องสูง ${m5.hostH}px · กระดาษ ${m5.canvasW}×${m5.canvasH}`,
   )
 }
-await shot('05-narrow-900.png')
+await shot('07-narrow-900.png')
 
 // ── เก็บกวาด — คืนฟอร์มแม่แบบเป็นสภาพก่อนสคริปต์นี้ ────────────
 await restoreForm(H, seedKey, formSnap)

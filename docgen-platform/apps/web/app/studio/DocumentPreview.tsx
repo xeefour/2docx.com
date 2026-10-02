@@ -12,7 +12,7 @@
  * คลิกรูปไหนก็ย้ายไปดูหน้านั้น
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { loadPdf, type LoadedPdf } from './lib/pdf'
 import { UNITS, type RulerUnit } from './lib/ruler'
@@ -72,6 +72,15 @@ export default function DocumentPreview({
   const mainRef = useRef<HTMLCanvasElement>(null)
   const stripRef = useRef<HTMLDivElement>(null)
   const pageRef = useRef<HTMLDivElement>(null)
+  /**
+   * ขนาดพื้นที่ว่างของกล่องพรีวิว — ใช้คำนวณ "พอดีทั้งหน้า"
+   *
+   * ⚠️ ต้องวัดด้วย ResizeObserver ไม่ใช่ครั้งเดียวตอน mount
+   *    เพราะกล่องยืด/หดตามหน้าต่าง แท็บ และแถบรูปย่อด้านล่าง
+   *    ครั้งเดียวตอน mount จะได้ค่าเก่า → กระดาษไม่พอดีกล่อง
+   */
+  const [box, setBox] = useState({ w: 0, h: 0 })
+
   /** กระดาษที่เตรียมไว้พิมพ์ — ต้องอยู่**นอก**ต้นไม้ของแอปถึงจะซ่อนทั้งแอปได้ตอนพิมพ์ */
   const printRef = useRef<HTMLDivElement>(null)
   const [printing, setPrinting] = useState(false)
@@ -134,6 +143,21 @@ export default function DocumentPreview({
   }, [fileUrl])
 
   // ── วาดหน้าหลัก ──
+  /**
+   * สเกลที่ "พอดีทั้งหน้า" — คำนวณจากกระดาษที่วัดได้จริง ไม่เดา
+   *
+   * ⚠️ ต้องคิดทั้ง**ความกว้างและความสูง** (contain) ไม่ใช่แค่ความกว้าง
+   *    คิดแค่ความกว้าง → กระดาษ A4 สูงกว่ากล่อง → ต้องเลื่อนแนวตั้ง
+   *    ผู้ใช้จึงดูไม่ครบหน้า แต่เอาไปตัดสินใจว่าจะใช้แม่แบบนี้ไหมไม่ได้
+   */
+  const fitScale = useMemo(() => {
+    if (!pagePt || !box.w || !box.h) return null
+    const availW = box.w - 32 - (ruler ? 18 + 10 : 0)
+    const availH = box.h - 32
+    if (availW <= 0 || availH <= 0) return null
+    return Math.min(availW / pagePt.widthPt, availH / pagePt.heightPt)
+  }, [pagePt, box.w, box.h, ruler])
+
   const drawMain = useCallback(async () => {
     if (!pdf || !mainRef.current) return
     const canvas = mainRef.current
@@ -146,8 +170,22 @@ export default function DocumentPreview({
     if (!host) return
     // เว้นที่ให้ไม้บรรทัดแนวตั้ง + ระยะขอบ ไม่งั้นหน้าจอแคบแล้วกระดาษล้นแนวนอน
     const aside = ruler ? 18 + 10 : 0
-    const avail = host.clientWidth - 32 - aside
-    canvas.style.width = `${Math.max(160, Math.round(avail * zoom))}px`
+    /**
+     * ⚠️ ค่านี้คือ**ความกว้าง CSS ของกระดาษบนจอ**
+     *    `pdf.render()` จะอ่าน `canvas.clientWidth` แล้วแปลงเป็นสเกลของ pdf.js เอง
+     *    ถ้าไม่ใส่ `zoom` ค่านี้ไว้ ผู้ใช้จะเลื่อนดูกระดาษไม่ได้เลย
+     *
+     * ⚠️ ตอนพอดีหน้า**ห้ามมีเพดานความกว้างต่ำ** เช่นเดิมที่ใช้ 160px
+     *    กล่องสั้น (จอเตี้ย / จอแคบ) คำนวณได้กระดาษแค่ ~115px กว้าง
+     *    แต่เพดาน 160px ดันกลับให้สูงเกินกล่อง → scrollbar แนวตั้งกลับมา
+     *    และกล่องจะ "ตรึง" ที่กระดาษเล็ก ๆ เพราะกล่องสูงตามกระดาษ (วงจรป้อนกลับ)
+     */
+    const widthPx = fitScale
+      ? pagePt
+        ? Math.max(24, Math.round(pagePt.widthPt * fitScale * zoom))
+        : 24
+      : Math.max(160, Math.round((host.clientWidth - 32 - aside) * zoom))
+    canvas.style.width = `${widthPx}px`
     try {
       await pdf.render(page, canvas)
       /**
@@ -159,7 +197,7 @@ export default function DocumentPreview({
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
-  }, [pdf, page, zoom, ruler])
+  }, [pdf, page, zoom, ruler, fitScale, pagePt])
 
   useEffect(() => {
     void drawMain()
@@ -184,6 +222,26 @@ export default function DocumentPreview({
       setStage((s) => (s.w === w && s.h === h ? s : { w, h }))
     })
     ro.observe(canvas)
+    return () => ro.disconnect()
+  }, [pdf])
+
+  /**
+   * ── ติดตามขนาดกล่องพรีวิว เพื่อให้กระดาษพอดีเสมอ ──
+   *
+   * ⚠️ แยกจาก observer ของ canvas เพราะสองคนนี้คนละเรื่อง
+   *    · canvas → ขนาด**กระดาษ** (ไม้บรรทัดใช้)
+   *    · กล่อง  → ขนาด**พื้นที่ว่าง** (คำนวณสเกลพอดีหน้า)
+   *    ถ้ามันวนกันจะเรนเดอร์ไม่จบ เพราะการวาดทำให้ขนาดกล่องเปลี่ยน
+   */
+  useEffect(() => {
+    const host = pageRef.current
+    if (!host || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      const w = host.clientWidth
+      const h = host.clientHeight
+      setBox((b) => (b.w === w && b.h === h ? b : { w, h }))
+    })
+    ro.observe(host)
     return () => ro.disconnect()
   }, [pdf])
 
@@ -344,24 +402,48 @@ export default function DocumentPreview({
         <div style={{ flex: 1 }} />
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <button className="ghost" onClick={() => step(-1)} disabled={zoom <= ZOOMS[0]}>
+          <button
+            className="ghost"
+            onClick={() => step(-1)}
+            disabled={zoom <= ZOOMS[0]}
+            title="ย่อลง"
+            aria-label="ซูมออก"
+          >
             −
           </button>
-          <span className="muted mono" style={{ fontSize: 12, minWidth: 42, textAlign: 'center' }}>
-            {Math.round(zoom * 100)}%
+          <span className="muted mono" style={{ fontSize: 12, minWidth: 52, textAlign: 'center' }}>
+            {/**
+             * ⚠️ ต้องโชว์**เปอร์เซ็นต์จริงเทียบขนาดกระดาษจริง**
+             *    ไม่ใช่ตัวคูณของ "พอดีหน้า" — ไม่งั้นค่า 100% จะหลอกว่าเป็นขนาดจริง
+             *    ทั้งที่จริงอาจกำลังย่ออยู่ที่ 64% เพราะกล่องเตี้ยกว่ากระดาษ
+             *    ผู้ใช้ที่จะตัดสินใจว่าจะพิมพ์หรือไม่ ต้องเห็นตัวเลขจริง
+             */}
+            {fitScale ? `${Math.round(fitScale * zoom * 100)}%` : '—'}
           </span>
           <button
             className="ghost"
             onClick={() => step(1)}
             disabled={zoom >= ZOOMS[ZOOMS.length - 1]}
+            title="ขยายเข้า"
+            aria-label="ซูมเข้า"
           >
             +
           </button>
-          {zoom !== 1 && (
-            <button className="ghost" onClick={() => setZoom(1)} style={{ fontSize: 12 }}>
-              รีเซ็ต
-            </button>
-          )}
+          {/**
+           * ⚠️ ปุ่มนี้คือทางออกหลัก ไม่ใช่ของแถบ ๆ
+           *   ผู้ใช้ที่ซูมเข้าไปอ่านแล้วอยากกลับไปดูทั้งหน้าในพริบตา
+           *   ต้องกดได้ในคลิกเดียว ไม่ต้องกดลบทีละครั้ง
+           */}
+          <button
+            className="ghost rulbtn"
+            onClick={() => setZoom(1)}
+            disabled={zoom === 1}
+            style={{ fontSize: 12 }}
+            title="ย่อให้เห็นทั้งหน้าพอดีกล่อง"
+            data-testid="zoom-fit"
+          >
+            พอดีหน้า
+          </button>
 
           {/*
            * ── ไม้บรรทัด (สลับหน่ายได้ เหมือน Word) ──

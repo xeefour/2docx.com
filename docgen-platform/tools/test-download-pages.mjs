@@ -22,6 +22,7 @@ import { join } from 'node:path'
 import { Redis } from 'ioredis'
 import { unzipSync } from 'fflate'
 import { PDFDocument } from 'pdf-lib'
+import { canvasDrawnJs } from './lib/canvas-drawn.mjs'
 import { keyOf, pickTemplate, TEST_TEMPLATES } from './lib/pick-template.mjs'
 import { FILL_FIELDS_JS, importTags, restoreForm, snapshotForm } from './lib/studio-seed.mjs'
 
@@ -319,13 +320,11 @@ check('มีช่องให้กรอกและกรอกได้', f
 await sleep(400)
 await clickText('เรนเดอร์ตัวอย่าง')
 /**
- * ⚠️ ต้องเช็คทั้ง width และ height ที่มากกว่า 400
- *    `<canvas>` ที่ยังไม่เคยวาดมีขนาดเริ่มต้น 300×150 → เช็คแค่ `width > 200` ผ่านมั่ว
+ * ⚠️ เกณฑ์ "วาดเสร็จแล้ว" ต้องมาจากตัวกลาง ไม่ใช่ `width > 400` ที่เขียนเอง
+ *    ตอนนี้กระดาษถูกย่อให้พอดีกล่อง → กว้างไม่ถึง 400px แม้วาดเสร็จแล้ว
+ *    (เคยทำให้สคริปต์นี้ตกทั้งชุด ทั้งที่พรีวิวไม่ได้พัง)
  */
-const rendered = await waitFor(
-  "(() => { const c = document.querySelector('.docpage canvas'); return !!c && c.width > 400 && c.height > 400 })()",
-  120000,
-)
+const rendered = await waitFor(canvasDrawnJs(), 120000)
 check('เรนเดอร์ตัวอย่างสำเร็จ', rendered)
 if (!rendered) {
   await shot('99-failed.png')

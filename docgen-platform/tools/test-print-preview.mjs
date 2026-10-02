@@ -21,6 +21,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Redis } from 'ioredis'
+import { canvasDrawnJs } from './lib/canvas-drawn.mjs'
 import { keyOf, pickTemplate, TEST_TEMPLATES } from './lib/pick-template.mjs'
 import { FILL_FIELDS_JS, importTags, restoreForm, snapshotForm } from './lib/studio-seed.mjs'
 
@@ -194,10 +195,7 @@ await sleep(600)
 await evaluate(FILL_FIELDS_JS)
 await sleep(400)
 await evaluate(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('เรนเดอร์ตัวอย่าง'))?.click()`)
-const rendered = await waitFor(
-  "(() => { const c = document.querySelector('.docpage canvas'); return !!c && c.width > 400 && c.height > 400 })()",
-  120000,
-)
+const rendered = await waitFor(canvasDrawnJs(), 120000)
 check('เรนเดอร์ตัวอย่างสำเร็จ', rendered)
 
 const total = await evaluate(

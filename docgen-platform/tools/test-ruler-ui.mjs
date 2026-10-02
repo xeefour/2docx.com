@@ -19,6 +19,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Redis } from 'ioredis'
+import { canvasDrawnJs } from './lib/canvas-drawn.mjs'
 import { keyOf, pickTemplate, TEST_TEMPLATES } from './lib/pick-template.mjs'
 import { FILL_FIELDS_JS, importTags, restoreForm, snapshotForm } from './lib/studio-seed.mjs'
 
@@ -189,10 +190,13 @@ if (btn) {
     await send('Input.dispatchMouseEvent', { type, x: btn.x, y: btn.y, button: 'left', clickCount: 1 })
 }
 const rendered = await waitFor(
-  // ⚠️ เช็คจาก `attrH` (พิกเซลจริงที่ pdf.js ตั้ง) ไม่ใช่ความกว้างที่เห็น
-  //    `<canvas>` ที่ยังไม่เคยวาดมีค่าเริ่มต้น 300×150
-  //    ถ้าเช็คผิดจะผ่านทั้งที่หน้าว่าง (เคยเจอ)
-  "(() => { const c = document.querySelector('.docstage__page canvas'); return !!c && c.width > 400 && c.height > 400 })()",
+  /**
+   * ⚠️ เช็คจากพิกเซลจริงที่ pdf.js ตั้ง ไม่ใช่ความกว้างที่เห็น
+   *    `<canvas>` ที่ยังไม่เคยวาดมีค่าเริ่มต้น 300×150
+   *    และกระดาษตอนนี้ถูกย่อให้พอดีกล่อง → `width > 400` ผ่านไม่ได้แม้วาดเสร็จแล้ว
+   *    (เคยทำให้สคริปต์นี้ตกทั้งชุด) เกณฑ์จริงอยู่ที่ `tools/lib/canvas-drawn.mjs`
+   */
+  canvasDrawnJs(),
   120000,
 )
 check('เรนเดอร์ตัวอย่างสำเร็จ (canvas ไม่ใช่ค่าเริ่มต้น 300×150)', rendered)
@@ -327,10 +331,7 @@ console.log('\n[7] จำค่าไว้ข้ามการรีเฟร�
     for (const type of ['mousePressed', 'mouseReleased'])
       await send('Input.dispatchMouseEvent', { type, x: again.x, y: again.y, button: 'left', clickCount: 1 })
   }
-  const ok = await waitFor(
-    "(() => { const c = document.querySelector('.docstage__page canvas'); return !!c && c.width > 400 })()",
-    120000,
-  )
+  const ok = await waitFor(canvasDrawnJs(), 120000)
   check('เรนเดอร์หลังรีเฟรชสำเร็จ', ok)
   if (ok) {
     /**
@@ -374,7 +375,19 @@ console.log('\n[8] ซ่อนไม้บรรทัด')
     return { left: Math.abs(cr.x - hr.x), right: Math.abs(cr.right - hr.right), w: cr.width, pw: hr.width }
   })()`)
   check('กระดาษกลับมาเต็มความกว้างที่มี', !!before && after.w > before.page.w - 1, before ? `${before.page.w} → ${after.w}` : '(ไม่มีข้อมูลก่อน)')
-  check('กระดาษอยู่กลางพื้นที่พรีวิว', after.left < 40 && after.right < 40, `ซ้าย${after.left.toFixed(0)} ขวา${after.right.toFixed(0)}`)
+  /**
+   * ⚠️ ต้องเช็คว่า**อยู่กลาง** ไม่ใช่ว่า "ไม่มีช่องว่างข้าง"
+   *
+   *   เดิมกระดาษเต็มความกว้างกล่องเสมอ (คำนวณจากความกว้างอย่างเดียว)
+   *   ตอนนี้กระดาษถูกย่อให้**พอดีทั้งหน้า** กล่องกว้างกว่ากระดาษก็เหลือข้างสองข้าง
+   *   ซึ่งถูกต้อง (A4 แนวตั้งสูงกว่ากว้าง พอดีความสูงแล้วจะกว้างเกินมาเสมอ)
+   *   เกณฑ์เดิม `< 40px` จึงไปบังคับสิ่งที่ผิด แล้วรายงานว่าหน้าจอพัง
+   */
+  check(
+    'กระดาษอยู่กลางพื้นที่พรีวิว (ช่องว่างสองข้างเท่ากัน)',
+    Math.abs(after.left - after.right) <= 2,
+    `ซ้าย ${after.left.toFixed(0)} · ขวา ${after.right.toFixed(0)} · กระดาษ ${after.w}px / กล่อง ${after.pw}px`,
+  )
   await shot('03-hidden.png')
 }
 
@@ -387,9 +400,13 @@ console.log('\n[9] ซูมแล้วไม้บรรทัดยังต�
 
   /**
    * ⚠️ ต้องวัดตำแหน่งปุ่มใหม่ทุกครั้ง และต้องยืนยันว่าซูมขึ้นจริง
-   *    ตอนซูมออกจาก 100% ปุ่ม "รีเซ็ต 100%" จะโผล่ข้าง `+` ทำให้แถบเครื่องมือยาวขึ้น
+   *    ตอนซูมออกจากพอดีหน้า ปุ่ม "พอดีหน้า" จะโผล่ข้าง `+` ทำให้แถบเครื่องมือยาวขึ้น
    *    ถ้าใช้พิกัดเดิมซ้ำ จะคลิกผิดปุ่ม และถ้าไม่เช็คค่าซูม
-   *    ข้อ "หลังซูมยังตรง" จะผ่านมั่วทั้งที่ยังอยู่ที่ 100% (เคยเจอ)
+   *    ข้อ "หลังซูมยังตรง" จะผ่านมั่วทั้งที่ยังอยู่ที่ขนาดเดิม (เคยเจอ)
+   *
+   * ⚠️ เทียบกับ**ค่าก่อนซูม** ไม่ใช่กับเลข 100 ตายตัว
+   *    ตอนนี้ตัวเลขคือเปอร์เซ็นต์จริงเทียบกระดาษจริง (พอดีหน้าอาจได้ 50% ตอนจอเตี้ย)
+   *    การกด `+` สองครั้ง = ซูม 2 เท่า → ตัวเลขต้องโตเป็น 2 เท่าของเดิม
    */
   const zoomNow = () => evaluate("document.querySelector('.doctools .mono')?.textContent?.trim() ?? ''")
   const before = await zoomNow()
@@ -412,7 +429,13 @@ console.log('\n[9] ซูมแล้วไม้บรรทัดยังต�
     await sleep(1200)
   }
   const after = await zoomNow()
-  check('ซูมได้จริงก่อนวัดว่าไม้ยังตรง', after !== before && Number.parseInt(after) > 100, `${before} → ${after}`)
+  const bNum = Number.parseInt(before)
+  const aNum = Number.parseInt(after)
+  check(
+    'ซูมได้จริงก่อนวัดว่าไม้ยังตรง',
+    after !== before && Number.isFinite(bNum) && Number.isFinite(aNum) && aNum > bNum * 1.5,
+    `${before} → ${after} (กด + 2 ครั้ง = ซูม 2 เท่า)`,
+  )
 
   const g = await geom()
   // ⚠️ ถ้า `g` เป็น null แปลว่าไม้บรรทัดไม่ขึ้น — รายงานเป็นข้อ ไม่ใช่ปล่อยให้สคริปต์พัง

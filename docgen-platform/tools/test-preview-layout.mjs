@@ -20,6 +20,7 @@ import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Redis } from 'ioredis'
+import { canvasDrawnJs } from './lib/canvas-drawn.mjs'
 import { keyOf, pickTemplate, TEST_TEMPLATES } from './lib/pick-template.mjs'
 import { FILL_FIELDS_JS, importTags, restoreForm, snapshotForm } from './lib/studio-seed.mjs'
 
@@ -258,15 +259,7 @@ console.log('\n[2] กรอกข้อมูลแล้วกดเรนเ�
 }
 
 await clickText('เรนเดอร์ตัวอย่าง')
-/**
- * ⚠️ ต้องรอให้ pdf.js **วาดเสร็จ** ไม่ใช่แค่มี element `<canvas>`
- *   canvas ถูกสร้างทันทีแต่ยังกว้าง 0 อยู่ → ถ้ารอแค่ element จะได้ภาพกระดาษเปล่า
- *   แล้วเผลอไป "ผ่าน" ทั้งที่พรีวิวไม่ได้วาดอะไรเลย
- */
-const rendered = await waitFor(
-  "(() => { const c = document.querySelector('.docpage canvas'); return !!c && c.width > 200 && c.height > 200 })()",
-  90000,
-)
+const rendered = await waitFor(canvasDrawnJs(), 90000)
 check('เรนเดอร์สำเร็จและ pdf.js วาดรูปเสร็จแล้ว', rendered)
 const canvasSize = await evaluate(
   "(() => { const c = document.querySelector('.docpage canvas'); return c ? c.width + 'x' + c.height : 'ไม่มี canvas' })()",
@@ -338,12 +331,9 @@ await sleep(400)
 const stillHasCanvas = await evaluate("!!document.querySelector('.docpage canvas')")
 if (!stillHasCanvas) {
   await clickText('เรนเดอร์ตัวอย่าง')
-  await waitFor(
-    // ⚠️ ต้องเช็คทั้ง width และ height ที่มากกว่า 400
-    //    `<canvas>` ที่ยังไม่เคยวาดมีขนาดเริ่มต้น 300×150 → เช็คแค่ `width > 200` ผ่านมั่ว
-    "(() => { const c = document.querySelector('.docpage canvas'); return !!c && c.width > 400 && c.height > 400 })()",
-    90000,
-  )
+  // ⚠️ เกณฑ์ "วาดเสร็จ" ต้องมาจากตัวกลาง ไม่ใช่ `width > 400`
+  //    กระดาษตอนนี้ถูกย่อให้พอดีกล่อง → กว้างไม่ถึง 400px แม้วาดเสร็จแล้ว
+  await waitFor(canvasDrawnJs(), 90000)
 }
 
 check('ไม่มีหัวข้อ "ตัวอย่างเอกสาร" ในการ์ดพรีวิว', !(await evaluate(
@@ -373,7 +363,8 @@ await shot('07-download-menu.png')
 // คลิกที่อื่นต้องปิดเมนู
 // ⚠️ ต้องใช้เมาส์จริง — `element.click()` ยิงแค่ event 'click' ไม่ยิง 'mousedown'
 //    ซึ่งเป็น event ที่โค้ดใช้ปิดเมนู → เทสต์จะตกทั้งที่ของจริงใช้งานได้
-await clickText('รีเซ็ต', 'button').catch(() => {})
+// ⚠️ เดิมเคยกดปุ่ม "รีเซ็ต" ก่อน แต่ปุ่มนั้นถูกแทนที่ด้วย "พอดีหน้า" (กลับพอดีกล่องในคลิกเดียว)
+//    ตอนนี้ปุ่มที่เหลือคือ "พอดีหน้า" ซึ่งถูก disable เมื่ออยู่ที่พอดีหน้าอยู่แล้ว
 await evaluate("document.querySelector('.doctools .mono')?.scrollIntoView({ block: 'center' })")
 await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 400, y: 300, button: 'left', clickCount: 1 })
 await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 400, y: 300, button: 'left', clickCount: 1 })

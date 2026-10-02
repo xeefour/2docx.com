@@ -239,7 +239,18 @@ tbody tr:hover {
   .editor-col--preview {
     display: flex;
     flex-direction: column;
-    max-height: min(calc(100vh - 32px), calc(100vh - var(--editor-top, 160px) - 8px));
+    /**
+     * ⚠️ ต้องเป็น `height` ไม่ใช่ `max-height`
+     *
+     *    ถ้าเป็น `max-height` คอลัมน์จะสูง**ตามเนื้อหา** → `.docpage` ก็สูงตามกระดาษ
+     *    → กระดาษที่วาดย่อเล็กทำให้กล่องเล็ก แล้วกล่องเล็กทำให้กระดาษย่อเล็กอีก
+     *    (วงจรป้อนกลับ) ผลคือกระดาษเล็กกว่าที่จอว่างรองรับมาก
+     *    ผู้ใช้ที่กำลังจะตัดสินใจว่าจะใช้แม่แบบนี้ไหม ก็เห็นได้แค่ตัวอักษรจิ๋ว ๆ
+     *
+     *    กำหนดความสูงตายตัวตามพื้นที่จอ → `.docpage` ได้ส่วนที่เหลือทั้งหมด
+     *    แล้ว "พอดีหน้า" คำนวณจากพื้นที่จริง ไม่ใช่จากกระดาษที่ย่อตัวเอง
+     */
+    height: min(calc(100vh - 32px), calc(100vh - var(--editor-top, 160px) - 8px));
     min-height: 0;
   }
   .editor-col--preview .editor-preview {
@@ -280,8 +291,13 @@ tbody tr:hover {
   max-height: min(620px, calc(100vh - 260px));
 }
 @media (max-width: 1079px) {
+  /**
+   * ⚠️ ต้องกำหนด `height` ให้แน่นอนเหมือนกัน
+   *    ถ้าใช้แค่ `max-height` กล่องจะสูงตามกระดาษ → กระดาษย่อตามกล่อง → วงจรป้อนกลับ
+   *    แล้วหยุดที่กระดาษเล็ก ๆ โดยไม่มีใครสั่ง
+   */
   .docpage {
-    max-height: 620px;
+    height: min(620px, calc(100vh - 260px));
   }
 }
 

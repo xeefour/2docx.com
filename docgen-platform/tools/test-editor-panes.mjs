@@ -3,12 +3,12 @@
  *
  *   node --env-file=.env tools/test-editor-panes.mjs
  *
- *   ซ้าย  ฟอร์ม · JSON
- *   ขวา   ตัวอย่างเอกสาร · แม่แบบ & การแชร์ · ช่องฟอร์ม · ประวัติ
+ *   ซ้าย  ฟอร์ม · JSON · ประวัติ
+ *   ขวา   ตัวอย่างเอกสาร · แม่แบบ & การแชร์ · ช่องฟอร์ม · ผู้ใช้แม่แบบนี้
  *
  * ── สิ่งที่ต้องผ่าน ────────────────────────────────────────────
  * 1. มีแถบแท็บ 2 ชุด คนละฝั่งของจอ
- * 2. ซ้ายมี 2 แท็บ · ขวามี 4 แท็บ และชื่อตรงตามที่กำหนด
+ * 2. ซ้ายมี 3 แท็บ · ขวามี 4 แท็บ และชื่อตรงตามที่กำหนด
  * 3. กดแท็บซ้าย → เนื้อหาเปลี่ยนเฉพาะฝั่งซ้าย
  * 4. กดแท็บขวา → เนื้อหาเปลี่ยนเฉพาะฝั่งขวา
  * 5. URL เก็บทั้งสองค่า (?tabs=…&pane=…)
@@ -181,13 +181,13 @@ const tabBars = await evaluate(`(() => {
   }))
 })()`)
 check('มีคอลัมน์ 2 ฝั่ง', tabBars.length === 2, `${tabBars.length} คอลัมน์`)
-check('ซ้ายมี 2 แท็บ', tabBars[0]?.tabs.length === 2, tabBars[0]?.tabs.join(' · '))
+check('ซ้ายมี 3 แท็บ', tabBars[0]?.tabs.length === 3, tabBars[0]?.tabs.join(' · '))
 check('ขวามี 4 แท็บ', tabBars[1]?.tabs.length === 4, tabBars[1]?.tabs.join(' · '))
 check('ฝั่งซ้ายอยู่ครึ่งซ้ายจริง', tabBars[0] && tabBars[0].x < tabBars[0].vw / 2, tabBars[0] ? `x=${tabBars[0].x} / จอ ${tabBars[0].vw}` : '')
 check('ฝั่งขวาอยู่ครึ่งขวาจริง', tabBars[1] && tabBars[1].x >= tabBars[1].vw / 2, tabBars[1] ? `x=${tabBars[1].x} / จอ ${tabBars[1].vw}` : '')
 check(
   'ชื่อแท็บตรงตามที่กำหนด',
-  tabBars[0]?.tabs.join(',') === 'ฟอร์ม,JSON' && tabBars[1]?.tabs.join(',') === 'ตัวอย่างเอกสาร,แม่แบบ & การแชร์,ช่องฟอร์ม,ประวัติ',
+  tabBars[0]?.tabs.join(',') === 'ฟอร์ม,JSON,ประวัติ' && tabBars[1]?.tabs.join(',') === 'ตัวอย่างเอกสาร,แม่แบบ & การแชร์,ช่องฟอร์ม,ผู้ใช้แม่แบบนี้',
   `ซ้าย=[${tabBars[0]?.tabs.join(' | ')}] ขวา=[${tabBars[1]?.tabs.join(' | ')}]`,
 )
 check('เริ่มต้นเปิดฝั่งซ้าย=ฟอร์ม ขวา=ตัวอย่างเอกสาร', (await param('tabs')) === 'form' && (await param('pane')) === 'preview', await where())
@@ -213,7 +213,7 @@ check('เนื้อหาฝั่งขวาถูกเปลี่ยน�
 await shot('03-right-fields.png')
 
 console.log('\n[4] ทุกแท็บฝั่งขวาต้องเปิดเนื้อหาของตัวเอง')
-for (const label of ['แม่แบบ & การแชร์', 'ประวัติ', 'ตัวอย่างเอกสาร']) {
+for (const label of ['แม่แบบ & การแชร์', 'ผู้ใช้แม่แบบนี้', 'ตัวอย่างเอกสาร']) {
   const ok = await clickPaneTab('right', label)
   await sleep(800)
   const st = await sideContent()
@@ -249,7 +249,7 @@ await waitFor("document.querySelectorAll('.editor-split > .editor-col').length =
 await sleep(600)
 const s6 = await sideContent()
 check('เปิดลิงก์ตรง → ซ้าย=JSON', s6[0]?.active?.startsWith('JSON'), s6[0]?.active)
-check('เปิดลิงก์ตรง → ขวา=ประวัติ', s6[1]?.active === 'ประวัติ', s6[1]?.active)
+check('เปิดลิงก์ตรง → ขวา=ผู้ใช้แม่แบบนี้', s6[1]?.active === 'ผู้ใช้แม่แบบนี้', s6[1]?.active)
 await shot('05-deeplink.png')
 
 console.log('\n[7] URL รุ่นเก่า ?tabs=fields — ลิงก์ที่แชร์ไว้ต้องยังใช้ได้')

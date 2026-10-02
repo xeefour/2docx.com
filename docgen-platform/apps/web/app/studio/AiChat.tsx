@@ -47,7 +47,15 @@ export default function AiChat({
   const [sessions, setSessions] = useState<ChatSessionMeta[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
-  const [provider, setProvider] = useState<'minimax' | 'openai' | 'mock'>('minimax')
+  /**
+   * ⚠️ ค่าเริ่มต้น**ต้องเป็น `mock`** ไม่ใช่ `minimax`
+   *
+   * ค่าจริงมาจาก `llmStatus()` ซึ่งยิงตอน mount (ยังไม่เสร็จเมื่อผู้ใช้กดส่งได้)
+   * ถ้าเริ่มที่ `minimax` แล้วผู้ใช้กดส่งก่อน status จะกลับมา
+   * → ยิง provider ที่ไม่มี key → 503 `LLM_NOT_CONFIGURED`
+   * mock ไม่ต้องใช้ key จึงเป็นค่าเริ่มต้นที่ปลอดภัยที่สุด
+   */
+  const [provider, setProvider] = useState<'minimax' | 'openai' | 'mock'>('mock')
   const [status, setStatus] = useState<LlmStatus | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
 

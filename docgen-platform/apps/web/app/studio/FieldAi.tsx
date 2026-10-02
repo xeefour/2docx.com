@@ -85,7 +85,17 @@ export default function FieldAi({
   const [turns, setTurns] = useState<Turn[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
-  const [provider, setProvider] = useState<Provider>('minimax')
+  /**
+   * ⚠️ ค่าเริ่มต้น**ต้องเป็น `mock`** ไม่ใช่ `minimax`
+   *
+   * ค่าจริงมาจาก `llmStatus()` ซึ่งยิงเมื่อเปิด popover เท่านั้น
+   * ถ้าเริ่มที่ `minimax` แล้วผู้ใช้กดส่งก่อน status จะกลับมา
+   * → ยิง provider ที่ไม่มี key → 503 `LLM_NOT_CONFIGURED`
+   *
+   * mock ไม่ต้องใช้ key จึงเป็นค่าเริ่มต้นที่ปลอดภัยที่สุด
+   * (แย่กว่าเดิมแค่ตอนผู้ใช้ยังไม่ได้ตั้ง key — ซึ่งได้คำตอบทดสอบแทนที่จะพัง)
+   */
+  const [provider, setProvider] = useState<Provider>('mock')
   const [status, setStatus] = useState<LlmStatus | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
   const boxRef = useRef<HTMLDivElement>(null)

@@ -19,6 +19,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Redis } from 'ioredis'
+import { keyOf, pickTemplate, TEST_TEMPLATES } from './lib/pick-template.mjs'
+import { FILL_FIELDS_JS, importTags, restoreForm, snapshotForm } from './lib/studio-seed.mjs'
 
 const CHROME = process.env.CHROME_PATH ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 const PORT = 9371
@@ -44,13 +46,20 @@ await redis.set(
   1800,
 )
 const H = { cookie: `docgen_session=${sid}`, 'content-type': 'application/json' }
-const API = 'http://127.0.0.1:4001'
 
-const templates = (await (await fetch(`${API}/api/templates`, { headers: H })).json()).items ?? []
-const prefer = ['หัวกระดาษ', 'สำเนา 1', 'อำเภอเนินมะปราง']
-const picked = prefer.map((w) => templates.find((t) => (t.name ?? '').includes(w))).find(Boolean) ?? templates[0]
-const key = String(picked?.id ?? '')
-console.log(`ใช้แม่แบบ: ${picked?.name}`)
+/**
+ * เลือกแม่แบบตามชื่อ ไม่ใช่ `items[0]` — ลำดับรายการเปลี่ยนได้ทุกครั้งที่เทสต์อื่นสร้าง/ลบแม่แบบชั่วคราว
+ */
+const picked = await pickTemplate(H, [TEST_TEMPLATES.multipage, 'สำเนา 1', 'อำเภอเนินมะปราง'])
+const key = keyOf(picked)
+console.log(`ใช้แม่แบบ: ${picked.name} (key ${key})`)
+
+/**
+ * เตรียมช่องกรอก + snapshot ฟอร์มเดิมไว้ก่อน (`import-tags` เขียนทับของเดิม)
+ */
+const formSnap = await snapshotForm(H, key)
+const seed = await importTags(H, picked)
+console.log(`เตรียมช่องกรอกจากแท็กจริง — ${seed.ok ? 'สำเร็จ' : 'ล้มเหลว ' + seed.status}`)
 
 const profile = mkdtempSync(join(tmpdir(), 'cdp-ruler-'))
 const chrome = spawn(
@@ -161,6 +170,14 @@ console.log('\n[0] เปิดแม่แบบแล้วเรนเดอ�
 await send('Page.navigate', { url: `${WEB}/studio/${key}?tabs=form&pane=preview` })
 await waitFor("!!document.querySelector('.dl__btn')", 45000)
 await sleep(600)
+/**
+ * ⚠️ ต้อง**กรอกฟอร์มให้ครบ**ก่อนกดเรนเดอร์ — แอปบล็อกเมื่อช่องบังคับยังว่าง
+ *    แม่แบบ `ทดสอบหัวกระดาษ` มีช่องบังคับ "เรื่อง" ค้างอยู่ 1 ช่อง
+ *    ถ้าไม่กรอก จะไม่มี canvas ให้วัด แล้วเทสต์ตกตั้งแต่ข้อแรก
+ */
+const filled = await evaluate(FILL_FIELDS_JS)
+console.log(`  กรอกข้อมูล ${filled} ช่อง`)
+await sleep(400)
 const btn = await evaluate(`(() => {
   const el = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('เรนเดอร์ตัวอย่าง'))
   if (!el) return null
@@ -288,6 +305,12 @@ console.log('\n[7] จำค่าไว้ข้ามการรีเฟร�
   await waitFor("!!document.querySelector('.dl__btn')", 60000)
   await sleep(800)
   /**
+   * ⚠️ หลังรีเฟรช ฟอร์มกลับเป็นค่าว่าง → ต้องกรอกใหม่ก่อน มิฉะนั้นปุ่มเรนเดอร์จะถูกบล็อก
+   *    เพราะช่องบังคับ (เช่น "เรื่อง") ยังว่าง แล้วข้อนี้จะตกทั้งที่ localStorage ทำงานถูก
+   */
+  await evaluate(FILL_FIELDS_JS)
+  await sleep(400)
+  /**
    * ⚠️ หลังรีเฟรช พรีวิวยังไม่มีรูป — ผู้ใช้ต้องกด "เรนเดอร์ตัวอย่าง" ใหม่
    *    แถบเครื่องมือ (ปุ่มไม้บรรทัด) จึงยังไม่มี ต้องเรนเดอร์ก่อนจึงจะเช็คได้
    *    ถ้าเช็คตรนี้เลย เทสต์จะตกทั้งที่ localStorage ทำงานถูก
@@ -407,6 +430,8 @@ console.log('\n[9] ซูมแล้วไม้บรรทัดยังต�
   await shot('04-zoomed.png')
 }
 
+// ── เก็บกวาด — คืนฟอร์มแม่แบบให้เป็นสภาพก่อนสคริปต์นี้ ────────────
+await restoreForm(H, key, formSnap)
 await send('Browser.close').catch(() => {})
 chrome.kill()
 await redis.del(`session:${sid}`)

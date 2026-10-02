@@ -5,7 +5,7 @@
  *
  * ทดสอบ 7 ข้อ
  *   1. หน้ารายการมีแท็บ 4 อัน (ทั้งหมด / ที่ฉันเป็นเจ้าของ / แชร์กับฉัน / บุ๊กมาร์ก)
- *   2. เปิดแม่แบบแล้วมีแท็บ 5 อัน (ฟอร์ม / JSON / ช่องฟอร์ม / แม่แบบ&แชร์ / ประวัติ)
+ *   2. เปิดแม่แบบแล้วมีแท็บ 2 ชุด (ซ้าย 3 + ขวา 4)
  *   3. ฟอร์ม: พิมพ์ผ่านกติกา regex → ขึ้น error · แก้ให้ถูก → error หาย
  *   4. AI (mock): ส่งข้อความ → ได้คำตอบ + ข้อมูลไหลเข้าฟอร์ม
  *   5. ช่องฟอร์ม: เติมช่องอัตโนมัติจากแท็ก → เพิ่มช่องใหม่ → บันทึก
@@ -17,6 +17,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Redis } from 'ioredis'
+import { keyOf, pickTemplate, TEST_TEMPLATES } from './lib/pick-template.mjs'
 
 const CHROME = process.env.CHROME_PATH ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 const PORT = 9337
@@ -206,13 +207,14 @@ console.log('\n[1] แท็บหน้ารายการแม่แบบ'
 
 // ── เตรียมช่องกรอกให้แม่แบบที่จะเปิด ─────────────────────────────
 //
-// ⚠️ ต้องเตรียมเอง เพราะท้ายสคริปต์มีขั้น "เก็บกวาด" ที่ DELETE ช่องฟอร์มของแม่แบบแรก
-//    ถ้าเทสต์รอบก่อนหน้ารันเก็บกวาดไปแล้ว แม่แบบแรกจะไม่มีช่องกรอก
+// ⚠️ ต้องเตรียมเอง เพราะท้ายสคริปต์มีขั้น "เก็บกวาด" ที่ DELETE ช่องฟอร์มของแม่แบบ
+//    ถ้าเทสต์รอบก่อนหน้ารันเก็บกวาดไปแล้ว แม่แบบนั้นจะไม่มีช่องกรอก
 //    รอบถัดไปก็จะตกที่ "ฟอร์มมีช่องให้กรอก" ทั้งที่แอปไม่ได้พัง — เป็นบั๊กของสคริปต์
+//
+// ⚠️ เลือกแม่แบบ**ตามชื่อ** ไม่ใช่ `items[0]` — ลำดับรายการเปลี่ยนได้
+//    (เคยหยิบได้แม่แบบชั่วคราวของเทสต์อื่น)
 const H = { cookie: `docgen_session=${sid}` }
-const seedKey = String(
-  (await (await fetch('http://127.0.0.1:4001/api/templates', { headers: H })).json())?.items?.[0]?.id ?? '',
-)
+const seedKey = keyOf(await pickTemplate(H, [TEST_TEMPLATES.multipage]))
 const seeded = seedKey
   ? await (
       await fetch(`http://127.0.0.1:4001/api/form/${seedKey}`, {
@@ -242,12 +244,13 @@ console.log('\n[2] เปิดแม่แบบ — ต้องมีแท�
   const left = await leftTabLabels()
   const right = await rightTabLabels()
   check('มีสองคอลัมน์พร้อมแท็บของตัวเอง', ok, `ซ้าย ${left.length} · ขวา ${right.length}`)
-  check('ฝั่งซ้ายมี "ฟอร์ม" และ "JSON"', left.length === 2 && left.includes('ฟอร์ม') && left.includes('JSON'), left.join(' | '))
+  check('ฝั่งซ้ายมี "ฟอร์ม" "JSON" และ "ประวัติ"', left.length === 3 && left.includes('ฟอร์ม') && left.includes('JSON') && left.includes('ประวัติ'), left.join(' | '))
   check('ฝั่งขวามีครบ 4 แท็บ', right.length === 4, right.join(' | '))
   check('มี "ตัวอย่างเอกสาร"', right.some((l) => l.includes('ตัวอย่างเอกสาร')))
   check('มี "ช่องฟอร์ม"', right.some((l) => l.includes('ช่องฟอร์ม')))
   check('มี "แม่แบบ & การแชร์"', right.some((l) => l.includes('การแชร์')))
-  check('มี "ประวัติ"', right.some((l) => l.includes('ประวัติ')))
+  check('มี "ผู้ใช้แม่แบบนี้"', right.some((l) => l.includes('ผู้ใช้แม่แบบนี้')))
+  check('ฝั่งขวาไม่มีชื่อ "ประวัติ" ซ้ำ (ย้ายไปฝั่งซ้ายแล้ว)', !right.some((l) => l.trim() === 'ประวัติ'))
   check('แสดงช่องกรอกตามแท็กของแม่แบบ', await evaluate("document.querySelectorAll('.fieldset__group').length > 0"))
   await shot('2-editor-form.png')
 }
@@ -361,12 +364,14 @@ console.log('\n[6] แท็บแม่แบบ & การแชร์')
   check('ล้างการตั้งค่าแล้วกลับเป็นเปิดสาธารณ', cleared)
 }
 
-// ── 7. ประวัติ ──────────────────────────────────────────────
-console.log('\n[7] แท็บประวัติ — ใครใช้แม่แบบนี้')
+// ── 7. ผู้ใช้แม่แบบนี้ ──────────────────────────────────────
+console.log('\n[7] แท็บผู้ใช้แม่แบบนี้ — ใครใช้แม่แบบนี้')
 {
-  await clickText('ประวัติ', '.editor-col--right .tabs__tab')
+  // ⚠️ ชื่อแท็บฝั่งขวาเปลี่ยนจาก "ประวัติ" เป็น "ผู้ใช้แม่แบบนี้"
+  //    เพราะ "ประวัติ" ถูกย้ายไปเป็นแท็บฝั่งซ้าย (กู้ค่าเดิมมาแก้ต่อได้)
+  await clickText('ผู้ใช้แม่แบบนี้', '.editor-col--right .tabs__tab')
   const loaded = await waitFor("document.body.textContent.includes('ฉบับล่าสุด') || document.body.textContent.includes('ยังไม่มีใครสร้างเอกสาร')", 20000)
-  check('แท็บประวัติโหลดได้', loaded)
+  check('แท็บผู้ใช้แม่แบบนี้โหลดได้', loaded)
   await shot('7-history.png')
 }
 

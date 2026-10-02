@@ -18,6 +18,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Redis } from 'ioredis'
+import { keyOf, pickTemplate, TEST_TEMPLATES } from './lib/pick-template.mjs'
 
 const CHROME = process.env.CHROME_PATH ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 const PORT = 9357
@@ -54,7 +55,7 @@ const SEED = [
   { key: 'ประเภท', label: 'ประเภท', type: 'select', group: 'เนื้อหา', order: 2, options: [{ value: 'ขอ', label: 'ขอ' }] },
   { key: 'มีเอกสารแนบ', label: 'มีเอกสารแนบ', type: 'checkbox', group: 'เนื้อหา', order: 3 },
 ]
-const key = String((await (await fetch(`${API}/api/templates`, { headers: H })).json())?.items?.[0]?.id ?? '')
+const key = keyOf(await pickTemplate(H, [TEST_TEMPLATES.multipage]))
 await fetch(`${API}/api/form/${key}`, { method: 'PUT', headers: H, body: JSON.stringify({ fields: SEED }) })
 console.log(`เตรียมแม่แบบ ${key} พร้อมช่อง ${SEED.length} ช่อง`)
 
@@ -234,7 +235,18 @@ console.log('\n[1] ไอคอน AI อยู่ตรงช่องที่
         (el) => !el.closest('.fieldbox')),
     }
   })()`)
-  check('ช่องที่พิมพ์ได้มีไอคอนครบ (text+textarea+number = 4)', stats.total === 4 && stats.withBtn === 4, `${stats.withBtn}/${stats.total}`)
+  /**
+   * ⚠️ เช็ค "ทุกช่องที่พิมพ์ได้มีไอคอน" ไม่ใช่ "มี 4 ช่องพอดี"
+   *
+   * แอปเติมช่องอัตโนมัติจากแท็กของแม่แบบที่ไม่ได้อยู่ในฟอร์มให้ด้วย
+   * เช่น `หน่วยงาน` / `เนื้อหา` ของแม่แบบทดสอบหัวกระดาษ
+   * ถ้าเทสต์นับตายตัว จะตกทั้งที่พฤติกรรมถูก (เคยเจอ: ได้ 6/6 แต่คาดไว้ 4)
+   */
+  check(
+    'ทุกช่องที่พิมพ์ได้มีไอคอนครบ',
+    stats.total >= 4 && stats.withBtn === stats.total,
+    `${stats.withBtn}/${stats.total} ช่อง`,
+  )
   check('ไอคอนอยู่ขวาสุดของช่องจริง', stats.atRight)
   check('select / checkbox ไม่มีไอคอน', stats.clean)
   await shot('01-icons.png')

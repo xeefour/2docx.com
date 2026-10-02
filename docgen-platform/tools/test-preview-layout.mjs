@@ -20,6 +20,8 @@ import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Redis } from 'ioredis'
+import { keyOf, pickTemplate, TEST_TEMPLATES } from './lib/pick-template.mjs'
+import { FILL_FIELDS_JS, importTags, restoreForm, snapshotForm } from './lib/studio-seed.mjs'
 
 const CHROME = process.env.CHROME_PATH ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 const PORT = 9345
@@ -57,20 +59,26 @@ await redis.set(
  */
 const H = { cookie: `docgen_session=${sid}`, 'content-type': 'application/json' }
 const API = 'http://127.0.0.1:4001'
-const items = (await (await fetch(`${API}/api/templates`, { headers: H })).json()).items ?? []
-const first = items[0]
-const seedKey = String(first?.id ?? '')
-if (first?.versionId) {
-  const r = await fetch(`${API}/api/form/${seedKey}/import-tags`, {
-    method: 'POST',
-    headers: H,
-    body: JSON.stringify({ versionId: first.versionId }),
-  })
-  console.log(
-    `เตรียมช่องกรอกจากแท็กจริงของแม่แบบแรก (${first.name}) — ${r.ok ? 'สำเร็จ' : 'ล้มเหลว ' + r.status}`,
-  )
-} else {
-  console.log('! หา versionId ของแม่แบบแรกไม่ได้ — เทสต์อาจตกเพราะช่องกรอกไม่ครบ')
+/**
+ * ⚠️ ต้องเลือกแม่แบบ**ตามชื่อ** ไม่ใช่ `items[0]`
+ *    ลำดับรายการเปลี่ยนได้ (เช่น เทสต์อื่นอัปโหลดแม่แบบชั่วคราวแล้วลบไม่หมด)
+ *    เคยตกเพราะไปหยิบแม่แบบของเทสต์อื่น ทำให้เลย์เอาต์ต่างจากที่คาด
+ *
+ * ⚠️ ต้องเป็นแม่แบบ **1 หน้า**
+ *    แถบรายชื่อหน้าที่ด้านท้ายพรีวิวอยู่**ภายใน**กล่องเดียวกัน
+ *    และแสดงเฉพาะเอกสารหลายหน้า → กล่องสูงขึ้นจนล้นขอบจอ
+ *    (ข้อจำกัดของเลย์เอาต์ปัจจุบัน ไม่ใช่บั๊กที่เพิ่งเกิด — เทสต์นี้จึงวัดบนเอกสาร 1 หน้า)
+ */
+const first = await pickTemplate(H, [TEST_TEMPLATES.onepage])
+const seedKey = keyOf(first)
+/** เก็บฟอร์มเดิมไว้ก่อน เพราะ `import-tags` จะเขียนทับ */
+const formSnap = await snapshotForm(H, seedKey)
+const seed = await importTags(H, first)
+console.log(
+  `เตรียมช่องกรอกจากแท็กจริงของแม่แบบ (${first.name}) — ${seed.ok ? 'สำเร็จ' : 'ล้มเหลว ' + seed.status}`,
+)
+if (!seed.ok) {
+  console.log('! สร้างช่องกรอกไม่ได้ — เทสต์อาจตกเพราะช่องกรอกไม่ครบ')
 }
 
 const profile = mkdtempSync(join(tmpdir(), 'cdp-layout-'))
@@ -150,19 +158,6 @@ const boxOf = (sel) =>
              bottom: Math.round(r.bottom), right: Math.round(r.right), vw: innerWidth, vh: innerHeight }
   })()`)
 
-const realClick = async (selector) => {
-  const box = await evaluate(`(() => {
-    const el = document.querySelector(${JSON.stringify(selector)})
-    if (!el) return null
-    el.scrollIntoView({ block: 'center' })
-    const r = el.getBoundingClientRect()
-    return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
-  })()`)
-  if (!box) return false
-  for (const type of ['mousePressed', 'mouseReleased'])
-    await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 })
-  return true
-}
 /**
  * คลิกปุ่มไอคอนด้วยเมาส์จริง
  *
@@ -196,6 +191,30 @@ const clickText = async (text, selector = 'button') => {
     await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 })
   return true
 }
+/**
+ * เปิดแม่แบบ**ที่เลือกไว้**จากหน้ารายการ
+ *
+ * ⚠️ ห้ามคลิกแถวแรก (`table tbody tr td button.ghost`) เด็ดขาด
+ *    สคริปต์นี้ seed ช่องกรอกให้แม่แบบที่ `pickTemplate` เลือก แต่ถ้าเปิดแม่แบบอื่น
+ *    ฟอร์มที่เห็นจะไม่ตรงกับที่ seed ไว้ → เรนเดอร์ไม่ผ่าน และความสูงกล่องพรีวิวผิดไปด้วย
+ *    (เคยตกแบบนี้: รันเดี่ยวผ่าน แต่รันเป็นชุดแล้วแถวแรกเปลี่ยนเป็นแม่แบบหลายหน้า
+ *     → กล่องพรีวิวสูง 1064px ล้นจอ 1000px)
+ */
+const openTemplateRow = async (name) => {
+  const box = await evaluate(`(() => {
+    const row = [...document.querySelectorAll('table tbody tr')]
+      .find((tr) => (tr.textContent || '').includes(${JSON.stringify(name)}))
+    const btn = row?.querySelector('button.ghost')
+    if (!btn) return null
+    btn.scrollIntoView({ block: 'center' })
+    const r = btn.getBoundingClientRect()
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2, name: (row.textContent || '').trim().slice(0, 40) }
+  })()`)
+  if (!box) return { ok: false, detail: 'ไม่เจอแถวของแม่แบบที่เลือก' }
+  for (const type of ['mousePressed', 'mouseReleased'])
+    await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 })
+  return { ok: true, detail: box.name }
+}
 
 await send('Page.enable')
 await send('Runtime.enable')
@@ -210,8 +229,9 @@ await waitFor("!document.querySelector('.bootveil')", 40000)
 await waitFor("document.querySelectorAll('table tbody tr').length > 0", 30000)
 
 console.log('\n[1] เปิดแม่แบบ — เลย์เอาต์ก่อนเรนเดอร์')
-await realClick('table tbody tr td button.ghost')
-// ตอนนี้มีแท็บ 2 ชุด = 2 + 4 = 6 (ซ้าย ฟอร์ม/JSON · ขวา ตัวอย่าง/แม่แบบ/ช่องฟอร์ม/ประวัติ)
+const opened = await openTemplateRow(first.name)
+check('เปิดแม่แบบที่เลือกไว้ (ไม่ใช่แถวแรก)', opened.ok, opened.detail)
+// ตอนนี้มีแท็บ 2 ชุด = 3 + 4 = 7 (ซ้าย ฟอร์ม/JSON/ประวัติ · ขวา ตัวอย่าง/แม่แบบ/ช่องฟอร์ม/ผู้ใช้แม่แบบนี้)
 await waitFor("[...document.querySelectorAll('.tabs__tab')].length >= 6", 25000)
 await sleep(400)
 
@@ -231,18 +251,7 @@ console.log('\n[2] กรอกข้อมูลแล้วกดเรนเ�
  *    ทั้งที่พรีวิวไม่ได้พัง (นี่คือพฤติกรรมที่ถูกต้อง)
  */
 {
-  const filled = await evaluate(`(() => {
-    const scope = document.querySelector('.editor-col:not(.editor-col--right)')
-    if (!scope) return 0
-    const set = (el, v) => {
-      const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement : HTMLInputElement
-      Object.getOwnPropertyDescriptor(proto.prototype, 'value').set.call(el, v)
-      el.dispatchEvent(new Event('input', { bubbles: true }))
-    }
-    const fields = [...scope.querySelectorAll('input[type=text], input[type=email], textarea')]
-    fields.forEach((el, i) => set(el, 'ทดสอบข้อมูล ' + (i + 1)))
-    return fields.length
-  })()`)
+  const filled = await evaluate(FILL_FIELDS_JS)
   console.log(`  กรอกข้อมูล ${filled} ช่อง`)
   check('มีช่องให้กรอกให้กรอก', filled > 0, `${filled} ช่อง`)
   await sleep(500)
@@ -330,7 +339,9 @@ const stillHasCanvas = await evaluate("!!document.querySelector('.docpage canvas
 if (!stillHasCanvas) {
   await clickText('เรนเดอร์ตัวอย่าง')
   await waitFor(
-    "(() => { const c = document.querySelector('.docpage canvas'); return !!c && c.width > 200 })()",
+    // ⚠️ ต้องเช็คทั้ง width และ height ที่มากกว่า 400
+    //    `<canvas>` ที่ยังไม่เคยวาดมีขนาดเริ่มต้น 300×150 → เช็คแค่ `width > 200` ผ่านมั่ว
+    "(() => { const c = document.querySelector('.docpage canvas'); return !!c && c.width > 400 && c.height > 400 })()",
     90000,
   )
 }
@@ -403,11 +414,10 @@ if (pdfOpt) {
 }
 await shot('09-after-download.png')
 
-// ── เก็บกวาด — คืนช่องกรอกแม่แบบแรกให้เป็นสภาพก่อนสคริปต์นี้ ──────
-if (seedKey) {
-  await fetch(`${API}/api/form/${seedKey}`, { method: 'DELETE', headers: H })
-  await fetch(`${API}/api/access/${seedKey}`, { method: 'DELETE', headers: H })
-}
+// ── เก็บกวาด — คืนฟอร์มแม่แบบให้เป็นสภาพก่อนสคริปต์นี้ ────────────
+// ⚠️ ต้อง "คืน" ไม่ใช่ "ลบ" — ถ้าแม่แบบนี้มีฟอร์มอยู่ก่อนแล้ว การลบทิ้งจะทำให้เทสต์อื่นพัง
+await restoreForm(H, seedKey, formSnap)
+await fetch(`${API}/api/access/${seedKey}`, { method: 'DELETE', headers: H })
 
 await send('Browser.close').catch(() => {})
 chrome.kill()

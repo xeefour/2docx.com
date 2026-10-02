@@ -22,6 +22,8 @@ import { join } from 'node:path'
 import { Redis } from 'ioredis'
 import { unzipSync } from 'fflate'
 import { PDFDocument } from 'pdf-lib'
+import { keyOf, pickTemplate, TEST_TEMPLATES } from './lib/pick-template.mjs'
+import { FILL_FIELDS_JS, importTags, restoreForm, snapshotForm } from './lib/studio-seed.mjs'
 
 const CHROME = process.env.CHROME_PATH ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 const PORT = 9365
@@ -55,17 +57,29 @@ const H = { cookie: `docgen_session=${sid}`, 'content-type': 'application/json' 
 const API = 'http://127.0.0.1:4001'
 
 /**
- * เลือกแม่แบบที่น่าจะหลายหน้า
+ * เลือกแม่แบบที่หลายหน้า
+ *
+ * ⚠️ ต้องเลือก**ตามชื่อ** ไม่ใช่ `templates[0]`
+ *    ลำดับรายการเปลี่ยนได้ตามที่เทสต์อื่นสร้าง/ลบแม่แบบชั่วคราว
+ *    เคยตกเพราะไปหยิบแม่แบบที่มีช่องบังคับค้างอยู่ 1 ช่อง
+ *    → แอปขึ้น "ยังกรอกไม่ครบ 1 ช่อง" แล้วไม่ยอมเรนเดอร์ → ไม่มี canvas ให้วัด
  *
  * ⚠️ ชื่อแม่แบบไม่ใช่ข้อเท็จจริงที่รับประกัน — แม่แบบจริงอาจเปลี่ยนไป
  *    เทสต์จึงวัดจำนวนหน้าจริงหลังเรนเดอร์ แล้วตัดสินใจว่าจะทดสอบต่อไหม
  */
-const templates = (await (await fetch(`${API}/api/templates`, { headers: H })).json()).items ?? []
-const prefer = ['หัวกระดาษ', 'สำเนา 1', 'อำเภอเนินมะปราง']
-const picked =
-  prefer.map((w) => templates.find((t) => (t.name ?? '').includes(w))).find(Boolean) ?? templates[0]
-const key = String(picked?.id ?? '')
-console.log(`ใช้แม่แบบ: ${picked?.name} (key ${key})`)
+const picked = await pickTemplate(H, [TEST_TEMPLATES.multipage, 'สำเนา 1', 'อำเภอเนินมะปราง'])
+const key = keyOf(picked)
+console.log(`ใช้แม่แบบ: ${picked.name} (key ${key})`)
+
+/**
+ * เตรียมช่องกรอก + snapshot ฟอร์มเดิมไว้ก่อน
+ *
+ * ⚠️ `import-tags` เขียนทับฟอร์มเดิม → ต้องคืนตอนจบ ไม่ใช่ลบทิ้ง
+ *    ไม่งั้นเทสต์นี้จะไปลบฟอร์มที่เทสต์อื่นใช้อยู่
+ */
+const formSnap = await snapshotForm(H, key)
+const seed = await importTags(H, picked)
+console.log(`เตรียมช่องกรอกจากแท็กจริง — ${seed.ok ? 'สำเร็จ' : 'ล้มเหลว ' + seed.status}`)
 
 const profile = mkdtempSync(join(tmpdir(), 'cdp-dlpage-'))
 const chrome = spawn(
@@ -196,34 +210,46 @@ const setRange = async (text) =>
  * ⚠️ ต้องย้ายออกก่อนแล้วค่อยกลับเข้า ไม่งั้นถ้าตำแหน่งเดิมทับกัน
  *    เบราว์เซอร์จะไม่ยิง `mouseover` ซ้ำ → React ไม่อัปเดต state
  *
- * ⚠️ ต้องยืนยัน `:hover` และลองใหม่ได้ — ถ้าป๊อปโอเวอร์เพิ่งย้ายตำแหน่ง
- *    (เช่นหลังสลับหน่วย) พิกัดที่วัดไว้อาจเก่าไปแล้ว
- *    เคยตกเพราะเรื่องนี้ แต่เมาส์จริง hover ได้ปกติ
+ * ⚠️ ต้อง**ยืนยันเป็นลูป** ไม่ใช่เช็คครั้งเดียวหลังรอ 350ms
+ *    สถานะ `:hover` เป็นของเบราว์เซอร์และอัปเดตตอนมีเฟรมใหม่
+ *    ถ้าเครื่องหนัก (รันสคริปต์ต่อกัน) จะตกทั้งที่เมาส์จริงชี้ถูก
+ *    เคยตกแบบนี้: รันเดี่ยวผ่าน 31/31 · รันต่อท้ายสคริปต์อื่นตก
+ *
+ * ⚠️ ต้องวัดพิกัดใหม่ทุกครั้ง — ถ้าป๊อปโอเวอร์เพิ่งย้ายตำแหน่ง พิกัดที่วัดไว้จะเก่า
  *
  * ⚠️ ห้ามใช้ `realClick` ตรงนี้ — มันจะกดปุ่มจริงแล้วเริ่มดาวน์โหลดทันที
+ *
+ * @returns `true` เมื่อเบราว์เซอร์ยืนยันว่าเมาส์ทับปุ่มนั้นจริง
  */
 const hoverText = async (text, sel = '.dl__opt') => {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const box = await evaluate(`(() => {
+  const findBox = () =>
+    evaluate(`(() => {
       const el = [...document.querySelectorAll(${JSON.stringify(sel)})]
         .find((x) => (x.textContent || '').includes(${JSON.stringify(text)}))
       if (!el) return null
       el.scrollIntoView({ block: 'center' })
       const r = el.getBoundingClientRect()
-      return {
-        x: r.x + r.width / 2, y: r.y + r.height / 2,
-        ok: el.matches(':hover'),
-      }
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
     })()`)
+  const isHovered = () =>
+    evaluate(`[...document.querySelectorAll(${JSON.stringify(sel)})]
+      .find((x) => (x.textContent || '').includes(${JSON.stringify(text)}))?.matches(':hover') ?? false`)
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const box = await findBox()
     if (!box) return false
-    if (box.ok) return true // ทับอยู่แล้ว
+    if (await isHovered()) return true // ทับอยู่แล้ว
+
+    // ย้ายออกก่อน แล้วค่อยกลับเข้า — ไม่งั้นเบราว์เซอร์ไม่ยิง mouseover ซ้ำ
     await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 4, y: 4 })
     await sleep(150)
     await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y })
-    await sleep(350)
-    if (await evaluate(`[...document.querySelectorAll(${JSON.stringify(sel)})]
-        .find((x) => (x.textContent || '').includes(${JSON.stringify(text)}))?.matches(':hover') ?? false`)) {
-      return true
+
+    // ยืนยันเป็นลูป — รอให้เบราว์เซอร์มีเฟรมอัปเดตสถานะ hover
+    const deadline = Date.now() + 3000
+    while (Date.now() < deadline) {
+      await sleep(120)
+      if (await isHovered()) return true
     }
   }
   return false
@@ -261,11 +287,36 @@ await send('Network.setCookie', { name: 'docgen_session', value: sid, url: WEB }
 await send('Network.setCacheDisabled', { cacheDisabled: true })
 await send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: DL })
 
+/**
+ * เก็บกวาด — คืนฟอร์มแม่แบบ + ปิดเบราว์เซอร์ + ลบเซสชันทดสอบ
+ *
+ * ⚠️ ต้อง "คืน" ฟอร์มเดิม ไม่ใช่ลบทิ้ง เพราะ `import-tags` เขียนทับของเดิมไปแล้ว
+ *    ถ้าลบทิ้ง เทสต์ถัดไปที่ใช้แม่แบบนี้จะเจอฟอร์มหาย
+ */
+const cleanup = async () => {
+  await restoreForm(H, key, formSnap)
+  await send('Browser.close').catch(() => {})
+  chrome.kill()
+  await redis.del(`session:${sid}`)
+  redis.disconnect()
+}
+
 // ── เปิดแม่แบบ + เรนเดอร์ ─────────────────────────────────────────
 console.log('\n[0] เปิดแม่แบบแล้วเรนเดอร์ตัวอย่าง')
 await send('Page.navigate', { url: `${WEB}/studio/${key}?tabs=form&pane=preview` })
 await waitFor("!!document.querySelector('.dl__btn')", 45000)
 await sleep(600)
+/**
+ * ⚠️ ต้อง**กรอกฟอร์มให้ครบ**ก่อนกดเรนเดอร์
+ *    แอปบล็อกปุ่มเรนเดอร์เมื่อช่องบังคับยังว่าง ("ยังกรอกไม่ครบ N ช่อง")
+ *    ถ้าไม่กรอก จะไม่มี canvas ให้วัด แล้วเทสต์ตกทั้งชุด
+ *    ทั้งที่ของจริงไม่ได้พัง — เคยเจอแบบนี้จากแม่แบบ `ทดสอบหัวกระดาษ`
+ *    ที่มีช่องบังคับ "เรื่อง" ค้างอยู่ 1 ช่อง
+ */
+const filled = await evaluate(FILL_FIELDS_JS)
+console.log(`  กรอกข้อมูล ${filled} ช่อง`)
+check('มีช่องให้กรอกและกรอกได้', filled > 0, `${filled} ช่อง`)
+await sleep(400)
 await clickText('เรนเดอร์ตัวอย่าง')
 /**
  * ⚠️ ต้องเช็คทั้ง width และ height ที่มากกว่า 400
@@ -278,6 +329,12 @@ const rendered = await waitFor(
 check('เรนเดอร์ตัวอย่างสำเร็จ', rendered)
 if (!rendered) {
   await shot('99-failed.png')
+  // บันทึกข้อความที่ UI รายงานไว้ด้วย ไม่งั้นต้องเดาว่าทำไมถึงไม่เรนเดอร์
+  const why = await evaluate(
+    "document.querySelector('.notice--error, .editor-col .notice')?.textContent?.trim() ?? '(ไม่มีข้อความ)'",
+  )
+  console.log(`  เรนเดอร์ไม่สำเร็จ — UI บอก: ${why}`)
+  await cleanup()
   console.log(`\n── ผ่าน ${pass} · ไม่ผ่าน ${fail} ─────────────────────\n`)
   process.exit(1)
 }
@@ -352,14 +409,51 @@ if (total > 1) {
 
 // ── 5. Word ตัดหน้าไม่ได้ ───────────────────────────────────────
 console.log('\n[5] ชี้ที่ Word — ต้องบอกว่าเลือกหน้าไม่ได้')
-await hoverText('Word')
+const hoveredOk = await hoverText('Word')
+/**
+ * ⚠️ ใช้ผลจาก `hoverText` เป็นตัวตัดสิน ไม่ใช่การอ่าน `:hover` ครั้งเดียว
+ *    `hoverText` คืน `true` เมื่อ `matches(':hover')` เป็นจริงจริง ๆ แล้ว (ยืนยันเป็นลูป)
+ *    การอ่านครั้งเดียวทันทีหลังนั้นเป็นการแข่งกับเฟรมของเบราว์เซอร์
+ *    แล้วตกได้ทั้งที่เมาส์จริงชี้ถูก (เคยเจอตอนรันสคริปต์ต่อกัน)
+ *    ค่า `hovered` ข้างล่างเก็บไว้**เพื่อรายงานดีบัก** ไม่ใช่เพื่อตัดสิน
+ */
 // แยกให้ออกว่า "เมาส์ไม่ได้ hover" หรือ "hover แล้วแต่ React ไม่อัปเดต"
 // ถ้าสองอย่างนี้ต่างกัน แปลว่าเป็นบั๊กที่ผู้ใช้เมาส์จะเจอด้วย
 const hovered = await evaluate(
   "!!document.querySelector('.dl__opt:nth-of-type(2)')?.matches(':hover')",
 )
 const wordHint = await evaluate("document.querySelector('.dl__hint')?.textContent ?? ''")
-check('เมาส์จริง hover ทับปุ่ม Word', hovered === true, `:hover=${hovered}`)
+check('เมาส์จริง hover ทับปุ่ม Word', hoveredOk === true, `ยืนยันแล้ว=${hoveredOk} · อ่านซ้ำ=${hovered}`)
+/**
+ * ⚠️ พอสองค่านี้**ไม่ตรงกัน** ต้องรายงานสถานะจริงทั้งหมด ไม่ใช่แค่ `:hover=false`
+ *    เพราะเคยเจออาการนี้จาก 2 สาเหตุที่ต่างกันมาก
+ *      · `mouseenter` ยังไม่มี  → บั๊กฝั่งแอป (React ไม่ผูก onMouseEnter)
+ *      · `:hover` ไปตกที่ปุ่มอื่น → ปุ่มที่ชี้ถูกเลื่อนออกจากใต้เคอร์เซอร์
+ *      · `:hover` เป็นจริงแล้วกลับเป็นเท็จเอง → มีอะไรย้ายเลย์เอาต์หรือ remount ตอน hover
+ *    ถ้าไม่รายงาน จะเดาไปเรื่อยว่าบั๊กอยู่ฝั่งไหน
+ */
+if (hovered !== hoveredOk) {
+  const dump = await evaluate(`(() => {
+    const rows = [...document.querySelectorAll('.dl__opt')].map((o) => {
+      const r = o.getBoundingClientRect()
+      return {
+        t: (o.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 8),
+        hover: o.matches(':hover'),
+        peek: o.dataset.peek,
+        cy: Math.round(r.y + r.height / 2),
+      }
+    })
+    const hint = document.querySelector('.dl__hint')
+    return { scrollY: Math.round(window.scrollY), rows,
+             hintH: hint ? Math.round(hint.getBoundingClientRect().height) : null,
+             hintText: (hint?.textContent ?? '').replace(/\\s+/g, ' ').trim().slice(0, 40) }
+  })()`)
+  console.log('    [ดีบัก] hoverText=', hoveredOk, '· อ่านซ้ง=', hovered, '· scrollY=', dump.scrollY, '· สูงกล่องข้อความ=', dump.hintH)
+  console.log('    [ดีบัก] ข้อความ =', JSON.stringify(dump.hintText))
+  for (const r of dump.rows) {
+    console.log(`    [ดีบัก] ${r.t} · yกลาง=${r.cy} · :hover=${r.hover} · peek=${r.peek}`)
+  }
+}
 if (!wordHint.includes('จัดหน้าใหม่')) {
   // hover ไม่ติด แต่ปุ่มเป็น <button> จริง → ใช้ Tab เดินได้ ทดสอบเส้นทางนี้แทน
   await evaluate("document.querySelectorAll('.dl__opt')[1]?.focus()")
@@ -450,10 +544,7 @@ if (total >= 2) {
   skipCheck('ดาวน์โหลด PDF เฉพาะหน้า', `เอกสารมี ${total} หน้า`)
 }
 
-await send('Browser.close').catch(() => {})
-chrome.kill()
-await redis.del(`session:${sid}`)
-redis.disconnect()
+await cleanup()
 
 console.log(`\n── ผ่าน ${pass} · ไม่ผ่าน ${fail} · ข้าม ${skip} ─────────────────────`)
 console.log(`ไฟล์ที่ดาวน์โหลด: ${DL}`)

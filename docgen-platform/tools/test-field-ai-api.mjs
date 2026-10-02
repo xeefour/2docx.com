@@ -3,6 +3,7 @@
  *   node --env-file=.env tools/test-field-ai-api.mjs
  */
 import { Redis } from 'ioredis'
+import { keyOf, pickTemplate, TEST_TEMPLATES } from './lib/pick-template.mjs'
 
 const redis = new Redis(process.env.VALKEY_URL)
 const sid = `field-${Date.now()}`
@@ -47,7 +48,7 @@ const check = (name, ok, detail = '') => {
   ok ? pass++ : fail++
 }
 
-const key = String((await (await fetch(`${API}/api/templates`, { headers: H })).json()).items?.[0]?.id)
+const key = keyOf(await pickTemplate(H, [TEST_TEMPLATES.multipage]))
 await fetch(`${API}/api/form/${key}`, {
   method: 'PUT',
   headers: H,

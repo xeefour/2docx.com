@@ -153,7 +153,8 @@ const boxOf = (sel) =>
     if (!el) return null
     const r = el.getBoundingClientRect()
     return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height),
-             bottom: Math.round(r.bottom), right: Math.round(r.right), vw: innerWidth, vh: innerHeight }
+             bottom: Math.round(r.bottom), right: Math.round(r.right), vw: innerWidth, vh: innerHeight,
+             innerScroll: el.scrollHeight - el.clientHeight }
   })()`)
 
 /**
@@ -267,16 +268,24 @@ const prev2 = await boxOf('.editor-preview')
 const canvas = await boxOf('.docpage canvas')
 const docBox = await boxOf('.docpage')
 check('กล่องตัวอย่างยังอยู่ฝั่งขวา', prev2 && prev2.x >= prev2.vw / 2, prev2 ? `x=${prev2.x} / จอ ${prev2.vw}` : '')
+
 /**
- * ⚠️ เกณฑ์ใหม่: กล่องรูปเอกสารสูง**เท่าหน้าจอพอดี** ไม่ใช่ "การ์ดต้องอยู่ในจอ"
- *   ผู้ใช้สั่ง "ให้สูงเท่าความสูงหน้าจอ ส่วน thumbnail ต้องเลื่อนลงถึงจะเห็น"
- *   → การ์ดจึง**ยาวกว่าจอโดยตั้งใจ** และคอลัมน์ถอน `sticky` เพื่อให้เลื่อนถึงแถบรูปย่อได้
- *   (เคยเป็น: การ์ดต้องอยู่ในจอ → กล่องรูปได้แค่ 588px จากจอ 1000px)
+ * ⚠️ เกณฑ์คือ "สูงอย่างน้อยหนึ่งหน้าจอ" ไม่ใช่ "เท่าหน้าจอพอดี"
+ *   กล่องเป็น `min-height: 100vh` ให้ยืดตามกระดาษ
+ *   เพราะผู้ใช้เจอ scrollbar 2 อันซ้อนกันที่ 579×539
+ *   (กล่องล็อก 100vh → กระดาษล้นกล่อง → เลื่อนข้างใน + เลื่อนหน้าเว็บ)
+ *   และการ์ดยัง**ยาวกว่าจอโดยตั้งใจ** คอลัมน์จึงถอน `sticky`
+ *   เพื่อให้เลื่อนถึงแถบรูปย่อได้
  */
 check(
-  'กล่องรูปเอกสารสูงเท่าหน้าจอพอดี',
-  docBox && Math.abs(docBox.h - docBox.vh) <= 1,
+  'กล่องรูปเอกสารสูงอย่างน้อยหนึ่งหน้าจอ',
+  docBox && docBox.h >= docBox.vh - 1,
   docBox ? `กล่องรูป ${docBox.h}px / จอ ${docBox.vh}px` : 'ไม่พบ .docpage',
+)
+check(
+  'ไม่มี scrollbar ข้างในกล่อง',
+  docBox && docBox.innerScroll <= 1,
+  docBox ? `เนื้อหาล้นในกล่อง ${docBox.innerScroll}px` : 'ไม่พบ .docpage',
 )
 check(
   'การ์ดยาวกว่าจอตามที่ออกแบบไว้ (แถบรูปย่อถูกดันลงใต้ขอบจอ)',

@@ -124,6 +124,115 @@ tbody tr:hover {
   background: var(--brand-soft);
 }
 
+/* ── รายการแม่แบบบนมือถือ ─────────────────────────────────────
+ * ที่จอแคบ ตาราง 5 คอลัมน์นี้กว้าง ~757px (ชื่อแม่แบบยาว ๆ + ปุ่ม 4 ปุ่ม
+ * ที่บังคับไม่ให้ขึ้นบรรทัดใหม่) แต่มือถือกว้าง 360–430px
+ *
+ * ⚠️ การ์ดรอบตารางมี `overflow: hidden` ปุ่มที่ล้นออกไปจึงไม่ใช่แค่
+ *    "ต้องเลื่อนไปดู" แต่**ถูกตัดทิ้งจนกดไม่ได้เลย**
+ *    วัดจริงที่ 579px: ปุ่มจัดการขอบขวาอยู่ที่ 757px = ล้นไป 178px ทั้ง 11 แถว
+ *
+ * แก้โดยเปลี่ยนทุกแถวเป็นการ์ด: ซ่อนหัวตาราง แล้วใช้ป้ายกำกับในแต่ละบรรทัดแทน
+ *
+ * ⚠️ scope ด้วย `.tpllist` เสมอ — ตารางประวัติใน `HistoryPanel` ยังต้องเป็น
+ *    ตารางเหมือนเดิม ถ้าเขียนกฎ `table` / `td` ตรง ๆ จะไปกระทบมันด้วย
+ */
+@media (max-width: 720px) {
+  /* หัวตารางไม่มีที่ให้เทียบคอลัมน์แล้ว ป้ายกำกับในแต่ละบรรทัดทำหน้าที่แทน */
+  .tpllist thead {
+    display: none;
+  }
+  .tpllist,
+  .tpllist tbody {
+    display: block;
+    width: 100%;
+  }
+  .tpllist tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px 0;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .tpllist tbody tr:last-child {
+    border-bottom: none;
+  }
+  .tpllist td {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: none;
+  }
+  /* ชื่อแม่แบบ = หัวของการ์ด */
+  .tpllist td:first-child {
+    margin-bottom: 4px;
+  }
+  .tpllist td:first-child > button {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  /* หมวด / แท็ก / ชนิด — ต่อกันในบรรทัดเดียว ไม่ต้องกินทีละบรรทัด */
+  .tpllist td:nth-child(2),
+  .tpllist td:nth-child(3),
+  .tpllist td:nth-child(4) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    max-width: 100%;
+    margin-right: 12px;
+    font-size: 13px;
+  }
+  .tpllist td:nth-child(2)::before,
+  .tpllist td:nth-child(3)::before,
+  .tpllist td:nth-child(4)::before {
+    content: attr(data-label);
+    /* เซลล์ชนิดเป็น `.mono` — ป้ายต้องกลับไปใช้ฟอนต์ปกติด้วย */
+    font-family: inherit;
+    font-family:
+      'Sarabun', 'Noto Sans Thai', 'IBM Plex Sans Thai', -apple-system, BlinkMacSystemFont,
+      'Segoe UI', system-ui, sans-serif;
+    font-size: 11px;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  /**
+   * ช่องที่ไม่มีข้อมูล (ไม่มีหมวด / ไม่มีแท็ก) — ไม่ต้องเอามายืนเปล่า ๆ
+   *
+   * ⚠️ ต้องอยู่**หลัง**กฎ `td:nth-child(2..4)` เสมอ
+   *    ทั้งสองกฎมี specificity เท่ากัน (คลาส 2 + type 1) กฎที่มาทีหลังชนะ
+   *    เคยเจอ: ย้ายไปไว้ก่อน → `display: none` ถูก `display: inline-flex` ทับ
+   *    ผลคือแถวยังโชว์ "หมวด — แท็ก" เปล่า ๆ ทั้งที่ไม่มีข้อมูลให้ดู
+   */
+  .tpllist td.is-empty {
+    display: none;
+  }
+  /* ปุ่มจัดการ — เต็มบรรทัด ยืดหยุ่นตามจอ และสูงพอให้นิ้วแตะ */
+  .tpllist td:last-child {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+    /* inline style เดิมตั้งไว้ right/nowrap — ต้อง override */
+    text-align: left !important;
+    white-space: normal !important;
+  }
+  .tpllist td:last-child a {
+    display: flex;
+    flex: 1 1 0;
+    min-width: 84px;
+    text-decoration: none;
+  }
+  .tpllist td:last-child button {
+    flex: 1 1 0;
+    min-width: 84px;
+    min-height: 36px;
+    padding: 8px 10px;
+  }
+}
+
 /* ── ป้าย ─────────────────────────────────────────────── */
 .pill {
   display: inline-block;
@@ -286,7 +395,7 @@ tbody tr:hover {
   }
 }
 
-/** พื้นที่รูปหน้าเอกสาร — สูงเท่าหน้าจอพอดี (หนึ่งหน้าจอ = หนึ่งจอ ไม่ใช่สองจอ) */
+/** พื้นที่รูปหน้าเอกสาร — สูงอย่างน้อยหนึ่งหน้าจอ (กระดาษสูงเกินก็ให้กล่องยืดตาม จะได้ไม่ต้องเลื่อนข้างในกล่อง) */
 .docpage {
   padding: 16px;
   background: var(--surface);
@@ -307,20 +416,27 @@ tbody tr:hover {
   justify-content: center;
   align-items: flex-start;
   /**
-   * ⚠️ สูงเท่าความสูงหน้าจอเสมอ — นี่คือสิ่งที่ผู้ใช้สั่ง
-   *    "ให้รูปเอกสารสูงเท่าความสูงหน้าจอ แถบรูปย่อต้องเลื่อนลงถึงจะเห็น"
+   * ⚠️ สูงเท่าหนึ่งหน้าจอเป็น**ขั้นต่ำ** ไม่ใช่ค่าเดียวตายตัว
    *
-   *   เดิมกล่องนี้สูงได้แค่ 588px จากจอ 1000px เพราะต้องแบ่งพื้นที่กับ
-   *   แถบรูปย่อและบรรทัดคำอธิบายที่อยู่**ใต้มันในการ์ดเดียวกัน**
-   *   ย้ายความสูงมาไว้ที่กล่องนี้ที่เดียว แถบข้างล่างจึงตกไปนอกจอ
-   *   โดยธรรมชาติ ไม่ต้องไปหักความสูงใครอีกแล้ว
+   *   เดิมล็อก `height: 100vh` → กระดาษที่สูงเกินกล่องต้อง**เลื่อนข้างในกล่อง**
+   *   แล้วหน้าเว็บก็ยังต้องเลื่อนอีกชั้น เพราะแถบรูปย่ออยู่ใต้กล่อง
+   *   = scrollbar 2 อันซ้อนกัน ผู้ใช้บอกว่า UX ไม่ได้
+   *   (เจอจริงที่ 579×539 — กระดาษ A4 ที่ 71% สูง 777px แต่กล่องเหลือ 507px)
    *
-   * ⚠️ ต้องเป็น `height` ไม่ใช่ `max-height`
-   *    `max-height` = กล่องสูงตามกระดาษ → กระดาษย่อตามกล่อง
-   *    → วงจรป้อนกลับ กล่องหดเหลือเท่ากระดาษเล็ก ๆ โดยไม่มีใครสั่ง
-   *    (ต้องกันการย้อนกลับไว้ ๆ แบบนี้)
+   *   `min-height` แก้ตรงจุด: กระดาษสูงเกินก็ให้**กล่องยืดตาม**แทนที่จะล้น
+   *   → เห็นครบทั้งหน้าเสมอ เหลือ scrollbar เดียวของหน้าเว็บ
+   *   และถ้ากระดาษสั้นกว่า กล่องยังสูงเต็มจอตามที่ผู้ใช้เคยสั่งไว้
+   *   แถบรูปย่อก็ยังตกไปใต้ขอบจอเหมือนเดิม
+   *
+   * ⚠️ เพราะกล่องยืดตามกระดาษ จะเอา**ความสูงกล่อง**มาคำนวณ "พอดีทั้งหน้า" อีกไม่ได้
+   *    (กล่องใหญ่ → สเกลใหญ่ → กระดาษใหญ่ → กล่องใหญ่ไปเรื่อย ไม่มีจุดนิ่ง)
+   *    `fitScale` ใน `DocumentPreview.tsx` จึงต้องใช้**ความสูงหน้าจอ**เป็นฐานแทน
+   *
+   * ⚠️ ยังห้ามใช้ `max-height` เด็ดขาด
+   *    `max-height` = กล่องหดตามกระดาษ → กระดาษย่อตามกล่อง → วงจรป้อนกลับ
+   *    กล่องยุบเหลือเท่ากระดาษเล็ก ๆ โดยไม่มีใครสั่ง (ต้องกันไว้)
    */
-  height: 100vh;
+  min-height: 100vh;
 }
 
 /* ── เมนูดาวน์โหลด (ไอคอน → เลือกรูปแบบทีหลัง) ─────────────────

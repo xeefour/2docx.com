@@ -361,7 +361,12 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
             ไม่พบแม่แบบ — ลองล้างตัวกรอง หรืออัปโหลดไฟล์ใหม่
           </div>
         ) : (
-          <table>
+          /*
+           * ⚠️ `tpllist` — ต้องมี class นี้เพื่อให้กฎ responsive ของมือถือ
+           *    แยกได้ว่าตารางไหนคือรายการแม่แบบ (หน้านี้) ไม่ไปกระทบตารางอื่น
+           *    เช่นตารางประวัติใน `HistoryPanel` ที่ยังต้องการเป็นตารางเหมือนเดิม
+           */
+          <table className="tpllist">
             <thead>
               <tr>
                 <th>ชื่อ</th>
@@ -461,8 +466,10 @@ function TemplateRow({
           {view?.visibility === 'private' && <span className="pill">🔒</span>}
         </div>
       </td>
-      <td>{tpl.category ? <span className="pill">{tpl.category}</span> : <span className="muted">—</span>}</td>
-      <td>
+      <td data-label="หมวด" className={tpl.category ? undefined : 'is-empty'}>
+        {tpl.category ? <span className="pill">{tpl.category}</span> : <span className="muted">—</span>}
+      </td>
+      <td data-label="แท็ก" className={tpl.tags.length ? undefined : 'is-empty'}>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 240 }}>
           {tpl.tags.slice(0, 3).map((g) => (
             <span key={g} className="pill">
@@ -472,7 +479,9 @@ function TemplateRow({
           {tpl.tags.length > 3 && <span className="muted" style={{ fontSize: 12 }}>+{tpl.tags.length - 3}</span>}
         </div>
       </td>
-      <td className="muted mono">{tpl.type}</td>
+      <td className="muted mono" data-label="ชนิด">
+        {tpl.type}
+      </td>
       <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
         <button
           className="ghost"

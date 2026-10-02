@@ -27,6 +27,12 @@ const PORT = 9362
 const WEB = 'http://localhost:3000'
 const API = 'http://127.0.0.1:4001'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+/**
+ * รับขนาดจอจาก argument — ต้องวัดได้หลายขนาด เพราะอาการ "scrollbar 2 อัน"
+ * โผล่เฉพาะจอที่ต่ำ ไม่เจอที่จอสูง (เจอครั้งแรกที่ 579×539 ตอนผู้ใช้รายงาน)
+ */
+const VW = Number(process.argv[2] ?? 1600)
+const VH = Number(process.argv[3] ?? 1000)
 
 const redis = new Redis(process.env.VALKEY_URL)
 const sid = `dbgtop-${Date.now()}`
@@ -38,7 +44,7 @@ const snap = await snapshotForm(H, seedKey)
 await importTags(H, tpl)
 
 const profile = mkdtempSync(join(tmpdir(), 'cdp-dbgtop-'))
-const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--window-size=1600,1000', `--remote-debugging-port=${PORT}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' })
+const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', `--window-size=${VW},${VH}`, `--remote-debugging-port=${PORT}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' })
 let wsUrl = null
 for (let i = 0; i < 40 && !wsUrl; i++) {
   await sleep(500)
@@ -88,13 +94,13 @@ const click = async (expr) => {
 const shot = async (name) => {
   const { data } = await send('Page.captureScreenshot', { format: 'png' })
   mkdirSync(join(process.cwd(), 'logs'), { recursive: true })
-  const file = join(process.cwd(), 'logs', `preview-${name}.png`)
+  const file = join(process.cwd(), 'logs', `preview-${name}-${VW}x${VH}.png`)
   writeFileSync(file, Buffer.from(data, 'base64'))
   console.log('  ภาพ:', file)
 }
 await send('Page.enable')
 await send('Runtime.enable')
-await send('Emulation.setDeviceMetricsOverride', { width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false })
+await send('Emulation.setDeviceMetricsOverride', { width: VW, height: VH, deviceScaleFactor: 1, mobile: false })
 await send('Network.setCookie', { name: 'docgen_session', value: sid, url: WEB })
 await send('Network.setCacheDisabled', { cacheDisabled: true })
 await send('Page.navigate', { url: `${WEB}/studio` })
@@ -134,6 +140,16 @@ const openTemplate = async (name) => {
   return true
 }
 
+/**
+ * ⚠️ แถบ URL มุมล่างซ้าย (`.urlbar__panel`) ลอยทับเนื้อหาตอนจอเตี้ย
+ *    ที่ 579×539 มันบังปุ่ม "เปิด" ของแถวล่าง ๆ จนกดไม่ได้
+ *    เคยเจอ: กดแล้วไม่เปิด เพราะ `elementFromPoint` โดนแผงนี้ ไม่ใช่ปุ่ม
+ *    → ยุบมันก่อนวัด (กดปุ่ม**ตัวสุดท้าย**ใน `.urlbar__actions` = ปุ่ม "ซ่อน"
+ *       เลี่ยงการค้นด้วยชื่อไทย เพราะพิมพ์ผิดตัวเดียวก็หาไม่เจจากชื่อ)
+ */
+await click(`[...document.querySelectorAll('.urlbar__actions button')].at(-1)`)
+await sleep(400)
+
 console.log('เปิดแม่แบบ:', tpl.name)
 await openTemplate(tpl.name)
 const opened = await waitFor("[...document.querySelectorAll('.tabs__tab')].length >= 6", 30000)
@@ -169,6 +185,16 @@ const probe = () =>
     const b = el.getBoundingClientRect()
     return { y: Math.round(b.y), bottom: Math.round(b.bottom), h: Math.round(b.height) }
   }
+  /**
+   * ⚠️ scrollbar **ข้างในกล่อง** — ตัวชี้ขาดของ UX แย่เรื่อง scrollbar 2 อัน
+   *    ค่า > 0 แปลว่ากระดาษยังล้นกล่อง ผู้ใช้ต้องเลื่อนข้างในอีกชั้นก่อน
+   *    แล้วหน้าเว็บก็ยังต้องเลื่อนอีก (แถบรูปย่ออยู่ใต้กล่อง) = ซ้อนกัน 2 อัน
+   *    กล่องต้องยืดตามกระดาษ (min-height: 100vh) ค่านี้จึงต้องเป็น 0 เสมอ
+   */
+  const innerScroll = (() => {
+    const el = document.querySelector('.docpage')
+    return el ? el.scrollHeight - el.clientHeight : null
+  })()
   const col = document.querySelector('.editor-col--preview')
   const strip = r('.docstrip__wrap')
   return {
@@ -188,6 +214,7 @@ const probe = () =>
         '=' + Math.round(b.getBoundingClientRect().height),
     ),
     docpage: r('.docpage'),
+    innerScroll,
     strip,
     /** แถบรูปย่อต้องอยู่ใต้ขอบจอ → ต้องเลื่อนถึงจะเห็น */
     stripHiddenAtTop: strip ? strip.y >= innerHeight : null,
@@ -204,6 +231,11 @@ const show = async (label) => {
 
 const before = await show('scroll = 0 →')
 await shot('01-top')
+/** ถ่ายตอนเลื่อนมาให้กล่องกระดาษอยู่บนสุด — จอเตี้ยแถวซ้ายโตจนพรีวิวไปอยู่ล่างจอ */
+await evaluate("document.querySelector('.docpage')?.scrollIntoView({ block: 'start' })")
+await sleep(900)
+await show('เลื่อนมาที่กล่องกระดาษ →')
+await shot('03-docpage')
 await evaluate('scrollTo(0, document.body.scrollHeight)')
 await sleep(1200)
 const after = await show('เลื่อนสุด →')
@@ -212,7 +244,8 @@ await evaluate('scrollTo(0, 0)')
 await sleep(600)
 
 console.log('\nสรุป')
-console.log('  กล่องรูปเอกสารสูงเท่าหน้าจอ :', before.docpage?.h, '/', before.vh)
+console.log('  กล่องรูปเอกสารสูงอย่างน้อยหนึ่งหน้าจอ :', before.docpage?.h, '/', before.vh)
+console.log('  scrollbar ข้างในกล่อง            :', before.innerScroll, 'px (ต้องเป็น 0)')
 console.log('  แถบรูปย่ออยู่ใต้ขอบจอตอนแรก :', before.stripHiddenAtTop)
 console.log('  เลื่อนแล้วเห็นแถบรูปย่อ     :', after.stripReachable)
 

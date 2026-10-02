@@ -220,6 +220,7 @@ const measure = () =>
     return {
       hostW: host.clientWidth, hostH: host.clientHeight,
       scrollW: host.scrollWidth, scrollH: host.scrollHeight,
+      vh: innerHeight,
       canvasW: Math.round(cr.width), canvasH: Math.round(cr.height),
       bmpW: c.width, bmpH: c.height,
       pct: (pct?.textContent || '').trim(),
@@ -437,17 +438,27 @@ console.log('\n[3b] ความสูงพื้นที่รูป — ต�
       docH: Math.round(doc?.clientHeight ?? NaN),
       vh: innerHeight,
       colPos: col ? getComputedStyle(col).position : '?',
+      innerScroll: doc ? doc.scrollHeight - doc.clientHeight : NaN,
     }
   })()`)
   /**
-   * ⚠️ เกณฑ์คือ "เท่าหน้าจอพอดี" ไม่ใช่ "ใหญ่กว่าเดิม"
-   *   ผู้ใช้สั่งให้กล่องรูปเอกสารสูงเท่าความสุดหน้าจอ (เดิมได้แค่ 588px จาก 1000px)
-   *   และแถบรูปย่อต้องถูกดันไปใต้ขอบจอ
+   * ⚠️ เกณฑ์เปลี่ยนจาก "เท่าหน้าจอพอดี" เป็น
+   *    "อย่างน้อยหนึ่งหน้าจอ + ไม่มี scrollbar ข้างในกล่อง"
+   *
+   *   ผู้ใช้รายงานว่าที่ 579×539 มี scrollbar **2 อันซ้อนกัน** (ในกล่อง + หน้าเว็บ)
+   *   เพราะกล่องล็อก `height: 100vh` กระดาษที่สูงเกินก็ต้องเลื่อนข้างใน
+   *   แก้เป็น `min-height: 100vh` → กล่องยืดตามกระดาษ เห็นครบ เหลือ scrollbar หน้าเดียว
+   *   และแถบรูปย่อยังถูกดันไปใต้ขอบจอเหมือนเดิม
    */
   check(
-    'กล่องรูปเอกสารสูงเท่าหน้าจอพอดี',
-    Math.abs(geo.docH - geo.vh) <= 1,
+    'กล่องรูปเอกสารสูงอย่างน้อยหนึ่งหน้าจอ',
+    geo.docH >= geo.vh - 1,
     `พื้นที่รูป ${geo.docH}px / จอ ${geo.vh}px · ทั้งการ์ด ${geo.colH}px`,
+  )
+  check(
+    'ไม่มี scrollbar ข้างในกล่อง (เหลือ scrollbar เดียวของหน้าเว็บ)',
+    geo.innerScroll <= 1,
+    `เนื้อหาล้นในกล่อง ${geo.innerScroll}px`,
   )
   /**
    * ⚠️ การ์ดสูงเกินจอเสมอ คอลัมน์จึง**ต้องไม่ sticky**
@@ -630,10 +641,16 @@ await sleep(900)
 const m5 = await measure()
 if (m5) {
   check('จอแคบ: ไม่มี scrollbar แนวนอน', m5.scrollW <= m5.hostW + 2, `เนื้อหา ${m5.scrollW} / กล่อง ${m5.hostW}`)
+
   check(
-    'จอแคบ: กล่องสูงตายตัว ไม่ใช่สูงตามกระดาษ (กันวงจรกระดาษย่อตัวเอง)',
-    m5.hostH >= 200,
-    `กล่องสูง ${m5.hostH}px · กระดาษ ${m5.canvasW}×${m5.canvasH}`,
+    'จอแคบ: กล่องสูงอย่างน้อยหนึ่งหน้าจอ',
+    m5.hostH >= m5.vh - 1,
+    `กล่องสูง ${m5.hostH}px / จอ ${m5.vh}px · กระดาษ ${m5.canvasW}×${m5.canvasH}`,
+  )
+  check(
+    'จอแคบ: ไม่มี scrollbar ข้างในกล่อง',
+    m5.scrollH - m5.hostH <= 1,
+    `เนื้อหาล้นในกล่อง ${m5.scrollH - m5.hostH}px`,
   )
 }
 await shot('07-narrow-900.png')

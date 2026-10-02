@@ -298,7 +298,10 @@ export default function DocumentPreview({
     })
     ro.observe(canvas)
     return () => ro.disconnect()
-  }, [pdf])
+    // ⚠️ ต้องมี `loading` ด้วย เหตุผลเดียวกับ observer ของกล่องด้านล่าง
+    //    ถ้า effect รันตอนที่ canvas ยังไม่ถูก mount จะไม่มีโอกาส observe อีก
+    //    (ผลคือ `stage` ค้างที่ 0 → ไม้บรรทัดไม่โผล่)
+  }, [pdf, loading])
 
   /**
    * ── ติดตามขนาดกล่องพรีวิว เพื่อให้กระดาษพอดีเสมอ ──
@@ -337,7 +340,19 @@ export default function DocumentPreview({
       ro.disconnect()
       window.removeEventListener('resize', read)
     }
-  }, [pdf])
+    /**
+     * ⚠️ ต้องมี `loading` ในรายการ dependency ด้วย ไม่ใช่ผูกแค่ `pdf`
+     *
+     *   ระหว่าง `setPdf(...)` กับ `setLoading(false)` ถ้า React แทรกรอบเรนเดอร์
+     *   (เรียน `await` คาบอยู่ตรงนั้น) หน้าจอยังเป็น "กำลังเปิดเอกสาร…"
+     *   → `.docpage` ยังไม่มีใน DOM → `pageRef.current` เป็น null → effect รีเทิร์นก่อน
+     *   → `pdf` ไม่เปลี่ยนอีก → effect ไม่มีโอกาสรันซ้ำ → `box` ค้างที่ {0, 0}
+     *   → `fitScale` เป็น null → เปอร์เซ็นต์ขึ้น "—" และกระดาษวาดด้วยสูตรสำรอง
+     *
+     *   เจอจริงแบบไม่ประจำ (ผ่านบ้างตกบ้าง) เพราะขึ้นกับจังหวะของ React
+     *   การผูก `loading` ทำให้ effect รันใหม่ตอนกล่องถูก mount จริงเสมอ
+     */
+  }, [pdf, loading])
 
   // ── วาดรูปย่อในแถบด้านล่าง ──
   useEffect(() => {

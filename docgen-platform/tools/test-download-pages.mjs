@@ -338,34 +338,109 @@ if (!rendered) {
   process.exit(1)
 }
 
-// ── 1. ช่องเลือกหน้า ─────────────────────────────────────────────
-console.log('\n[1] ช่องเลือกหน้าในเมนูดาวน์โหลด')
+// ── 1. เมนูมี 3 ตัวเลือก และกล่องเลือกหน้ายังไม่โผล่ ────────────────────
+console.log('\n[1] เมนูมี 3 ตัวเลือก — กล่อง "หน้าที่ต้องการ" ยังไม่โผล่')
 await realClick('.dl__btn')
 check('เปิดเมนูได้', await waitFor("!!document.querySelector('.dl__pop')", 8000))
-check('มีช่องพิมพ์ช่วงหน้า', await evaluate("!!document.querySelector('.dl__rangeinput')"))
-const countText = await evaluate("document.querySelector('.dl__count')?.textContent ?? ''")
-const total = Number(countText.match(/(\d+)/)?.[1] ?? 0)
-check('บอกจำนวนหน้ารวม', total > 0, countText)
-/**
- * ⚠️ พรีวิวแสดง**ทีละหน้า** มีตัวบอก "หน้า 1 / 3" และแถบรูปย่อด้านล่าง
- *    ดังนั้น `document.querySelectorAll('.docpage canvas').length` จะเป็น 1 เสมอ
- *    นับ canvas แล้วเทียบกับเมนู = เทสต์ผิด ไม่ใช่แอปผิด
- *    ต้องอ่านตัวเลขจากตัวบอกตำแหน่งของพรีวิวเอง
- */
-const previewLabel = await evaluate(
-  "document.querySelector('.doctools .muted')?.textContent?.trim() ?? ''",
-)
-const previewTotal = Number(previewLabel.match(/\/\s*(\d+)/)?.[1] ?? 0)
-check('จำนวนหน้าตรงกับตัวบอกหน้าในพรีวิว', total === previewTotal, `เมนูบอก ${total} · พรีวิว "${previewLabel}"`)
-check('พรีวิววาดครบทีละหน้า (ไม่ใช่ทุกหน้าพร้อมกัน)', previewTotal > 0 && (await evaluate("document.querySelectorAll('.docpage canvas').length")) === 1)
-check('เริ่มต้นเป็นทุกหน้า', countText.includes('ทั้งหมด'), countText)
 const opts = await evaluate("[...document.querySelectorAll('.dl__opt')].map((b) => b.innerText.replace(/\\n+/g, ' ').trim())")
-check('มีตัวเลือก ZIP', opts.some((o) => o.includes('ZIP')), opts.join(' | '))
-check('มี 4 รูปแบบ (PDF · Word · รูป · ZIP)', opts.length === 4, `${opts.length}`)
+check('มี 3 ตัวเลือก (PDF · Word · รูปภาพ)', opts.length === 3, `${opts.length}: ${opts.join(' | ')}`)
+check('ไม่มีตัวเลือก ZIP แยกแล้ว', !opts.some((o) => o.includes('ZIP')), opts.join(' | '))
+/**
+ * ⚠️ กติกาใหม่: กล่อง "หน้าที่ต้องการ" ซ่อนไว้จนกว่าผู้ใช้จะ**คลิกรูปภาพ**
+ *   ต้องไม่มีทั้งช่องพิมพ์และปุ่มยืนยันตั้งแต่เปิดเมนู
+ */
+check('ยังไม่มีช่องพิมพ์ช่วงหน้า', !(await evaluate("!!document.querySelector('.dl__rangeinput')")))
+check('ยังไม่มีปุ่มยืนยันดาวน์โหลดรูป', !(await evaluate("!!document.querySelector('.dl__go')")))
+check('ยังไม่เริ่มดาวน์โหลดอะไร', listDownloads().length === 0, listDownloads().join(', '))
+/**
+ * จำนวนหน้าต้องอ่านจากตัวบอกของพรีวิว เพราะ `.dl__count` ยังไม่มีใน DOM
+ * พรีวิย์แสดง**ทีละหน้า** มีตัวบอก "หน้า 1 / 3" ดังนั้น
+ * `document.querySelectorAll('.docpage canvas').length` จะเป็น 1 เสมอ
+ * นับ canvas แล้วเทียบกับเมนู = เทสต์ผิด ไม่ใช่แอปผิด
+ */
+const previewLabel = await evaluate("document.querySelector('.doctools .muted')?.textContent?.trim() ?? ''")
+const total = Number(previewLabel.match(/\/\s*(\d+)/)?.[1] ?? 0)
+check('อ่านจำนวนหน้าจากพรีวิวได้', total > 0, previewLabel)
+check('พรีวิววาดครบทีละหน้า (ไม่ใช่ทุกหน้าพร้อมกัน)', total > 0 && (await evaluate("document.querySelectorAll('.docpage canvas').length")) === 1)
 await shot('01-menu.png')
 
-// ── 2. พิมพ์ช่วงหน้า ────────────────────────────────────────────
-console.log('\n[2] พิมพ์ช่วงหน้า — จำนวนที่เลือกต้องเปลี่ยน')
+/** คลิกปุ่มตัวเลือกด้วยเมาส์จริง หาจากข้อความใน `.dl__opt` (ไม่ใช่ทุกปุ่มในเมนู) */
+const clickOpt = async (text) => {
+  const box = await evaluate(`(() => {
+    const el = [...document.querySelectorAll('.dl__opt')].find((b) => (b.innerText || '').includes(${JSON.stringify(text)}))
+    if (!el) return null
+    const pop = el.closest('.dl__pop')
+    ;(pop ?? el).scrollIntoView({ block: 'center' })
+    const r = el.getBoundingClientRect()
+    const x = r.x + r.width / 2, y = r.y + r.height / 2
+    const hit = document.elementFromPoint(x, y)
+    return { ok: !!hit && (el.contains(hit) || hit === el), x, y }
+  })()`)
+  if (!box?.ok) return false
+  for (const type of ['mousePressed', 'mouseReleased'])
+    await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 })
+  return true
+}
+
+/**
+ * เปิดกล่องเลือกหน้าให้ครบ — เผื่อกรณีเมนูถูกปิดไปแล้วจากการดาวน์โหลดรอบก่อน
+ * (เมนูปิดตัวเองทุกครั้งที่กดดาวน์โหลดสำเร็จ)
+ */
+const openImagePanel = async () => {
+  if (!(await evaluate("!!document.querySelector('.dl__imgpanel')"))) {
+    if (!(await evaluate("!!document.querySelector('.dl__pop')"))) {
+      await realClick('.dl__btn')
+      await waitFor("!!document.querySelector('.dl__pop')", 8000)
+    }
+    await clickOpt('รูปภาพ')
+    await waitFor("!!document.querySelector('.dl__imgpanel')", 5000)
+  }
+  await sleep(300)
+}
+
+// ── 2. คลิกรูปภาพแล้วกล่องเลือกหน้าต้องโผล่ใต้ปุ่ม ──────────────────
+console.log('\n[2] คลิก "รูปภาพ" — กล่องเลือกหน้าต้องโผล่ใต้ปุ่มนี้')
+const geoBefore = await evaluate(`(() => {
+  const pop = document.querySelector('.dl__pop')
+  if (!pop) return null
+  const pr = pop.getBoundingClientRect()
+  return { popH: Math.round(pr.height), hasPanel: !!document.querySelector('.dl__imgpanel'),
+           relY: [...document.querySelectorAll('.dl__opt')].map((o) => Math.round(o.getBoundingClientRect().y - pr.y)) }
+})()`)
+check('คลิกปุ่มรูปภาพได้', await clickOpt('รูปภาพ'))
+const panelShown = await waitFor("!!document.querySelector('.dl__imgpanel')", 5000)
+check('กล่องเลือกหน้าโผล่หลังคลิกรูปภาพ', panelShown)
+check('มีช่องพิมพ์ช่วงหน้า', await evaluate("!!document.querySelector('.dl__rangeinput')"))
+check('มีปุ่มยืนยันดาวน์โหลดรูป', await evaluate("!!document.querySelector('.dl__go')"))
+/**
+ * ⚠️ "ใต้ปุ่มรูปภาพ" = วัดตำแหน่ง**เทียบกับกล่องเมนู** ไม่ใช่พิกัดบนจอ
+ *   `scrollIntoView` ทำให้ทุกอย่างขยับพร้อมกัน ถ้าเทียบพิกัดจอจะเทียบผิด
+ */
+const geoAfter = await evaluate(`(() => {
+  const pop = document.querySelector('.dl__pop')
+  const panel = document.querySelector('.dl__imgpanel')
+  if (!pop || !panel) return null
+  const pr = pop.getBoundingClientRect()
+  const png = [...document.querySelectorAll('.dl__opt')].find((o) => (o.innerText || '').includes('รูปภาพ'))
+  return {
+    popH: Math.round(pr.height),
+    relY: [...document.querySelectorAll('.dl__opt')].map((o) => Math.round(o.getBoundingClientRect().y - pr.y)),
+    panelRelY: Math.round(panel.getBoundingClientRect().y - pr.y),
+    pngRelY: png ? Math.round(png.getBoundingClientRect().y - pr.y) : null,
+    pngH: png ? Math.round(png.getBoundingClientRect().height) : null,
+  }
+})()`)
+check('กล่องเลือกหน้าอยู่ใต้ปุ่มรูปภาพจริง', geoAfter && geoAfter.panelRelY > geoAfter.pngRelY, `ปุ่มรูปภาพ y=${geoAfter?.pngRelY} · กล่อง y=${geoAfter?.panelRelY}`)
+check('ปุ่มรูปภาพกว้างเต็มแถว ไม่ใช่ครึ่งแถว', geoAfter && geoAfter.relY.length === 3 && geoAfter.relY[2] > geoAfter.relY[1] + 30, `relY=${geoAfter?.relY.join()}`)
+check('กล่องที่เพิ่งมาทำให้เมนูสูงขึ้น (แปลว่ามีอะไรเพิ่มจริง)', geoBefore && geoAfter && geoAfter.popH > geoBefore.popH, `${geoBefore?.popH} → ${geoAfter?.popH}px`)
+const countText = await evaluate("document.querySelector('.dl__count')?.textContent ?? ''")
+check('บอกจำนวนหน้ารวมตรงกับพรีวิว', countText.includes(`ทั้งหมด ${total}`), `${countText} · พรีวิว ${total} หน้า`)
+check('เริ่มต้นเป็นทุกหน้า', countText.includes('ทั้งหมด'), countText)
+check('ยังไม่เริ่มดาวน์โหลดอะไร (คลิกครั้งแรกแค่เปิดกล่อง)', listDownloads().length === 0, listDownloads().join(', '))
+await shot('02-image-panel.png')
+
+// ── 3. พิมพ์ช่วงหน้า ────────────────────────────────────────────
+console.log('\n[3] พิมพ์ช่วงหน้า — จำนวนที่เลือกต้องเปลี่ยน และปุ่มยืนยันต้องบอกชนิดไฟล์')
 if (total >= 3) {
   await setRange('2-3')
   await sleep(400)
@@ -373,28 +448,31 @@ if (total >= 3) {
   check('เลือก 2 หน้า', c2 === '2 จาก ' + total + ' หน้า', c2)
   const hint = await evaluate("document.querySelector('.dl__hint')?.textContent ?? ''")
   check('ใบ้ว่าจะได้กี่หน้า', hint.includes('จะได้ 2 หน้า'), hint)
-  const pngOpt = await evaluate("[...document.querySelectorAll('.dl__opt')].find(b => b.innerText.includes('รูปภาพ'))?.innerText.replace(/\\n+/g,' ').trim()")
-  check('ป้ายกำกับบอกว่าเหลือหน้าที่เลือก', /2 หน้าที่เลือก/.test(pngOpt ?? ''), pngOpt)
+  check('บอกว่าจะรวมเป็น ZIP (มากกว่า 1 หน้า)', hint.includes('ZIP'), hint)
+  const go2 = await evaluate("document.querySelector('.dl__go')?.textContent ?? ''")
+  check('ปุ่มยืนยันบอกว่า 2 รูปเป็น ZIP', go2.includes('2 รูป') && go2.includes('ZIP'), go2)
 } else {
   skipCheck('เลือกช่วงหน้า', `เอกสารมี ${total} หน้า`)
 }
-await shot('02-range.png')
+await shot('03-range.png')
 
-// ── 3. พิมพ์ผิด ─────────────────────────────────────────────────
-console.log('\n[3] พิมพ์ผิด — ต้องบอกเหตุผล ไม่ใช่เงียบ')
+// ── 4. พิมพ์ผิด ─────────────────────────────────────────────────
+console.log('\n[4] พิมพ์ผิด — ต้องบอกเหตุผลและปิดปุ่มยืนยัน ไม่ใช่เงียบ')
 await setRange('99')
 await sleep(400)
 const err = await evaluate("document.querySelector('.dl__hint--err')?.textContent ?? ''")
 check('ขึ้นข้อความบอกว่าเอกสารมีกี่หน้า', err.includes(`เอกสารมีแค่ ${total} หน้า`), err)
-await shot('03-bad-range.png')
+check('ปุ่มยืนยันถูกปิดใช้งานเมื่อช่วงหน้าผิด', await evaluate("!!document.querySelector('.dl__go')?.disabled"))
+await shot('04-bad-range.png')
 await setRange('')
 await sleep(300)
 
-// ── 4. ปุ่มลัด ─────────────────────────────────────────────────
-console.log('\n[4] ปุ่มลัดเลือกหน้า')
+// ── 5. ปุ่มลัด ─────────────────────────────────────────────────
+console.log('\n[5] ปุ่มลัดเลือกหน้า')
 await clickText('หน้าแรก', '.dl__quick button')
 await sleep(300)
 check('ปุ่ม "หน้าแรก" ได้ 1 หน้า', (await evaluate("document.querySelector('.dl__count')?.textContent ?? ''")).includes('1 จาก'))
+check('1 หน้า → ปุ่มยืนยันต้องเป็นไฟล์รูปเดียว ไม่ใช่ ZIP', (await evaluate("document.querySelector('.dl__go')?.textContent ?? ''")).includes('PNG'))
 await clickText('ทุกหน้า', '.dl__quick button')
 await sleep(300)
 check('ปุ่ม "ทุกหน้า" กลับเป็นทั้งหมด', (await evaluate("document.querySelector('.dl__count')?.textContent ?? ''")).includes('ทั้งหมด'))
@@ -406,154 +484,80 @@ if (total > 1) {
   await sleep(200)
 }
 
-// ── 5. Word ตัดหน้าไม่ได้ ───────────────────────────────────────
-console.log('\n[5] ชี้ที่ Word — ต้องบอกว่าเลือกหน้าไม่ได้')
-const hoveredOk = await hoverText('Word')
+// ── 6. เลื่อนเมาส์ผ่านปุ่มแล้วเมนูต้องไม่ขยับ ────────────────────────
+console.log('\n[6] เลื่อนเมาส์ผ่านปุ่ม — เมนูต้องนิ่ง (กันกระพริบไม่สิ้นสุด)')
 /**
- * ⚠️ ใช้ผลจาก `hoverText` เป็นตัวตัดสิน ไม่ใช่การอ่าน `:hover` ครั้งเดียว
- *    `hoverText` คืน `true` เมื่อ `matches(':hover')` เป็นจริงจริง ๆ แล้ว (ยืนยันเป็นลูป)
- *    การอ่านครั้งเดียวทันทีหลังนั้นเป็นการแข่งกับเฟรมของเบราว์เซอร์
- *    แล้วตกได้ทั้งที่เมาส์จริงชี้ถูก (เคยเจอตอนรันสคริปต์ต่อกัน)
- *    ค่า `hovered` ข้างล่างเก็บไว้**เพื่อรายงานดีบัก** ไม่ใช่เพื่อตัดสิน
- */
-// แยกให้ออกว่า "เมาส์ไม่ได้ hover" หรือ "hover แล้วแต่ React ไม่อัปเดต"
-// ถ้าสองอย่างนี้ต่างกัน แปลว่าเป็นบั๊กที่ผู้ใช้เมาส์จะเจอด้วย
-const hovered = await evaluate(
-  "!!document.querySelector('.dl__opt:nth-of-type(2)')?.matches(':hover')",
-)
-const wordHint = await evaluate("document.querySelector('.dl__hint')?.textContent ?? ''")
-check('เมาส์จริง hover ทับปุ่ม Word', hoveredOk === true, `ยืนยันแล้ว=${hoveredOk} · อ่านซ้ำ=${hovered}`)
-/**
- * ⚠️ พอสองค่านี้**ไม่ตรงกัน** ต้องรายงานสถานะจริงทั้งหมด ไม่ใช่แค่ `:hover=false`
- *    เพราะเคยเจออาการนี้จาก 2 สาเหตุที่ต่างกันมาก
- *      · `mouseenter` ยังไม่มี  → บั๊กฝั่งแอป (React ไม่ผูก onMouseEnter)
- *      · `:hover` ไปตกที่ปุ่มอื่น → ปุ่มที่ชี้ถูกเลื่อนออกจากใต้เคอร์เซอร์
- *      · `:hover` เป็นจริงแล้วกลับเป็นเท็จเอง → มีอะไรย้ายเลย์เอาต์หรือ remount ตอน hover
- *    ถ้าไม่รายงาน จะเดาไปเรื่อยว่าบั๊กอยู่ฝั่งไหน
- */
-if (hovered !== hoveredOk) {
-  const dump = await evaluate(`(() => {
-    const rows = [...document.querySelectorAll('.dl__opt')].map((o) => {
-      const r = o.getBoundingClientRect()
-      return {
-        t: (o.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 8),
-        hover: o.matches(':hover'),
-        peek: o.dataset.peek,
-        cy: Math.round(r.y + r.height / 2),
-      }
-    })
-    const hint = document.querySelector('.dl__hint')
-    return { scrollY: Math.round(window.scrollY), rows,
-             hintH: hint ? Math.round(hint.getBoundingClientRect().height) : null,
-             hintText: (hint?.textContent ?? '').replace(/\\s+/g, ' ').trim().slice(0, 40) }
-  })()`)
-  console.log('    [ดีบัก] hoverText=', hoveredOk, '· อ่านซ้ง=', hovered, '· scrollY=', dump.scrollY, '· สูงกล่องข้อความ=', dump.hintH)
-  console.log('    [ดีบัก] ข้อความ =', JSON.stringify(dump.hintText))
-  for (const r of dump.rows) {
-    console.log(`    [ดีบัก] ${r.t} · yกลาง=${r.cy} · :hover=${r.hover} · peek=${r.peek}`)
-  }
-}
-if (!wordHint.includes('จัดหน้าใหม่')) {
-  // hover ไม่ติด แต่ปุ่มเป็น <button> จริง → ใช้ Tab เดินได้ ทดสอบเส้นทางนี้แทน
-  await evaluate("document.querySelectorAll('.dl__opt')[1]?.focus()")
-  await sleep(300)
-}
-const wordHint2 = await evaluate("document.querySelector('.dl__hint')?.textContent ?? ''")
-check('บอกว่า Word ไม่ใช้การเลือกหน้า', wordHint2.includes('Word') && wordHint2.includes('จัดหน้าใหม่'), wordHint2)
-check(
-  'ยังไม่เริ่มดาวน์โหลดอะไร (แค่ชี้ ไม่ใช่กด)',
-  listDownloads().length === 0,
-  listDownloads().join(', '),
-)
-await shot('04-word-hint.png')
-/**
- * ⚠️ ชี้ไอคอนรูปแบบที่**ตัดหน้าไม่ได้** (Word/รูปภาพ/ZIP) แล้ว
- *    กล่อง "หน้าที่ต้องการ" ต้อง**ยังอยู่** และเมนูต้อง**ไม่ขยับ**
+ * ⚠️ เคยพั้งมาแล้วสองรอบ (ผู้ใช้รายงานว่าเมนูกระพริบไม่สิ้นสุด)
+ *   รอบแรก: กล่อง "หน้าที่ต้องการ" ซ่อน/โชว์ตาม `peek` ตอน hover
+ *             → เมนูสูงลดลง ~121px → ปุ่มที่เมาส์ชี้ขยับขึ้นมาทับเมาส์ → วนไม่จบ
+ *   รอบสอง: แก้ด้วยการคงกล่องไว้ + `disabled` แต่ผู้ใช้ยังอยากได้กล่องที่ซ่อนไว้
+ *   ตอนนี้: กล่องซ่อนด้วย**การคลิก** ไม่ผูกกับ hover เลย → ต้องไม่มีอะไรขยับตอนชี้
  *
- *   เคยพั้งมาแล้ว (ผู้ใช้รายงานว่าเมนูกระพริบไม่สิ้นสุด):
- *   กล่องนี้ถูกซ่อนทิ้งเมื่อ `showRange` เป็น false → เมนูสูงลดลง ~121px
- *   → ปุ่มรูปแบบที่อยู่ข้างล่างขยับขึ้นมา**ทับเมาส์** → `peek` เปลี่ยนกลับ
- *   → กล่องกลับมา → ปุ่มขยับลง → วนไปมาไม่สิ้นสุด และกดช่องไม่ได้เลย
- *
- *   ต้องเช็คทั้ง "ช่องยังอยู่" และ "ตำแหน่งปุ่มไม่ขยับ"
- *   เพราะแค่ช่องยังอยู่แต่ปุ่มขยับ 3px ก็ทำให้เมาส์หลุดปุ่มได้เหมือนกัน
- */
-/**
- * ⚠️ ชี้ไอคอน **Word** (รูปแบบเดียวที่ตัดหน้าไม่ได้ — PDF/PNG/ZIP ตัดได้ทั้งหมด)
- *    แล้วกล่อง "หน้าที่ต้องการ" ต้อง**ยังอยู่** และเมนูต้อง**ไม่ขยับ**
- *
- *   เคยพั้งมาแล้ว (ผู้ใช้รายงานว่าเมนูกระพริบไม่สิ้นสุด):
- *   กล่องนี้ถูกซ่อนทิ้งเมื่อ `showRange` เป็น false → เมนูสูงลดลง ~121px
- *   → ปุ่มรูปแบบที่อยู่ข้างล่างขยับขึ้นมา**ทับเมาส์** → `peek` เปลี่ยนกลับ
- *   → กล่องกลับมา → ปุ่มขยับลง → วนไปมาไม่สิ้นสุด และกดช่องไม่ได้เลย
- *
- * ⚠️ ต้องวัดตำแหน่งปุ่ม**เทียบกับกล่องเมนู** ไม่ใช่พิกัดบนจอ
+ *   ต้องวัดตำแหน่งปุ่ม**เทียบกับกล่องเมนู** ไม่ใช่พิกัดบนจอ
  *   `hoverText` เรียก `scrollIntoView` → ถ้าหน้าเลื่อน พิกัดทุกอย่างขยับพร้อมกัน
- *   ทำให้เทียบผิดแล้วไปโทษแอปว่าเมนูขยับ (เจอตอนรันรอบแรก)
  */
 const dlGeo = () =>
   evaluate(`(() => {
-    const pop = document.querySelector('.dl__pop')
-    const input = document.querySelector('.dl__rangeinput')
-    if (!pop) return null
-    const pr = pop.getBoundingClientRect()
-    return {
-      popH: Math.round(pr.height),
-      hasInput: !!input,
-      inputDisabled: !!input?.disabled,
-      /** ระยะจากขอบบนเมนูถึงปุ่มแต่ละปุ่ม — ไม่ขึ้นกับการเลื่อนหน้า */
-      relY: [...document.querySelectorAll('.dl__opt')].map(
-        (o) => Math.round(o.getBoundingClientRect().y - pr.y),
-      ),
-    }
-  })()`)
+  const pop = document.querySelector('.dl__pop')
+  if (!pop) return null
+  const pr = pop.getBoundingClientRect()
+  return {
+    popH: Math.round(pr.height),
+    /** ระยะจากขอบบนเมนูถึงปุ่มแต่ละปุ่ม — ไม่ขึ้นกับการเลื่อนหน้า */
+    relY: [...document.querySelectorAll('.dl__opt')].map((o) => Math.round(o.getBoundingClientRect().y - pr.y)),
+  }
+})()`)
 
 const geoPdf = await dlGeo()
-const hoveredWord2 = await hoverText('Word')
+const hoveredWord = await hoverText('Word')
 const geoWord = await dlGeo()
-check(
-  'ชี้ Word (ตัดหน้าไม่ได้) → ช่อง "หน้าที่ต้องการ" ยังอยู่ ไม่หายไป',
-  hoveredWord2 && geoWord?.hasInput === true,
-  `ยังอยู่=${geoWord?.hasInput} · ปิดใช้งาน=${geoWord?.inputDisabled}`,
-)
-check(
-  'ชี้ Word → ความสูงเมนูเท่าเดิม ไม่หด (กันกระพริบไม่สิ้นสุด)',
-  geoPdf && geoWord && Math.abs(geoWord.popH - geoPdf.popH) <= 1,
-  `สูง ${geoPdf?.popH} → ${geoWord?.popH}px`,
-)
-check(
-  'ชี้ Word → ปุ่มรูปแบบไม่ขยับจากใต้เคอร์เซอร์',
-  geoPdf && geoWord && geoWord.relY.join() === geoPdf.relY.join(),
-  `${geoPdf?.relY.join()} → ${geoWord?.relY.join()}`,
-)
-check(
-  'ช่องที่ตัดหน้าไม่ได้ ต้องถูกปิดใช้งาน (ยังเห็นและอ่านได้ แต่กดไม่ได้)',
-  geoWord?.inputDisabled === true,
-  `disabled=${geoWord?.inputDisabled}`,
-)
-await shot('04b-hover-word.png')
-await hoverText('PDF')
+check('เมาส์จริงชี้ปุ่ม Word ได้', hoveredWord === true)
+check('ชี้ Word → ความสูงเมนูเท่าเดิม ไม่หด', geoPdf && geoWord && Math.abs(geoWord.popH - geoPdf.popH) <= 1, `สูง ${geoPdf?.popH} → ${geoWord?.popH}px`)
+check('ชี้ Word → ปุ่มรูปแบบไม่ขยับจากใต้เคอร์เซอร์', geoPdf && geoWord && geoWord.relY.join() === geoPdf.relY.join(), `${geoPdf?.relY.join()} → ${geoWord?.relY.join()}`)
+const geoPng = await (async () => { await hoverText('รูปภาพ'); return dlGeo() })()
+check('ชี้รูปภาพ → เมนูก็ยังนิ่ง (กล่องที่เปิดไว้ต้องไม่ถูก hover ปิด)', geoWord && geoPng && geoPng.relY.join() === geoWord.relY.join(), `${geoWord?.relY.join()} → ${geoPng?.relY.join()}`)
+check('ยังไม่เริ่มดาวน์โหลดอะไร (แค่ชี้ ไม่ใช่กด)', listDownloads().length === 0, listDownloads().join(', '))
+await shot('05-hover.png')
 
-// ── 6. ดาวน์โหลด ZIP ────────────────────────────────────────────
-console.log('\n[6] ดาวน์โหลด ZIP — ต้องได้ไฟล์เดียวที่เปิดได้')
+// ── 7. ดาวน์โหลดรูป 1 หน้า → ไฟล์ PNG เดียว ─────────────────────────
+console.log('\n[7] ดาวน์โหลดรูป 1 หน้า — ต้องได้ไฟล์ .png ไฟล์เดียว (ไม่ใช่ ZIP)')
+if (total >= 1) {
+  await openImagePanel()
+  await setRange('1')
+  await sleep(400)
+  const goLabel = await evaluate("document.querySelector('.dl__go')?.textContent ?? ''")
+  check('1 หน้า → ปุ่มยืนยันสัญญาว่าจะได้ PNG ไม่ใช่ ZIP', goLabel.includes('PNG') && !goLabel.includes('ZIP'), goLabel)
+  check('กดปุ่มยืนยันได้', await realClick('.dl__go'))
+
+  const files = await waitFile('.png')
+  check('ได้ไฟล์ .png บนดิสก์', files.length === 1, files.join(', '))
+  check('ไม่ได้ไฟล์ .zip มาด้วย', listDownloads().filter((f) => f.endsWith('.zip')).length === 0, listDownloads().join(', '))
+  if (files.length) {
+    const bytes = new Uint8Array(readFileSync(join(DL, files[0])))
+    check('ไฟล์เป็น PNG จริง (magic %PNG)', bytes[0] === 0x89 && bytes[1] === 0x50, `${bytes.length} ไบต์`)
+    check('ชื่อไฟล์บอกเลขหน้า', /หน้า1\.png$/.test(files[0]), files[0])
+    check('รูปไม่ใช่ไฟล์ว่าง', bytes.length > 2000, `${bytes.length} ไบต์`)
+  }
+  await shot('06-after-png.png')
+} else {
+  skipCheck('ดาวน์โหลดรูป 1 หน้า', `เอกสารมี ${total} หน้า`)
+}
+
+// ── 8. ดาวน์โหลดรูปหลายหน้า → ไฟล์ ZIP ────────────────────────────
+console.log('\n[8] ดาวน์โหลดรูปมากกว่า 1 หน้า — ต้องได้ไฟล์ .zip ไฟล์เดียว')
 if (total >= 2) {
   const want = Math.min(2, total)
+  await openImagePanel()
   await setRange(`1-${want}`)
   await sleep(400)
-  const zipOpt = await evaluate(`(() => {
-    const el = [...document.querySelectorAll('.dl__opt')].find((b) => b.innerText.includes('ZIP'))
-    if (!el) return null
-    const r = el.getBoundingClientRect()
-    return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
-  })()`)
-  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: zipOpt.x, y: zipOpt.y, button: 'left', clickCount: 1 })
-  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: zipOpt.x, y: zipOpt.y, button: 'left', clickCount: 1 })
+  const goLabel = await evaluate("document.querySelector('.dl__go')?.textContent ?? ''")
+  check('หลายหน้า → ปุ่มยืนยันสัญญาว่าจะได้ ZIP', goLabel.includes('ZIP'), goLabel)
+  check('กดปุ่มยืนยันได้', await realClick('.dl__go'))
 
   const files = await waitFile('.zip')
   check('ได้ไฟล์ .zip บนดิสก์', files.length === 1, files.join(', '))
   if (files.length) {
-    const path = join(DL, files[0])
-    const bytes = new Uint8Array(readFileSync(path))
+    const bytes = new Uint8Array(readFileSync(join(DL, files[0])))
     check('ไฟล์ไม่ว่าง', bytes.length > 0, `${bytes.length} ไบต์`)
     const entries = unzipSync(bytes)
     const names = Object.keys(entries)
@@ -565,30 +569,22 @@ if (total >= 2) {
     const onePng = Object.values(entries)[0]
     check('รูปไม่ใช่ไฟล์ว่าง', onePng && onePng.length > 2000, `${onePng?.length ?? 0} ไบต์`)
   }
-  await shot('05-after-zip.png')
+  await shot('07-after-zip.png')
 } else {
-  skipCheck('ดาวน์โหลด ZIP', `เอกสารมี ${total} หน้า`)
+  skipCheck('ดาวน์โหลดรูปหลายหน้า', `เอกสารมี ${total} หน้า`)
 }
 
-// ── 7. ดาวน์โหลด PDF เฉพาะหน้าที่เลือก ───────────────────────────
-console.log('\n[7] ดาวน์โหลด PDF + เลือกหน้า — ต้องเหลือเฉพาะหน้าที่เลือก')
-if (total >= 2) {
-  await realClick('.dl__btn')
-  await waitFor("!!document.querySelector('.dl__pop')", 8000)
-  await setRange('1')
-  await sleep(300)
-  const pdfOpt = await evaluate(`(() => {
-    const el = [...document.querySelectorAll('.dl__opt')].find((b) => b.innerText.includes('PDF'))
-    if (!el) return null
-    const r = el.getBoundingClientRect()
-    return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
-  })()`)
-  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pdfOpt.x, y: pdfOpt.y, button: 'left', clickCount: 1 })
-  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: pdfOpt.x, y: pdfOpt.y, button: 'left', clickCount: 1 })
+// ── 9. ดาวน์โหลด PDF → ทั้งเล่ม ไม่ตัดหน้า ─────────────────────────
+console.log('\n[9] ดาวน์โหลด PDF — ต้องได้ทั้งเล่ม ไม่ใช่เฉพาะหน้าที่เลือกไว้')
+{
+  if (!(await evaluate("!!document.querySelector('.dl__pop')"))) {
+    await realClick('.dl__btn')
+    await waitFor("!!document.querySelector('.dl__pop')", 8000)
+  }
+  check('กด PDF ได้', await clickOpt('PDF'))
 
   const files = await waitFile('.pdf')
   if (!files.length) {
-    // เปิดเมนูดูข้อความสถานะ/ข้อผิดพลาดที่ UI รายงานไว้
     await realClick('.dl__btn').catch(() => {})
     await sleep(500)
     const msg = await evaluate("document.querySelector('.dl__status')?.textContent ?? '(ไม่มีข้อความ)'")
@@ -597,17 +593,15 @@ if (total >= 2) {
     check('ได้ไฟล์ .pdf', true, files.join(', '))
   }
   if (files.length) {
-    const path = join(DL, files[0])
-    const bytes = new Uint8Array(readFileSync(path))
+    const bytes = new Uint8Array(readFileSync(join(DL, files[0])))
     check('ไฟล์เป็น PDF จริง (magic %PDF-)', String.fromCharCode(...bytes.slice(0, 5)) === '%PDF-')
     const doc = await PDFDocument.load(bytes)
-    check('เหลือ 1 หน้า ตามที่เลือก', doc.getPageCount() === 1, `ได้ ${doc.getPageCount()} หน้า`)
-    check('ชื่อไฟล์บอกหน้าที่ตัด', /หน้า1\.pdf$/.test(files[0]), files[0])
+    check('ได้ทั้งเล่ม ไม่ใช่หน้าเดียว', doc.getPageCount() === total, `ได้ ${doc.getPageCount()} / ${total} หน้า`)
+    check('ชื่อไฟล์ไม่มีเลขหน้าต่อท้าย (ไม่ได้ตัดหน้า)', !/หน้า\d*\.pdf$/.test(files[0]), files[0])
   }
-  await shot('06-after-pdf.png')
-} else {
-  skipCheck('ดาวน์โหลด PDF เฉพาะหน้า', `เอกสารมี ${total} หน้า`)
+  await shot('08-after-pdf.png')
 }
+
 
 await cleanup()
 

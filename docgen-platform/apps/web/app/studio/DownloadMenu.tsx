@@ -1,12 +1,32 @@
 'use client'
 
 /**
- * ปุ่มดาวน์โหลดแบบไอคอน — คลิกแล้วค่อยเลือกรูปแบบและหน้าที่ต้องการ
+ * ปุ่มดาวน์โหลดแบบไอคอน — คลิกแล้วค่อยเลือกรูปแบบ
  *
  * ── ทำไมเปลี่ยนจาก dropdown เป็นเมนูไอคอน ───────────────────────
  *   เดิมเป็น `<select>` กว้าง ~290px กินพื้นที่แถบเครื่องมือของพรีวิว
  *   และบีบจนหัวการ์ดสูงเปล่า ๆ
  *   ใหม่: ไอคอนวงกลมตัวเดียวในแถบซูม · รูปแบบโผล่หลังคลิก
+ *
+ * ── กติกาใหม่: 3 ตัวเลือก (ผู้ใช้สั่ง) ──────────────────────────
+ *   · **PDF** / **Word** — ส่งออก**ทั้งเล่ม**ทันที ไม่มีการเลือกหน้า
+ *     Word จัดหน้าใหม่เองตอนเปิดอยู่แล้ว ตัดหน้าไปก็ไม่มีผล
+ *   · **รูปภาพ** — คลิกแล้วค่อยเปิดกล่อง "หน้าที่ต้องการ" **ใต้ปุ่มนี้**
+ *     แล้วดาวน์โหลดตามจำนวนหน้าที่เลือก:
+ *       · 1 หน้า → ไฟล์ `.png` ไฟล์เดียว
+ *       · มากกว่า 1 หน้า → ไฟล์ `.zip` (รูปแยกกันข้างใน)
+ *     ตัวเลือก "ZIP" เป็นตัวเลือกแยง จึงถูกตัดออกตามกติกาข้างบน
+ *     (เดิมมี 4 ตัวเลือก: PDF · Word · รูปภาพ · ZIP)
+ *
+ * ── ทำไมกล่อง "หน้าที่ต้องการ" ถึงซ่อนไว้จนกว่าจะคลิกรูปภาพ ──────
+ *   เดิมกล่องนี้อยู่บนสุดตลอด แล้ว**ซ่อน/โชว์ตามรูปแบบที่เมาส์ชี้** (`peek`)
+ *   ตอนชี้ Word → กล่องหาย → เมนูสูงลดลง ~121px → ปุ่มที่เมาส์ชี้ขยับขึ้นมาทับ
+ *   → เมาส์หลุดจากปุ่มเดิม → กลับไปชี้ปุ่มเดิม → กล่องกลับมา → **กระพริบไม่สิ้นสุด**
+ *   (ผู้ใช้รายงานเรื่องนี้ เคยแก้ครั้งแรกด้วยการคงกล่องไว้ + `disabled`)
+ *   ตอนนี้ผู้ใช้สั่งให้กลับมาซ่อน แต่**ซ่อนด้วยการคลิก ไม่ใช่ hover**
+ *   เพราะ hover แล้วขยับ = วงจรเดิมกลับมา ส่วนคลิกแล้วขยับต่ำที่ต่างกัน:
+ *   เมนูที่เปิดค้างไว้จะไม่มีอะไรขยับเลยตอนเลื่อนเมาส์ผ่านปุ่ม
+ *   และกล่องที่โผล่อยู่**ใต้**ปุ่มรูปภาพ จึงไม่ดันปุ่มที่เมาส์ชี้อยู่
  *
  * ── ทำไม PDF/DOCX ต้องเรนเดอร์ใหม่ทุกครั้ง ──────────────────────
  *   ตัวอย่างบนจอคือ PDF ฉบับเดียว แต่ DOCX ไม่เคยถูกสร้างมา
@@ -16,22 +36,17 @@
  * ── ทำไมรูปไม่ต้องเรนเดอร์ใหม่ ────────────────────────────────
  *   หน้าเอกสารถูกวาดอยู่ใน canvas อยู่แล้ว → ตัดออกมาเป็น PNG ได้เลย
  *
- * ── เลือกหน้า + รวม ZIP ───────────────────────────────────────
- *   · เขียนช่วงหน้าได้ (`1-3, 5, 8-`) — เหมาะกับเอกสารหลายสิบหน้า
- *     ชิปรายหน้าใช้ไม่ได้จริงเมื่อมี 100 หน้า
- *   · PDF ตัดหน้าให้ด้้วย pdf-lib ฝั่งเบราว์เซอร์ (ไม่ยิง API ใหม่)
- *   · ZIP เก็บด้วย fflate แบบ `level: 0` เพราะ PNG บีบมาแล้ว บีบซ้ำไม่มีผล
- *   · **Word ตัดหน้าไม่ได้** — Word จัดหน้าใหม่เองตอนเปิด
- *     จึงซ่อนตัวเลือกหน้าตอนเลือก Word แทนที่จะให้ผู้ใช้เลือกแล้วไม่มีผล
+ * ── เขียนช่วงหน้าได้ (`1-3, 5, 8-`) ────────────────────────────
+ *   เหมาะกับเอกสารหลายสิบหน้า ชิปรายหน้าใช้ไม่ได้จริงเมื่อมี 100 หน้า
+ *   ZIP เก็บด้วย fflate แบบ `level: 0` เพราะ PNG บีบมาแล้ว บีบซ้ำไม่มีผล
  */
 
 import { useEffect, useRef, useState } from 'react'
 import { api, waitForRender, ApiError } from './lib/api'
 import { allPages, describeSelection, pageSuffix, parsePageRange } from './lib/pages'
-import { pickPdfPages } from './lib/pdf-pages'
 import { blobToBytes, makeZip } from './lib/zip'
 
-type Format = 'pdf' | 'docx' | 'png' | 'zip'
+type Format = 'pdf' | 'docx' | 'png'
 
 interface Spec {
   /** ชื่อย่อบนเครื่องหมายชนิดไฟล์ */
@@ -42,19 +57,16 @@ interface Spec {
   hint: string
   /** สีเครื่องหมาย (ตรงกับสีจริงของโปรแกรมนั้น) */
   color: string
-  /** เลือกหน้าได้ไหม — Word ตัดหน้าไม่ได้ */
-  pageable: boolean
 }
 
 const SPEC: Record<Format, Spec> = {
-  pdf: { badge: 'PDF', name: 'PDF', hint: 'ฉบับส่งมอบ', color: '#d64545', pageable: true },
-  docx: { badge: 'DOC', name: 'Word', hint: 'แก้ต่อได้', color: '#2b579a', pageable: false },
-  png: { badge: 'PNG', name: 'รูปภาพ', hint: 'แยกไฟล์ทีละหน้า', color: '#2e8b57', pageable: true },
-  zip: { badge: 'ZIP', name: 'ZIP รวมทุกหน้า', hint: 'รูปภาพไฟล์เดียว', color: '#8a6d1f', pageable: true },
+  pdf: { badge: 'PDF', name: 'PDF', hint: 'ฉบับส่งมอบ ทั้งเล่ม', color: '#d64545' },
+  docx: { badge: 'DOC', name: 'Word', hint: 'แก้ต่อได้ ทั้งเล่ม', color: '#2b579a' },
+  png: { badge: 'PNG', name: 'รูปภาพ', hint: 'เลือกหน้าที่ต้องการ', color: '#2e8b57' },
 }
 
-/** ลำดับที่แสดง: PDF · Word · รูปภาพ · ZIP */
-const ORDER: Format[] = ['pdf', 'docx', 'png', 'zip']
+/** ลำดับที่แสดง: PDF · Word · รูปภาพ */
+const ORDER: Format[] = ['pdf', 'docx', 'png']
 
 /** ไอคอนลูกศรลงหน้ากระดาษ (ตรงกับปุ่มดาวน์โหลดของเบราว์เซอร์) */
 const DownloadIcon = () => (
@@ -101,13 +113,21 @@ export default function DownloadMenu({
   const [error, setError] = useState<string | null>(null)
   /** ข้อความช่วงหน้า — ว่าง = ทุกหน้า */
   const [range, setRange] = useState('')
-  /** รูปแบบที่ผู้ใช้ชี้ไว้ (ค่าเริ่มต้นแค่เอาไว้สลับสี ไม่กดอะไรทันที) */
-  const [peek, setPeek] = useState<Format>('pdf')
+  /**
+   * กล่อง "หน้าที่ต้องการ" เปิดหรือยัง
+   *
+   * ⚠️ เปิดด้วย**การคลิกปุ่มรูปภาพ**เท่านั้น ห้ามผูกกับ hover
+   *    เคยผูกกับ hover แล้วเกิดวงจรกระพริบไม่สิ้นสุด
+   *    (ดูคอมเมนต์หัวไฟล์เรื่องซ่อนกล่อง "หน้าที่ต้องการ")
+   */
+  const [imgOpen, setImgOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
   const stem = label.replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80) || 'เอกสาร'
   const parsed = parsePageRange(range, pageCount)
   const pages = parsed.ok ? parsed.pages : []
+  /** จำนวนหน้าที่จะได้จริง — ว่าง = ทุกหน้า */
+  const wantCount = pages.length > 0 ? pages.length : pageCount
 
   /* ── ปิดเมนูเมื่อคลิกที่อื่น / กด Esc ─────────────────────────── */
   useEffect(() => {
@@ -126,7 +146,7 @@ export default function DownloadMenu({
     }
   }, [open])
 
-  /** เรนเดอร์ใหม่ → ดึงไฟล์กลับมาเป็น bytes (ถ้าต้องตัดหน้า) */
+  /** เรนเดอร์ใหม่ → ดึงไฟล์กลับมาเป็น bytes */
   async function renderFresh(format: 'pdf' | 'docx') {
     const { _id } = await api.createDocument({ templateId, data: data(), outputFormat: format, label })
     const doc = await waitForRender(_id, (s) => setStatus(`สถานะ: ${s}`))
@@ -144,25 +164,16 @@ export default function DownloadMenu({
     return blob
   }
 
+  /** PDF / Word — ส่งออกทั้งเล่ม ไม่ตัดหน้า */
   async function downloadPdfOrDocx(format: 'pdf' | 'docx') {
     setBusy(true)
     setError(null)
     setStatus('กำลังเรนเดอร์ใหม่…')
     try {
       const blob = await renderFresh(format)
-      let out = blob
-      let name = `${stem}.${format}`
-
-      // ตัดหน้าได้เฉพาะ PDF — Word จัดหน้าใหม่เองตอนเปิด ตัดไปก็ไม่มีผล
-      if (format === 'pdf' && pages.length > 0 && pages.length < pageCount) {
-        setStatus('กำลังตัดหน้า…')
-        const cut = await pickPdfPages(await blobToBytes(blob), pages)
-        out = new Blob([cut.slice().buffer as ArrayBuffer], { type: 'application/pdf' })
-        name = `${stem}${pageSuffix(pages, pageCount)}.pdf`
-      }
-
-      saveBlob(out, name)
-      setStatus(`ได้ ${name} แล้ว`)
+      const name = `${stem}.${format}`
+      saveBlob(blob, name)
+      setStatus(`ได้ ${name} (ทั้งเล่ม) แล้ว`)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e))
       setStatus(null)
@@ -171,7 +182,17 @@ export default function DownloadMenu({
     }
   }
 
-  async function downloadImages(asZip: boolean) {
+  /**
+   * รูปภาพ — 1 หน้าได้ `.png` ไฟล์เดียว · มากกว่า 1 หน้าได้ `.zip`
+   *
+   * ⚠️ เลือกรูปแบบไฟล์เองตามจำนวนหน้า ไม่ต้องมีตัวเลือก ZIP แยก
+   *    (ผู้ใช้สั่ง: "ถ้ามีมากกว่า 1 รูป ให้ส่งออกมาเป็น zip ถ้าเลือกรูปเดียวส่งออกมาเป็น file รูป")
+   */
+  async function downloadImages() {
+    if (!parsed.ok) {
+      setError(parsed.reason)
+      return
+    }
     setBusy(true)
     setError(null)
     setStatus('กำลังสร้างรูป…')
@@ -181,15 +202,11 @@ export default function DownloadMenu({
       // (ใช้ allPages เพราะ pdf.count เป็นตัวเลข ไม่ใช่ array)
       const want = pages.length > 0 ? pages : allPages(pdf.count)
 
-      if (!asZip) {
-        for (const n of want) {
-          setStatus(`กำลังสร้างรูป… ${want.indexOf(n) + 1}/${want.length}`)
-          const blob = await pdf.toPng(n, 2)
-          saveBlob(blob, `${stem}-หน้า${n}.png`)
-          // เว้นสักครู่กันเบราว์เซอร์ไม่ค้างจากการดาวน์โหลดรัว ๆ
-          await new Promise((r) => setTimeout(r, 350))
-        }
-        setStatus(`ได้ ${want.length} ไฟล์ PNG แล้ว`)
+      if (want.length === 1) {
+        setStatus('กำลังสร้างรูป…')
+        const name = `${stem}-หน้า${want[0]}.png`
+        saveBlob(await pdf.toPng(want[0], 2), name)
+        setStatus(`ได้ ${name} แล้ว`)
         return
       }
 
@@ -211,18 +228,15 @@ export default function DownloadMenu({
   }
 
   const pick = (format: Format) => {
-    if (!parsed.ok) {
-      setError(parsed.reason)
+    if (format === 'png') {
+      // คลิกครั้งแรก = เปิดกล่องเลือกหน้า (ยังไม่ดาวน์โหลด)
+      setError(null)
+      setImgOpen(true)
       return
     }
-    setError(null)
     setOpen(false)
-    if (format === 'png') void downloadImages(false)
-    else if (format === 'zip') void downloadImages(true)
-    else void downloadPdfOrDocx(format)
+    void downloadPdfOrDocx(format)
   }
-
-  const showRange = SPEC[peek].pageable && pageCount > 0
 
   return (
     <div className="dl" ref={wrapRef}>
@@ -246,75 +260,15 @@ export default function DownloadMenu({
             ดาวน์โหลด
           </div>
 
-          {/* ── เลือกหน้า ── */}
-          <div className="dl__range">
-            <div className="dl__rangehead">
-              <span>หน้าที่ต้องการ</span>
-              <span className="dl__count">{pageCount > 0 ? describeSelection(pages, pageCount) : 'ยังไม่มีหน้า'}</span>
-            </div>
-            {/**
-             * ⚠️ **กล่องนี้ต้องอยู่ตลอดเวลา ห้ามซ่อนเมื่อรูปแบบที่เลือกไม่รองรับการตัดหน้า**
-             *
-             *   เคยพั้งมาแล้ว (ผู้ใช้รายงาน): เมื่อเมาส์ไปโดนไอคอน Word/รูปภาพ/ZIP
-             *   `peek` เปลี่ยน → `showRange` กลายเป็น false → กล่องนี้**หายไป**
-             *   เมนูสูงลดลง ~121px → ปุ่มรูปแบบที่อยู่ข้างล่าง**ขยับขึ้นมาทับเมาส์**
-             *   → เมาส์หลุดจากปุ่มเดิม → peek เปลี่ยนกลับ → กล่องกลับมา → ปุ่มขยับลง
-             *   เกิดวนไปมาไม่สิ้นสุด (กระพริบ) และกดช่อง "หน้าที่ต้องการ" ไม่ได้เลย
-             *
-             *   วิธีแก้: คงโครงสร้างไว้เสมอ แต่**ปิดใช้งาน**ช่องกับปุ่มตอนที่ใช้ไม่ได้
-             *   แล้วบอกเหตุผลในบรรทัดใต้ช่อง — ผู้ใช้ยังเห็นช่องอยู่ ยังอ่านข้อความได้
-             *   และความสูงเมนูคงที่ไม่ขยับ
-             */}
-            <input
-              className="dl__rangeinput"
-              value={range}
-              onChange={(e) => setRange(e.target.value)}
-              placeholder={`ทั้งหมด เช่น 1-3, 5`}
-              aria-label="ช่วงหน้าที่ต้องการ"
-              disabled={busy || !showRange}
-            />
-            <div className="dl__quick">
-              <button className="ghost" onClick={() => setRange('')} disabled={busy || !showRange}>
-                ทุกหน้า
-              </button>
-              <button className="ghost" onClick={() => setRange('1')} disabled={busy || !showRange}>
-                หน้าแรก
-              </button>
-              <button className="ghost" onClick={() => setRange(`1-${pageCount}`)} disabled={busy || !showRange}>
-                1–{pageCount}
-              </button>
-              {pageCount > 1 && (
-                <button
-                  className="ghost"
-                  onClick={() => setRange(`2-${pageCount}`)}
-                  disabled={busy || !showRange}
-                  title="ตัดหน้าแรก (หน้าปก) ออก"
-                >
-                  ไม่เอาปก
-                </button>
-              )}
-            </div>
-            <p className={`dl__hint${showRange && !parsed.ok ? ' dl__hint--err' : ''}`}>
-              {!showRange
-                ? SPEC[peek].pageable
-                  ? 'ยังไม่มีตัวอย่างบนจอ — ดาวน์โหลดได้ทั้งฉบับเท่านั้น'
-                  : `${SPEC[peek].name} ไม่ใช้การเลือกหน้า — จัดหน้าใหม่ตอนเปิด`
-                : parsed.ok
-                  ? `จะได้ ${pages.length} หน้า`
-                  : parsed.reason}
-            </p>
-          </div>
-
           <div className="dl__grid">
             {ORDER.map((f) => (
               <button
                 key={f}
-                className="dl__opt"
-                data-peek={peek === f}
+                className={`dl__opt${f === 'png' ? ' dl__opt--wide' : ''}`}
+                data-open={f === 'png' && imgOpen}
                 role="menuitem"
+                aria-expanded={f === 'png' ? imgOpen : undefined}
                 disabled={busy}
-                onMouseEnter={() => setPeek(f)}
-                onFocus={() => setPeek(f)}
                 onClick={() => pick(f)}
               >
                 <span className="dl__badge" style={{ background: SPEC[f].color }}>
@@ -322,14 +276,75 @@ export default function DownloadMenu({
                 </span>
                 <span>
                   {SPEC[f].name}
-                  <small>
-                    {SPEC[f].pageable && pageCount > 0 && pages.length < pageCount
-                      ? `${pages.length} หน้าที่เลือก`
-                      : SPEC[f].hint}
-                  </small>
+                  <small>{SPEC[f].hint}</small>
                 </span>
               </button>
             ))}
+
+            {/**
+             * กล่อง "หน้าที่ต้องการ" — โผล่**ใต้ปุ่มรูปภาพ** และโผล่**เมื่อคลิก**เท่านั้น
+             * ไม่ผูกกับ hover เด็ดขาด (เคยวนจนกระพริบไม่สิ้นสุด)
+             */}
+            {imgOpen && (
+              <div className="dl__imgpanel">
+                <div className="dl__range">
+                  <div className="dl__rangehead">
+                    <span>หน้าที่ต้องการ</span>
+                    <span className="dl__count">
+                      {pageCount > 0 ? describeSelection(pages, pageCount) : 'ยังไม่มีหน้า'}
+                    </span>
+                  </div>
+                  <input
+                    className="dl__rangeinput"
+                    value={range}
+                    onChange={(e) => setRange(e.target.value)}
+                    placeholder={`ทั้งหมด เช่น 1-3, 5`}
+                    aria-label="ช่วงหน้าที่ต้องการ"
+                    disabled={busy}
+                  />
+                  <div className="dl__quick">
+                    <button className="ghost" onClick={() => setRange('')} disabled={busy}>
+                      ทุกหน้า
+                    </button>
+                    <button className="ghost" onClick={() => setRange('1')} disabled={busy}>
+                      หน้าแรก
+                    </button>
+                    <button className="ghost" onClick={() => setRange(`1-${pageCount}`)} disabled={busy}>
+                      1–{pageCount}
+                    </button>
+                    {pageCount > 1 && (
+                      <button
+                        className="ghost"
+                        onClick={() => setRange(`2-${pageCount}`)}
+                        disabled={busy}
+                        title="ตัดหน้าแรก (หน้าปก) ออก"
+                      >
+                        ไม่เอาปก
+                      </button>
+                    )}
+                  </div>
+                  <p className={`dl__hint${!parsed.ok ? ' dl__hint--err' : ''}`}>
+                    {pageCount === 0
+                      ? 'ยังไม่มีตัวอย่างบนจอ — ดาวน์โหลดได้ทั้งฉบับเท่านั้น'
+                      : parsed.ok
+                        ? wantCount > 1
+                          ? `จะได้ ${wantCount} หน้า · รวมเป็นไฟล์ ZIP`
+                          : 'จะได้ 1 หน้า · ไฟล์รูปเดียว'
+                        : parsed.reason}
+                  </p>
+                </div>
+                <button
+                  className="dl__go"
+                  onClick={() => {
+                    setOpen(false)
+                    void downloadImages()
+                  }}
+                  disabled={busy || !parsed.ok || pageCount === 0}
+                >
+                  {wantCount > 1 ? `ดาวน์โหลด ${wantCount} รูปเป็น ZIP` : 'ดาวน์โหลดรูปภาพ (PNG)'}
+                </button>
+              </div>
+            )}
           </div>
 
           {(status || error) && (

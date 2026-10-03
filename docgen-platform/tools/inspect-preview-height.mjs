@@ -147,7 +147,11 @@ const openTemplate = async (name) => {
  *    → ยุบมันก่อนวัด (กดปุ่ม**ตัวสุดท้าย**ใน `.urlbar__actions` = ปุ่ม "ซ่อน"
  *       เลี่ยงการค้นด้วยชื่อไทย เพราะพิมพ์ผิดตัวเดียวก็หาไม่เจจากชื่อ)
  */
-await click(`[...document.querySelectorAll('.urlbar__actions button')].at(-1)`)
+// ตอนนี้แผงย่อเป็นค่าเริ่มต้นอยู่แล้ว (ไม่บังปุ่มหน้าเว็บ) — ถ้ามันกางอยู่ก็ยุบก่อนวัด
+await evaluate(`(() => {
+  if (!document.querySelector('.urlbar__panel')) return
+  ;[...document.querySelectorAll('.urlbar__actions button')].at(-1)?.click()
+})()`)
 await sleep(400)
 
 console.log('เปิดแม่แบบ:', tpl.name)

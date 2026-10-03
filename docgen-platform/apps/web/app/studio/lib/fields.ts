@@ -47,7 +47,7 @@ export function fieldDomId(key: string): string {
  *   ใช้ "ลำดับของช่องตัวแรกในกลุ่ม" แทน ซึ่งเปลี่ยนเฉพาะตอนเพิ่ม/ลบ/ย้ายช่อง
  *   ซึ่งเป็นความตั้งใจของผู้ใช้อยู่แล้ว
  */
-export function groupKey(group: { fields: FieldDef[] }, all: FieldDef[]): string {
+export function groupKey(group: { group: string; fields: FieldDef[] }, all: FieldDef[]): string {
   const idxs = group.fields.map((f) => all.indexOf(f)).filter((i) => i >= 0)
   // กลุ่มสังเคราะห์ (ช่องที่ยังไม่ได้ทำเป็นฟอร์ม) ไม่มีใน all → ใช้ชื่อกลุ่มซึ่งไม่เคยเปลี่ยน
   return `g-${idxs.length ? Math.min(...idxs) : group.group}`

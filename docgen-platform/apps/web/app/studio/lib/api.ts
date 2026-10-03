@@ -606,9 +606,14 @@ export const api = {
    * ประวัติส่วนตัว — เอาไว้กู้ค่าเดิมมาแก้ต่อ
    *
    * @param q คำค้น ค้นทั้งชื่อฉบับและค่าที่กรอก (เช่น ชื่อผู้รับ)
+   * @param page หน้าที่ขอ — คนเดียวมีได้เป็นร้อยฉบับ ต้องให้ server ตัด
    */
-  myHistory: (templateKey: string, q = '') =>
-    call<MyHistory>(`/history/${encodeURIComponent(templateKey)}/mine?q=${encodeURIComponent(q)}`),
+  myHistory: (templateKey: string, q = '', page?: { limit?: number; skip?: number }) => {
+    const p = new URLSearchParams({ q })
+    if (page?.limit) p.set('limit', String(page.limit))
+    if (page?.skip) p.set('skip', String(page.skip))
+    return call<MyHistory>(`/history/${encodeURIComponent(templateKey)}/mine?${p.toString()}`)
+  },
 
   // ── AI ช่วยกรอกข้อมูล ────────────────────────────────────
   llmStatus: () => call<LlmStatus>('/llm/status'),

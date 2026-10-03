@@ -186,6 +186,12 @@ const goHome = async () => {
   //     ถ้ารอแค่นั้น เราจะอ่านค่าก่อน hydration เสร็จ แล้วเห็นผ้าคลุมค้าง + ค่าว่าง)
   const ready = await waitFor("!document.querySelector('.bootveil')", 40000, 150)
   if (!ready) throw new Error('หน้าไม่ hydrate — แถบ URL จะเป็นตัวบอกว่า dev server เสีย')
+  // ⚠️ แผง URL ค่าเริ่มต้น = **ย่อ** (ไม่บังปุ่มหน้าเว็บ) → เทสต์นี้ต้องกางเองก่อน
+  //    (ผู้ใช้ทั่วไปไม่ต้องเจอ แต่เทสต์นี้ทดสอบ**เนื้อหาในแผง** จึงต้องกางเหมือนผู้ใช้ที่กดแท็บ)
+  await evaluate(`(() => {
+    if (document.querySelector('.urlbar__panel')) return
+    document.querySelector('.urlbar__toggle')?.click()
+  })()`)
   await waitFor("!!document.querySelector('.urlbar__panel')", 5000, 100)
 }
 

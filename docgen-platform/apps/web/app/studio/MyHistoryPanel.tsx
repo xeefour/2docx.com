@@ -14,6 +14,17 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { api, type MyHistory } from './lib/api'
+import Pager from './Pager'
+
+/**
+ * กี่ฉบับต่อหน้า
+ *
+ * ผู้ใช้สั่ง: *"ประวัติให้แสดงเฉพาะประวัติของผู้ใช้รายนั้น ๆ ถ้ามีมากๆ ทำเป็น pageination"*
+ * แถวละบรรทัดพร้อมตัวอย่างค่าที่กรอก ถ้ามากกว่านี้ก็ต้องเลื่อนในการ์ดอยู่ดี ๆ แล้ว
+ * และต้องให้ **server** ตัด ไม่ใช่ตัดในเบราว์เซอร์ เพราะแต่ละฉบับแนบ `data` ที่กรอก
+ * (ชื่อผู้รับ ที่อยู่ …) ยิงมาทั้งหมดแล้วเอาไว้แต่ในหน่วยความจำเปล่า ๆ
+ */
+const PAGE_SIZE = 10
 
 const STATUS_TONE: Record<string, string> = {
   done: 'pill ok',
@@ -48,6 +59,14 @@ function previewOf(data: Record<string, unknown>, limit = 3): string[] {
   return out
 }
 
+/** "1–10 จาก 43" — บอกว่าตอนนี้เห็นช่วงไหน */
+function rangeOf(page: number, pageSize: number, total: number): string {
+  if (total === 0) return 'ไม่มีฉบับ'
+  const from = (page - 1) * pageSize + 1
+  const to = Math.min(total, page * pageSize)
+  return `${from}–${to} จาก ${total}`
+}
+
 export default function MyHistoryPanel({
   templateKey,
   onRestore,
@@ -63,6 +82,32 @@ export default function MyHistoryPanel({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
+  /** หน้าปัจจุบัน (เริ่มที่ 1) — server ตัดให้ทุกหน้า */
+  const [page, setPage] = useState(1)
+
+  /**
+   * รีเซ็ตเลขหน้าเมื่อเปลี่ยนแม่แบบหรือพิมพ์คำค้นใหม่ — ทำ**ระหว่าง render** ไม่ใช่ใน useEffect
+   *
+   * ⚠️ ถ้ารีเซ็ตใน `useEffect` ตัว fetch จะยิงไปแล้ว 1 รอบด้วยเลขหน้าของคำค้นเก่า
+   *   แล้วค่อยยิงซ้ำอีกรอบหลังรีเซ็ต (ผลของคำค้นเก่าหายไปเฉย ๆ)
+   *
+   *   React อนุญาตให้เรียก setState ระหว่าง render เพื่อ "ปรับ state ให้ตรงกับค่าที่เปลี่ยน"
+   *   ได้โดยเฉพาะกรณีนี้ (React จะ render ซ้ำในรอบเดียว ไม่วนซ้ำ)
+   */
+  const [ctx, setCtx] = useState(`${templateKey}\u0000${q.trim()}`)
+  const ctxNow = `${templateKey}\u0000${q.trim()}`
+  if (ctx !== ctxNow) {
+    setCtx(ctxNow)
+    setPage(1)
+  }
+
+  const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE))
+  /**
+   * กันเลขหน้าค้างเกิน — เช่น ค้นแล้วเจอ 3 ฉบับ ตอนยังอยู่หน้า 5
+   *   (เกิดได้จริงตอนกดค้นหาใหม่ทั้งที่ยังไม่ทันรีเซ็ต หรือข้อมูลหดลงเอง)
+   */
+  if (page > pageCount) setPage(pageCount)
+
   /**
    * คำค้นที่ยิง API ไปแล้ว — ใช้กันยิงซ้ำ
    *
@@ -72,6 +117,11 @@ export default function MyHistoryPanel({
    *    (เคยเจอ: พิมพ์คำค้นแล้วถึงจะมีข้อมูลปรากฏ)
    */
   const sentQ = useRef<string | null>(null)
+  /**
+   * เลขหน้าที่ยิงไปแล้ว — แยกจาก `sentQ` เพราะกดเปลี่ยนหน้าแล้วต้องยิงใหม่
+   * แม้คำค้นจะยังเป็นคำเดิม (ถ้าใช้ตัวเดียวกัน กดหน้า 2 แล้วจะถูก `return` ทิ้ง)
+   */
+  const sentPage = useRef(0)
   const seq = useRef(0)
 
   /**
@@ -84,13 +134,14 @@ export default function MyHistoryPanel({
   useEffect(() => {
     const t = setTimeout(() => {
       const next = q.trim()
-      if (next === sentQ.current) return
+      if (next === sentQ.current && page === sentPage.current) return
       sentQ.current = next
+      sentPage.current = page
       const mine = ++seq.current
       setLoading(true)
       setError(null)
       void api
-        .myHistory(templateKey, next)
+        .myHistory(templateKey, next, { limit: PAGE_SIZE, skip: (page - 1) * PAGE_SIZE })
         .then((r) => {
           if (mine === seq.current) setData(r)
         })
@@ -102,7 +153,7 @@ export default function MyHistoryPanel({
         })
     }, 350)
     return () => clearTimeout(t)
-  }, [q, templateKey])
+  }, [q, templateKey, page])
 
   const items = data?.items ?? []
 
@@ -113,6 +164,8 @@ export default function MyHistoryPanel({
       <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line)' }}>
         <h2 style={{ margin: '0 0 2px', fontSize: 15 }}>ประวัติของฉัน</h2>
         <p className="muted" style={{ margin: '0 0 10px', fontSize: 12 }}>
+          เฉพาะฉบับที่คุณสั่งเรนเดอร์เองเท่านั้น ไม่มีของคนอื่นปนมา
+          <br />
           ค้นด้วยชื่อผู้รับหรือคำในเอกสาร แล้วกด “แก้ไข” เพื่อเอาค่าเดิมกลับมา
         </p>
         <input
@@ -182,10 +235,29 @@ export default function MyHistoryPanel({
         </ul>
       )}
 
-      {data && items.length > 0 && (
+      {loading && items.length > 0 && (
+        <p className="muted" style={{ padding: '8px 16px', margin: 0, fontSize: 12 }}>
+          กำลังโหลดหน้า {page}…
+        </p>
+      )}
+
+      {data && items.length > 0 && pageCount > 1 && (
+        <Pager
+          page={page}
+          pageCount={pageCount}
+          onChange={setPage}
+          testId="myhistory-pager"
+          summary={`หน้า ${page} / ${pageCount}`}
+        >
+          {rangeOf(page, PAGE_SIZE, data.total)}
+          {q.trim() ? ` · ค้นหา “${q.trim()}”` : ''}
+        </Pager>
+      )}
+
+      {data && items.length > 0 && pageCount <= 1 && (
         <div className="muted" style={{ padding: '10px 16px', fontSize: 12, borderTop: '1px solid var(--line)' }}>
           ทั้งหมด {data.total} ฉบับ
-          {q.trim() ? ` · ค้นหา “${q.trim()}” เจอ ${items.length}` : ''}
+          {q.trim() ? ` · ค้นหา “${q.trim()}” เจอ ${data.total}` : ''}
         </div>
       )}
     </div>

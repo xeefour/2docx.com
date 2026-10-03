@@ -37,6 +37,13 @@ body {
   font-family:
     'Sarabun', 'Noto Sans Thai', 'IBM Plex Sans Thai', -apple-system, BlinkMacSystemFont,
     'Segoe UI', system-ui, sans-serif;
+  /*
+   * เว้นที่ท้ายหน้าไว้ให้แถบ URL ลอยมุมล่างซ้าย (ตอนย่อ)
+   *
+   * ⚠️ ถ้าไม่เว้น เนื้อหาท้ายสุดของหน้าจะถูกแถบทับพอดี
+   *   และผู้ใช้เลื่อนลงสุดแล้วยังกดปุ่มข้างล่างไม่ได้ (แถบสูง ~40px + ขอบ 16px)
+   */
+  padding-bottom: 72px;
   background: var(--bg);
   color: var(--ink);
   font-size: 15px;

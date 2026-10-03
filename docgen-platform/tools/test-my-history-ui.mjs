@@ -10,6 +10,8 @@
  * 4. กด "แก้ไข" → กลับไปแท็บฟอร์ม และค่าถูกกู้กลับมาครบ
  * 5. URL สะท้อนแท็บที่เลือก (?tabs=history / ?tabs=form)
  * 6. ลิงก์ตรง ?tabs=history เปิดแท็บซ้ายถูกตัว
+ * 7. แบ่งหน้า — หน้าละ 10 ฉบับ · กดเลขหน้า 2 แล้วได้เนื้อหาคนละชุด ไม่ซ้ำหน้า 1
+ * 8. ค้นแล้วเลขหน้าต้องถูกรีเซ็ตกลับหน้า 1 (ผลค้นหาน้อยกว่า 10 ฉบับเสมอ)
  */
 import { spawn } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -41,6 +43,15 @@ await redis.set(
   1800,
 )
 const H = { cookie: `docgen_session=${sid}`, 'content-type': 'application/json' }
+/**
+ * ⚠️ header สำหรับ **DELETE**
+ *
+ *   ถ้าส่ง `content-type: application/json` ไปกับ DELETE ที่ไม่มี body
+ *   Fastify จะตอบ 500 "Body cannot be empty when content-type is set to 'application/json'"
+ *   → เก็บกวาดไม่สำเร็จ เอกสารทดสอบค้างในระบบให้ผู้ใช้จริงเจอ
+ *   (เจดียว ๆ: บรรทัดลบเอกสาร/ลบฟอร์มด้านล่างเคยล้มเหลวเงียบ ๆ ทุกครั้งที่รัน)
+ */
+const HD = { cookie: `docgen_session=${sid}` }
 
 const templates = (await (await fetch(`${API}/api/templates`, { headers: H })).json()).items ?? []
 const tpl = templates.find((t) => (t.name ?? '').includes('หัวกระดาษ')) ?? templates[0]
@@ -86,6 +97,31 @@ const created = await (
   })
 ).json()
 console.log(`สร้างเอกสารประวัติไว้ 1 ฉบับ: ${created._id}`)
+
+/**
+ * เติมให้ครบ 2 หน้า (หน้าละ 10 ฉบับ) เพื่อพิสูจน์ว่าแถบแบ่งหน้าทำงานจริง
+ *
+ * ⚠️ ต้องลบทิ้งตอนจบด้วย — ไม่งั้นผู้ใช้จริงเปิด "ผู้ใช้แม่แบบนี้" แล้วเจอขยะ 12 ฉบับ
+ */
+const PAGE_TAG = `หน้า-${Date.now()}`
+const FILLER = 11
+const made = [created._id]
+for (let i = 0; i < FILLER; i++) {
+  const d = await (
+    await fetch(`${API}/api/documents`, {
+      method: 'POST',
+      headers: H,
+      body: JSON.stringify({
+        templateId: tpl.versionId,
+        data: { [FIELD]: `นาย${PAGE_TAG}-${i}` },
+        outputFormat: 'pdf',
+        label: `แบ่งหน้า ${PAGE_TAG} #${i}`,
+      }),
+    })
+  ).json()
+  made.push(d._id)
+}
+console.log(`สร้างเอกสารเติมอีก ${FILLER} ฉบับ (รวม ${made.length} = 2 หน้า)`)
 
 const profile = mkdtempSync(join(tmpdir(), 'cdp-myhist-'))
 const chrome = spawn(
@@ -222,6 +258,39 @@ const hasPreview = await evaluate("!!document.querySelector('.myhist__peek')")
 check('แสดงตัวอย่างค่าที่กรอกไว้ (ให้รู้ว่าเป็นฉบับไหน)', hasPreview)
 await shot('01-list.png')
 
+// ── 2b. แบ่งหน้า ───────────────────────────────────────────────
+console.log('\n[2b] แบ่งหน้า — หน้าละ 10 ฉบับ ไม่ดึงมาทั้งหมด')
+const rangeText = () =>
+  evaluate("document.querySelector('[data-testid=\"myhistory-pager-range\"]')?.textContent?.trim() ?? ''")
+const rowCountNow = () =>
+  evaluate("document.querySelectorAll('[data-testid=\"myhistory-list\"] .myhist__row').length")
+
+check('มีแถบแบ่งหน้า', await waitFor("!!document.querySelector('[data-testid=\"myhistory-pager-page-2\"]')", 8000))
+check('หน้าแรกไม่เกิน 10 แถว', rowCount === 10, `${rowCount} แถว`)
+check('บอกว่าเห็นหน้าไหนของทั้งหมด', (await rangeText()).includes('หน้า 1 / 2'), await rangeText())
+const firstOfPage1 = await evaluate("document.querySelector('.myhist__row')?.textContent ?? ''")
+
+check('กดเลขหน้า 2 ได้', await realClick("document.querySelector('[data-testid=\"myhistory-pager-page-2\"]')"))
+const onPage2 = await waitFor(
+  "document.querySelectorAll('[data-testid=\"myhistory-list\"] .myhist__row').length === 2",
+  10000,
+)
+const rows2 = await rowCountNow()
+check('หน้า 2 เหลือ 2 แถว', onPage2 && rows2 === 2, `${rows2} แถว`)
+check('ข้อความช่วงเปลี่ยนตามหน้า', (await rangeText()).includes('หน้า 2 / 2'), await rangeText())
+const firstOfPage2 = await evaluate("document.querySelector('.myhist__row')?.textContent ?? ''")
+check('เนื้อหาหน้า 2 ไม่ใช่หน้า 1 ซ้ำ', firstOfPage2 !== '' && firstOfPage2 !== firstOfPage1)
+await shot('01b-page2.png')
+
+check('กดกลับหน้า 1 ได้', await realClick("document.querySelector('[data-testid=\"myhistory-pager-page-1\"]')"))
+const backToPage1 = await waitFor(
+  "document.querySelectorAll('[data-testid=\"myhistory-list\"] .myhist__row').length === 10",
+  10000,
+)
+check('หน้า 1 กลับมาครบ 10 แถว', backToPage1)
+check('ปุ่มหน้าก่อนหน้าเปิดอยู่ตอนอยู่หน้า 1',
+  await evaluate("[...document.querySelectorAll('[data-testid=\"myhistory-pager-prev\"]')].some((b) => b.disabled)"))
+
 // ── 3. URL ───────────────────────────────────────────────────
 console.log('\n[3] URL สะท้อนแท็บซ้าย')
 const url1 = await evaluate("location.search")
@@ -237,9 +306,22 @@ const found = await waitFor(
 )
 check('ค้นด้วยชื่อผู้รับแล้วเจอฉบับนั้น', found)
 await shot('02-search.png')
+// ── 4b. ค้นแล้วต้องกลับไปหน้าเดียว ──────────────────────────────
+console.log('\n[4b] ค้นแล้วเลขหน้าต้องถูกรีเซ็ต (ผลค้นหาน้อยกว่า 10 ฉบับเสมอ)')
+check(
+  'เจอแค่หน้าเดียว → แถบแบ่งหน้าหาย',
+  await waitFor("!document.querySelector('[data-testid=\"myhistory-pager-page-2\"]')", 6000),
+)
+await setSearch('')
+const backFull = await waitFor("document.querySelectorAll('.myhist__row').length === 10", 10000)
+check('ล้างคำค้นแล้วกลับหน้า 1 ครบ 10 แถว', backFull)
+check('กลับมาที่หน้า 1 ของ 2', (await rangeText()).includes('หน้า 1 / 2'), await rangeText())
 
 // ── 5. กดแก้ไข ──────────────────────────────────────────────
 console.log('\n[5] กด "แก้ไข" แล้วค่าต้องกลับเข้าฟอร์ม')
+// ค้นใหม่ก่อน เพราะข้อ 4b ล้างคำค้นไปแล้ว
+await setSearch(VALUE)
+await waitFor("document.querySelectorAll('.myhist__row').length === 1", 10000)
 const before = await evaluate(`(() => {
   const el = document.querySelector('[data-testid="myhistory-restore"]')
   if (!el) return null
@@ -283,7 +365,15 @@ check('ฝั่งขวาไม่ถูกเปิดผิดเป็น�
 await send('Browser.close').catch(() => {})
 chrome.kill()
 // เก็บกวาด: ลบช่องกรอกที่สร้างไว้ตอนต้นสคริปต์ คืนสภาพเดิม
-await fetch(`${API}/api/form/${key}`, { method: 'DELETE', headers: H }).catch(() => {})
+// เก็บกวาด: ลบเอกสารที่สคริปต์นี้สร้าง (ไม่ทิ้งขยะไว้ให้เจอตอนเปิดประวัติจริง)
+let wiped = 0
+for (const id of made) {
+  const r = await fetch(`${API}/api/documents/${id}`, { method: 'DELETE', headers: HD }).catch(() => null)
+  if (r?.status === 204 || r?.status === 200) wiped++
+}
+console.log(`ลบเอกสารทดสอบแล้ว ${wiped}/${made.length} ฉบับ`)
+// เก็บกวาด: ลบช่องกรอกที่สร้างไว้ตอนต้นสคริปต์ คืนสภาพเดิม
+await fetch(`${API}/api/form/${key}`, { method: 'DELETE', headers: HD }).catch(() => {})
 await redis.del(`session:${sid}`)
 redis.disconnect()
 

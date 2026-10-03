@@ -87,7 +87,17 @@ export default function AppStatus({ children }: { children: ReactNode }) {
   useEffect(() => {
     setMounted(true)
     setHref(window.location.href)
-    setOpen(localStorage.getItem('appstatus.urlbar') !== 'collapsed')
+    /**
+     * ⚠️ ค่าเริ่มต้น = **ย่อ** ไม่ใช่กาง
+     *
+     *   เดิมกางทันทีทุกคน (`!== 'collapsed'` = กาง) และมันลอยทับมุมล่างซ้าย
+     *   ซึ่งตรงกับกอลัมน์ซ้ายของหน้าแก้แม่แบบ → บังปุ่มท้ายหน้า (ผู้ใช้เจอ: เห็นปุ่มแต่กดไม่ได้)
+     *   เช่น ปุ่มเลขหน้าของแถบแบ่งหน้าในแท็บประวัติ
+     *
+     *   ตอนนี้ผู้ใช้กดแท็บเล็ก ๆ มุมล่างเพื่อกางเองได้ และระบบจะกางให้เอง
+     *   ตอนที่มีปัญหาจริง (หน้าค้างเกินกำหนด / มี error) เพราะตอนนั้นผู้ใช้ต้องการมันมากกว่า
+     */
+    setOpen(localStorage.getItem('appstatus.urlbar') === 'open')
   }, [])
 
   useEffect(() => {
@@ -204,6 +214,8 @@ export default function AppStatus({ children }: { children: ReactNode }) {
     const t = setTimeout(() => {
       setSlow(true)
       setVeil(false)
+      // กางแผงให้เองตอนหน้าค้าง — ค่าเริ่มต้นคือย่อ แต่ตอนนี้ผู้ใช้ต้องเห็นทางออกมากกว่า
+      setOpen(true)
     }, WATCHDOG_MS)
     return () => clearTimeout(t)
   }, [pending])
@@ -227,6 +239,22 @@ export default function AppStatus({ children }: { children: ReactNode }) {
       window.removeEventListener('error', onError)
       window.removeEventListener('unhandledrejection', onReject)
     }
+  }, [])
+
+  /**
+   * คลิกที่ไหนก็ได้ที่อยู่นอกแถบ = เก็บแถบกลับทันที
+   *
+   * ฟังด้วย `pointerdown` (ไม่ใช่ `click`) เพราะแผงต้องหายไป**ก่อน**ที่เบราว์เซอร์
+   * จะตัดสินว่าจะส่ง `click` ให้ใคร → คลิกครั้งแรกที่ทับแผงอยู่จึงได้กดปุ่มที่อยู่ข้างใต้จริง
+   * (ถ้ารอ `click` คลิกแรกจะถูกแผงกินไปเปล่า ๆ ผู้ใช้ต้องกดสองครั้ง)
+   */
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      if ((e.target as HTMLElement | null)?.closest?.('.urlbar')) return
+      setOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown, true)
+    return () => document.removeEventListener('pointerdown', onDown, true)
   }, [])
 
   /* ── คัดลอก ─────────────────────────────────────────────── */

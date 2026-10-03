@@ -335,6 +335,13 @@ export type MyTemplateHistory = z.infer<typeof MyTemplateHistory>
 /** ค้นหาในประวัติ — คำค้นว่าง = ไม่กรอง */
 export const MyHistoryQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(30),
+  /**
+   * ข้ามกี่ฉบับ — ใช้แบ่งหน้า
+   *
+   * ⚠️ เพดานไว้ที่ 50,000 เหมือน `/history/:key` เพราะ `skip` ต้องไล่ทีละเอกสาร
+   *    ถ้าไม่เพดาน ผู้ใช้พิมพ์ `?skip=99999999` แล้วค้างจน API ตอบไม่ทัน
+   */
+  skip: z.coerce.number().int().min(0).max(50_000).default(0),
   /** ค้นทั้งชื่อฉบับและค่าที่กรอกไว้ (เช่น ชื่อผู้รับ) */
   q: z.string().max(200).default(''),
 })

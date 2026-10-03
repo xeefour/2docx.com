@@ -95,6 +95,11 @@ const setLatency = (ms) => send('Network.emulateNetworkConditions', {
 const goHome = async () => {
   await send('Page.navigate', { url: `${WEB}/` })
   await waitFor("!document.querySelector('.bootveil')", 40000, 150)
+  // แผง URL ย่อเป็นค่าเริ่มต้น — สคริปต์นี้ต้องการถ่ายแผงที่กางอยู่ จึงกดแท็บให้มันกาง
+  await evaluate(`(() => {
+    if (document.querySelector('.urlbar__panel')) return
+    document.querySelector('.urlbar__toggle')?.click()
+  })()`)
   await waitFor("!!document.querySelector('.urlbar__panel')", 5000, 100)
 }
 

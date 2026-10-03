@@ -866,11 +866,19 @@ export async function templateHistory(
  *
  * ⚠️ กรอง `createdBy` เสมอ ค่าที่กรอกของคนอื่นเป็นข้อมูลส่วนตัว
  *    (ชื่อผู้รับ เลขบัตร ที่อยู่) ห้ามหลุดออกไปกับการค้นหา
+ *
+ * ── แบ่งหน้า ─────────────────────────────────────────────────────────
+ * คนเดียวสั่งเรนเดอร์แม่แบบเดียวกันได้เป็นร้อยฉบับ (ผู้ใช้สั่งว่า *"ถ้ามีมากๆ
+ * ทำเป็น pageination"*) ถ้ายิงมาทั้งหมดทุกครั้งที่เปลี่ยนหน้า
+ * จะทั้งช้าลงและดึง `data` ทั้งหมดมาทิ้งในหน่วยความจำเปล่า ๆ
+ *
+ * → ให้ Mongo ตัดให้เสมอ (`skip` + `limit`) ทั้งโหมดไม่ค้นและโหมดค้น
+ *   `total` ยังเป็นจำนวนทั้งหมด (ไม่ใช่จำนวนหน้านี้) เพื่อให้หน้าจอคำนวณจำนวนหน้าได้
  */
 export async function myTemplateHistory(
   app: App,
   templateKey: string,
-  query: { limit: number; q: string },
+  query: { limit: number; skip: number; q: string },
   req: Req,
 ): Promise<MyTemplateHistory> {
   const { sub } = who(req)
@@ -889,7 +897,7 @@ export async function myTemplateHistory(
    */
   if (!q) {
     const [rows, total] = await Promise.all([
-      col.find(base).sort({ createdAt: -1 }).limit(query.limit).toArray(),
+      col.find(base).sort({ createdAt: -1 }).skip(query.skip).limit(query.limit).toArray(),
       col.countDocuments(base),
     ])
     return { items: rows.map(toHistoryItem), total }
@@ -921,7 +929,7 @@ export async function myTemplateHistory(
     return searchableText(d.data).includes(needle)
   })
 
-  return { items: hit.slice(0, query.limit).map(toHistoryItem), total: hit.length }
+  return { items: hit.slice(query.skip, query.skip + query.limit).map(toHistoryItem), total: hit.length }
 }
 
 /** จำนวนฉบับสูงสุดที่ยอมสแกนตอนค้นหา */

@@ -683,6 +683,48 @@ tbody tr:hover {
   border-bottom: 1px solid var(--line);
   overflow-x: auto;
 }
+/**
+ * กลุ่มปุ่มแท็บ
+ *
+ * ⚠️ `display: contents` สำคัญ
+ *   ต้องให้ปุ่มแท็บเป็น flex item ของ `.tabs` **โดยตรง**
+ *   เพื่อให้ `gap`, `overflow-x` และ `margin-left: auto` ของปุ่มท้ายแถบทำงานเหมือนเดิม
+ *   ถ้าเป็นกล่องปกติ (block/flex item) ปุ่มแท็บทั้งหมดจะถูกยุบให้เหลือช่องเดียว
+ *   และ `test-editor-panes` ที่วัดความสูงแถบแท็บจะได้ค่าผิด
+ */
+.tabs__list {
+  display: contents;
+}
+/** ปุ่มดาวบุ๊กมาร์กที่ปลายขวาของแถบแท็บ (หน้าแก้ไขแม่แบบ) */
+.tabs__star {
+  /*
+   * ⚠️ ต้องกำหนด `color` เอง — กฎ `button { color: #fff }` ข้างบนจะทำให้
+   *   ดาวที่ยังไม่ได้กดกลายเป็นสีขาวบนพื้นขาว (มองไม่เห็น)
+   */
+  color: var(--ink-2);
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 6px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  /* ไม่ให้ยืด/หดจนบีบแท็บอื่นตอนจอแคบ */
+  flex: none;
+  /**
+   * ⚠️ ดันไปชิดขอบขวาของแถบ (ผู้ใช้สั่ง *"เพิ่มปุ่มสัญาลักษ์ bookmark ขวามือ"*)
+   *   ไม่งั้นมันจะเกาะติดกับแท็บตัวสุดท้าย (ดูซ้าย ๆ) ไม่ใช่อยู่ปลายแถบ
+   *   ตอนจอแคบจนแท็บล้น ค่า auto จะกลายเป็น 0 เอง → ดาวยังกดได้ ไม่หายไป
+   */
+  margin-left: auto;
+}
+.tabs__star:hover:not(:disabled) {
+  color: var(--warn);
+  background: var(--bg);
+}
+.tabs__star[aria-pressed='true'] {
+  color: var(--warn);
+}
 .tabs__tab {
   background: none;
   border: none;

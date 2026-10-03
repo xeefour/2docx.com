@@ -223,7 +223,13 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
     [bookmarks],
   )
 
-  /** กดดาว → เพิ่ม/ลบบุ๊กมาร์ก (เรียกจากปุ่มในตาราง) */
+  /**
+   * กดดาว → เพิ่ม/ลบบุ๊กมาร์ก (เรียกจากปุ่มในตาราง และจากปุ่มดาวในหน้าแก้ไข)
+   *
+   * ⚠️ ต้อง `throw` ต่อให้ผู้เรียกด้วย
+   *   หน้าแก้ไข `return` ออกจากหน้านี้ไปก่อนถึงจุดที่เรนเดอร์ `error`
+   *   ถ้ากลืน error ทิ้ง ผู้ใช้จะเห็นดาวไม่เปลี่ยนและไม่มีข้อความบอกว่าเพราะอะไร
+   */
   async function toggleBookmark(t: Template) {
     const key = templateKeyOf(t)
     try {
@@ -237,6 +243,7 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
       }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e))
+      throw e
     }
   }
 
@@ -278,6 +285,14 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
           //   แล้วแท็บที่เลือกไว้ของแม่แบบก่อนหน้าจะค้างมาด้วย
           key={templateKeyOf(open)}
           template={open}
+          /*
+           * ดาวบุ๊กมาร์กในหน้าแก้ไข (ผู้ใช้สั่ง: *"เพิ่มปุ่มสัญาลักษ์ bookmark ขวามือ"*)
+           *
+           * สถานะถือที่ `bookmarks` ของหน้านี้แหล่งเดียว → กลับไปหน้ารายการแล้วดาว
+           * ในตารางตรงกันเสมอ ไม่ต้องยิง `load()` ใหม่
+           */
+          bookmarked={bookmarkKeys.has(templateKeyOf(open))}
+          onToggleBookmark={() => toggleBookmark(open)}
           onClose={closeTemplate}
           onSaved={async (msg) => {
             setToast(msg)
@@ -422,7 +437,10 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
                     tpl={t}
                     view={view}
                     starred={bookmarkKeys.has(key)}
-                    onStar={() => void toggleBookmark(t)}
+                    // ⚠️ ต้อง `.catch()` — `toggleBookmark` โยน error ต่อให้ผู้เรียก
+                    //   แต่ตรงนี้ข้อความแสดงผ่าน `setError` ของหน้านี้อยู่แล้ว
+                    //   ถ้าไม่จับ promise จะกลายเป็น unhandledrejection (หน้าจอแดง)
+                    onStar={() => void toggleBookmark(t).catch(() => {})}
                     onOpen={() => openTemplate(t)}
                     onChanged={load}
                     onError={setError}

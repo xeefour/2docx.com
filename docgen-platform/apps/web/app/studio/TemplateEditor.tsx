@@ -56,11 +56,17 @@ export default function TemplateEditor({
   onClose,
   onSaved,
   notify,
+  bookmarked,
+  onToggleBookmark,
 }: {
   template: Template
   onClose: () => void
   onSaved: (msg: string) => void
   notify: (msg: string) => void
+  /** แม่แบบนี้อยู่ในบุ๊กมาร์กอยู่ไหม — สถานะถือที่หน้ารายการ (แหล่งเดียว) */
+  bookmarked: boolean
+  /** สลับบุ๊กมาร์ก — คืน promise ที่ reject เมื่อบันทึกไม่สำเร็จ */
+  onToggleBookmark: () => Promise<void>
 }) {
   const templateKey = templateKeyOf(template)
 
@@ -95,6 +101,27 @@ export default function TemplateEditor({
   const [staleDismissed, setStaleDismissed] = useState<string | null>(null)
   const [pdf, setPdf] = useState<LoadedPdf | null>(null)
   const [aiOpen, setAiOpen] = useState(true)
+  /** กำลังบันทึกบุ๊กมาร์ก — กันกดรัวจนยิง API เป็นสิบครั้ง */
+  const [starBusy, setStarBusy] = useState(false)
+
+  /**
+   * กดดาวที่ปลายขวาของแถบแท็บ (ผู้ใช้สั่ง: *"เพิ่มปุ่มสัญาลักษ์ bookmark ขวามือ"*)
+   *
+   * ⚠️ ต้อง `catch` เอง — หน้านี้ `return` ออกจากหน้ารายการไปแล้ว
+   *   ป้ายแจ้ง error ของหน้ารายการจึงไม่ถูกเรนเดอร์ตอนนี้
+   *   ถ้าไม่จับ error ผู้ใช้จะเห็นดาวไม่เปลี่ยนโดยไม่มีคำอธิบาย
+   */
+  async function toggleStar() {
+    if (starBusy) return
+    setStarBusy(true)
+    try {
+      await onToggleBookmark()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'บันทึกบุ๊กมาร์กไม่สำเร็จ')
+    } finally {
+      setStarBusy(false)
+    }
+  }
 
   const setAppBusy = useAppBusy()
   useEffect(() => {
@@ -470,7 +497,24 @@ export default function TemplateEditor({
       <div className="editor-split">
         {/* ───────── ซ้าย ───────── */}
         <div className="editor-col">
-          <Tabs tabs={leftTabs} active={tab} onChange={(id) => setTab(id as LeftTabId)} />
+          <Tabs
+            tabs={leftTabs}
+            active={tab}
+            onChange={(id) => setTab(id as LeftTabId)}
+            trailing={
+              <button
+                className="tabs__star"
+                data-testid="bookmark-toggle"
+                aria-pressed={bookmarked}
+                aria-label={bookmarked ? 'เอาออกจากบุ๊กมาร์ก' : 'เก็บไว้ในบุ๊กมาร์ก'}
+                title={bookmarked ? 'เอาออกจากบุ๊กมาร์ก' : 'เก็บไว้ในบุ๊กมาร์ก'}
+                disabled={starBusy}
+                onClick={() => void toggleStar()}
+              >
+                {bookmarked ? '★' : '☆'}
+              </button>
+            }
+          />
 
           {tab === 'form' && (
             <div className="editor-col">

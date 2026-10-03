@@ -196,6 +196,28 @@ const probe = () =>
       const td = document.querySelector('.tpllist tbody tr td.tplrow__thumb')
       return td ? getComputedStyle(td).display : 'ไม่มี td'
     })(),
+
+    /**
+     * ⚠️ แถวตัวกรอง: ปุ่มสวิตช์ (ชิด/รายการ) ต้องอยู่บรรทัดเดียวกับช่องค้นหา
+     *   ผู้ใช้สั่ง: *"หน้าจอเล็กให้อยู่บรรทัดเดียวกับค้นหา"*
+     *   เคยพังเพราะ .filters__q มี flex-basis: 100% ใน media query
+     *   แล้วดันปุ่มลงบรรทัดใหม่ — เทสต์เดิมตรวจแถวนี้ไม่ได้เลย ผ่านมาตลอด
+     */
+    filters: (() => {
+      const q = document.querySelector('.filters__q')
+      const t = document.querySelector('.viewtoggle')
+      if (!q || !t) return null
+      const qr = q.getBoundingClientRect()
+      const tr = t.getBoundingClientRect()
+      const bs = [...t.querySelectorAll('.viewtoggle__btn')].map((b) =>
+        Math.round(b.getBoundingClientRect().width)
+      )
+      return {
+        /** ต่างกันกี่ px ในแนวตั้ง = อยู่คนละบรรทัดกัน */
+        dy: Math.round(Math.abs(qr.top - tr.top)),
+        minBtnW: bs.length ? Math.min(...bs) : 0,
+      }
+    })(),
     labels: [...new Set([...document.querySelectorAll('.tpllist tbody td[data-label]')].map((td) => getComputedStyle(td, '::before').content).filter((c) => c && c !== 'none' && c !== 'normal'))],
   }
 })()`)
@@ -210,6 +232,23 @@ for (const w of [360, 414, 579]) {
   check('หัวตารางซ่อน (กลายเป็นการ์ด)', !p.theadShown && p.rowDisplay === 'flex', `thead=${p.theadShown} tr=${p.rowDisplay}`)
   check('ปุ่มสูงพอแตะนิ้ว (≥36px)', p.minH >= 36, `${p.minH}px`)
   check('ช่องว่างถูกซ่อน', p.emptyHidden, `มี ${p.emptyTotal} ช่องว่าง`)
+
+  /**
+   * ⚠️ ปุ่มสวิตช์ (ชิด/รายการ) ต้องอยู่บรรทัดเดียวกับช่องค้นหา
+   *   ผู้ใช้สั่ง: *"หน้าจอเล็กให้อยู่บรรทัดเดียวกับค้นหา"*
+   *   เคยใส่ flex-basis:100% ที่ช่องค้นหาเพื่อให้กว้าง
+   *   แต่ผลคือมันดันปุ่มลงบรรทัดใหม่ แล้วแถวนี้ดูเหมือนจัดวางไม่เสร็จ
+   */
+  check(
+    'ช่องค้นหากับปุ่มสวิตช์อยู่บรรทัดเดียวกัน',
+    !!p.filters && p.filters.dy <= 2,
+    p.filters ? `ต่างกัน ${p.filters.dy}px` : 'ไม่เจอช่องค้นหา/ปุ่มสวิตช์'
+  )
+  check(
+    'ปุ่มสวิตช์ไม่ถูกบีบจนเล็กกว่า 36px',
+    (p.filters?.minBtnW ?? 0) >= 36,
+    `${p.filters?.minBtnW ?? 0}px`
+  )
   /**
    * ⚠️ ภาพย่อโชว์**เฉพาะโหมดชิด** — ผู้ใช้สั่ง:
    *    *"ผมเลือกแบบรายการ ไม่ควรจะมีรูป"*

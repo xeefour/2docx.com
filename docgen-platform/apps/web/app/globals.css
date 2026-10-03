@@ -187,6 +187,163 @@ button.danger:hover:not(:disabled) {
   }
 }
 
+/* ── lightbox ดูภาพย่อ ──────────────────────────────────────────────
+ * ผู้ใช้สั่ง: *"คลิกที่รูปก็ได้ … ให้ popup รูปขึ้นมาแสดง เพื่อให้ผู้ใช้
+ *   ตัดสินใจว่าจะเลือกแบบนี้หรือไม่ ถ้ามีหลายรู้ก็เลื่อนไปข้างหน้า
+ *   ถอยหลังได้ ถ้าผู้ใช้ตกลง ก็มีปุ่มไปที่ form ต่อ"*
+ *
+ * ⚠️ z-index ต้องสูงกว่าแถบ URL (2147482500) และ popup คัดลอก (2147482600)
+ *    ไม่งั้นผ้าคลุมนี้จะโดนบังตอนจอแคบ แล้วผู้ใช้กดปิดไม่ได้
+ *    ต่ำกว่าผ้าคลุมตอนเปลี่ยนหน้า (…2000/…3000/…4000) เพราะตอนนั้นกำลังรอหน้าใหม่
+ *
+ * ⚠️ พื้นหลังใช้ inset:0 แบบ fixed + overflow:auto
+ *    รูปเอกสารสูงกว่าจอมือถือมาก ถ้าไม่ให้เลื่อน ผู้ใช้จะดูได้แค่หัวรูป
+ *    และเข้าใจผิดว่าระบบค้าง
+ */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2147482601;
+  display: flex;
+  flex-direction: column;
+  background: rgb(12 9 18 / 82%);
+  backdrop-filter: blur(2px);
+  overflow: auto;
+}
+.lightbox__bar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgb(12 9 18 / 92%);
+  color: #fff;
+  flex: none;
+}
+.lightbox__title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  font-size: 14px;
+}
+.lightbox__title b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lightbox__count {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 18%);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+/* กฎ button{color:#fff} ของโปรเจกต์ทำให้ปุ่มบนพื้นมืดมองไม่เห็น */
+.lightbox__bar .ghost {
+  color: #fff;
+  background: rgb(255 255 255 / 14%);
+  flex: none;
+}
+.lightbox__bar .ghost:hover:not(:disabled) {
+  background: rgb(255 255 255 / 24%);
+  color: #fff;
+}
+
+.lightbox__stage {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  /* ต้องเผื่อที่ให้ปุ่มเลื่อน ถ้าไม่งั้นรูปกว้างเต็มจนปุ่มถูกดันออกนอกจอ */
+  min-height: 0;
+}
+.lightbox__img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 10px 40px rgb(0 0 0 / 45%);
+}
+.lightbox__msg {
+  color: #fff;
+  font-size: 14px;
+  padding: 40px 20px;
+}
+.lightbox__nav {
+  flex: none;
+  width: 44px;
+  height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 16%);
+  color: #fff;
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+}
+.lightbox__nav:hover:not(:disabled) {
+  background: rgb(255 255 255 / 30%);
+}
+
+.lightbox__foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgb(12 9 18 / 92%);
+  flex: none;
+}
+.lightbox__foot .muted {
+  color: rgb(255 255 255 / 75%);
+}
+.lightbox__foot a {
+  flex: none;
+}
+/* ลิงก์หลักบนพื้นมืดต้องกำหนดสีเอง กฎ button{color:#fff} ไม่ครอบ a */
+.lightbox__foot a.primary {
+  color: #fff;
+}
+
+/* ภาพย่อบนแถวต้องดูกดได้ — เดิมเป็น <img> จึงไม่มีอาการชี้เมาส์ */
+.tplrow__thumb button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  line-height: 0;
+}
+.tplrow__thumb button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .lightbox__nav {
+    width: 40px;
+    height: 56px;
+  }
+  .lightbox__foot {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+}
+
 .previews {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

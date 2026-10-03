@@ -27,6 +27,7 @@ import {
   type Tombstone,
 } from './lib/api'
 import Tabs from './Tabs'
+import ThumbLightbox from './ThumbLightbox'
 import TemplateEditor from './TemplateEditor'
 import { readParam, readTemplateKey, setUrl, studioPath, TAB_PARAM } from './lib/urlState'
 
@@ -83,6 +84,8 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
   const [listView, setListView] = useState<'list' | 'grid'>(readStoredView)
   /** key → รูปตัวอย่างแรก (null = ยังไม่มีรูป หรือดูไม่ได้) */
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
+  /** แม่แบบที่กำลังเปิดดูรูปตัวอย่างเต็ม (null = ปิดอยู่) */
+  const [peek, setPeek] = useState<{ key: string; name: string } | null>(null)
 
   const [bookmarks, setBookmarks] = useState<BookmarkRecord[]>([])
   const [search, setSearch] = useState('')
@@ -544,6 +547,7 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
                     //   แต่ตรงนี้ข้อความแสดงผ่าน `setError` ของหน้านี้อยู่แล้ว
                     //   ถ้าไม่จับ promise จะกลายเป็น unhandledrejection (หน้าจอแดง)
                     onStar={() => void toggleBookmark(t).catch(() => {})}
+                    onPeek={() => setPeek({ key, name: t.name })}
                     onOpen={() => openTemplate(t)}
                     onChanged={load}
                     onError={setError}
@@ -555,6 +559,14 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
           </table>
         )}
       </div>
+
+      {peek && (
+        <ThumbLightbox
+          templateKey={peek.key}
+          templateName={peek.name}
+          onClose={() => setPeek(null)}
+        />
+      )}
 
       <TrashPanel notify={setToast} onRestored={load} />
     </div>
@@ -662,6 +674,7 @@ function TemplateRow({
   starred,
   thumb,
   onStar,
+  onPeek,
   onOpen,
   onChanged,
   onError,
@@ -673,6 +686,8 @@ function TemplateRow({
   /** URL ภาพย่อ (null = ยังไม่มีรูปตัวอย่าง) */
   thumb?: string | null
   onStar: () => void
+  /** เปิดดูรูปตัวอย่างเต็ม (ผู้ใช้สั่ง *"คลิกที่รูปก็ได้"*) */
+  onPeek: () => void
   onOpen: () => void
   onChanged: () => Promise<void>
   onError: (s: string) => void
@@ -841,17 +856,32 @@ function TemplateRow({
          *   โชว์เฉพาะตอนเป็นมุมมีชิด (ซ่อนด้วย CSS)
          */}
         <td className="tplrow__thumb" data-label="ตัวอย่าง">
+          {/*
+           * ⚠️ ผู้ใช้สั่ง *"คลิกที่รูปก็ได้ บางทีผู้ใช้ต้องการคลิกที่นี้"*
+           *   เดิมเป็น <img> จึงไม่มีอาการชี้เมาส์และกดไม่ได้
+           *   ครอบด้วย <button> เพื่อให้เป็นเป้าหมายที่กดได้จริง + เข้าถึงด้วยคีย์บอร์ด
+           *   ⚠️ คง <img> ไว้ข้างใน (ไม่ใช้ background-image)
+           *   เพราะเทสต์หลายชุดเลือกด้วย data-testid="row-thumb" และ
+           *   onError ต้องซ่อนรูปเสียเพื่อไม่ให้กรอบเสียค้างรกหน้าจอ
+           */}
           {thumb ? (
-            <img
-              src={thumb}
-              alt=""
-              loading="lazy"
-              data-testid="row-thumb"
-              onError={(e) => {
-                // รูปเสีย = ไม่ใช่ตัวหลัก → ซ่อนทิ้ง ไม่ปล่อยกรอบเสียค้างไว้ให้รกหน้าจอ
-                e.currentTarget.style.visibility = 'hidden'
-              }}
-            />
+            <button
+              type="button"
+              onClick={onPeek}
+              data-testid="row-thumb-btn"
+              aria-label={`ดูภาพตัวอย่างของ ${tpl.name}`}
+            >
+              <img
+                src={thumb}
+                alt=""
+                loading="lazy"
+                data-testid="row-thumb"
+                onError={(e) => {
+                  // รูปเสีย = ไม่ใช่ตัวหลัก → ซ่อนทิ้ง ไม่ปล่อยกรอบเสียค้างไว้ให้รกหน้าจอ
+                  e.currentTarget.style.visibility = 'hidden'
+                }}
+              />
+            </button>
           ) : (
             <span className="tplrow__noimg" aria-hidden="true">
               ไม่มีตัวอย่าง

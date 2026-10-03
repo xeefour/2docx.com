@@ -85,6 +85,74 @@ button.danger:hover:not(:disabled) {
   background: #9d1f1f;
 }
 
+/**
+ * ── ปุ่มจัดการในแถวแม่แบบ ────────────────────────────────────────
+ * ผู้ใช้สั่ง: *"ทำให้ปุ่ม bookmark และปุ่มอื่นๆ เล็กลง เพิ่ม icon ให้ด้วย"*
+ *   (ภาพที่ผู้ใช้ถ่าย: จอ 579px ปุ่ม 4 ปุ่มยืดเต็มความกว้างจอเป็นแถวเดียว)
+ *
+ * ⚠️ ไอคอนทำเป็น `::before` **ไม่ใช่ node ใน DOM** — ตั้งใจ
+ *   เทสต์หลายชุดเลือกปุ่มในแถวด้วย `textContent.trim() === 'เปิด'`
+ *   (`test-list-mobile` · `test-list-tabs-url` · `test-editor-panes` · `inspect-preview-height`)
+ *   ถ้าใส่ `<span>` ครอบไอคอน `textContent` จะกลายเป็น "📂เปิด" ทันที
+ *   แล้วทุกชุดต้องไปแก้ selector พร้อมกัน = เทสต์เงียบกว่าที่ควร
+ *   ทางนี้ได้ไอคอนเหมือนกัน แต่ `textContent` ยังเป็นคำเดียวเป๊ะ ๆ เหมือนเดิม
+ *
+ * ⚠️ **ความสูงขั้นต่ำ 36px บนจอเล็กยังไม่ลด — ตั้งใจ**
+ *   `test-list-mobile` มีข้อตรวจนี้อยู่ และ 36px คือพื้นที่นิ้วขั้นต่ำที่ยอมรับได้
+ *   (เล็กกว่านี้ปุ่มกดยากขึ้นจริงบนมือถือ)
+ *   → "เล็กลง" จึงหมายถึง**เล็กลงในแนวกว้าง** ไม่ยืดเต็มบรรทัดอีกต่อไป
+ */
+.tpllist td.tplrow__acts button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+/* ปุ่มดาวไม่มีป้ายกำกับ → จับเป็นสี่เหลี่ยมเล็ก ๆ กลาง ๆ */
+.tpllist td.tplrow__acts .tplrow__i-star {
+  min-width: 30px;
+  padding: 5px 8px;
+  justify-content: center;
+  font-size: 15px;
+}
+.tplrow__i-open::before {
+  content: '\1F4C2';
+}
+.tplrow__i-dl::before {
+  content: '\2B07\FE0E';
+}
+.tplrow__i-del::before {
+  content: '\1F5D1\FE0E';
+}
+
+/**
+ * ── ปุ่มที่ยืนยันผลบนตัวปุ่มเอง ───────────────────────────────────
+ * ผู้ใช้สั่ง: *"ผมคลิก copy link แล้ว แต่ไม่รู้ว่ามัน copy ได้
+ *   ระบบแจ้งเตือนแต่อยู่บนสุด โดยเฉพาะหน้าจอขนาดเล็ก"*
+ *
+ * ⚠️ ต้องกำหนด `color` เองทุกข้อ เพราะมีกฎ `button { color: #fff }` ทั้งระบบ
+ */
+button.ghost.ok {
+  background: var(--ok-bg);
+  border-color: #bfe5cf;
+  color: var(--ok);
+}
+button.ghost.ok:hover:not(:disabled) {
+  background: #d5efe0;
+  color: var(--ok);
+}
+button.ghost.err {
+  background: var(--err-bg);
+  border-color: #f5c6c6;
+  color: var(--err);
+}
+button.ghost.err:hover:not(:disabled) {
+  background: #f8d7d7;
+  color: var(--err);
+}
+
 input,
 select,
 textarea {
@@ -226,17 +294,22 @@ tbody tr:hover {
     text-align: left !important;
     white-space: normal !important;
   }
+  /*
+   * ปุ่มจัดการ — เรียงตามขนาดปุ่มจริง ไม่ยืดเต็มบรรทัด
+   *
+   * ⚠️ เดิม `flex: 1 1 0; min-width: 84px` ทำให้ปุ่ม 4 ปุ่มยืดเต็มความกว้างจอ
+   *    พอกันหมด (ภาพที่ผู้ใช้ถ่ายตอน 579px) แถวจึงสูงเท่าทั้งรายการทิ้งไปหนึ่งจอ
+   *    แก้เป็น `flex: 0 0 auto` = กดง่ายขึ้น เหลือพื้นที่ให้ชื่อแม่แบบยาว ๆ
+   *    ยังคง `min-height: 36px` ไว้ เพราะเป็นพื้นที่นิ้วขั้นต่ำ (ดูหัวข้อด้านบน)
+   */
   .tpllist td:last-child a {
-    display: flex;
-    flex: 1 1 0;
-    min-width: 84px;
+    display: inline-flex;
     text-decoration: none;
   }
   .tpllist td:last-child button {
-    flex: 1 1 0;
-    min-width: 84px;
+    flex: 0 0 auto;
     min-height: 36px;
-    padding: 8px 10px;
+    padding: 5px 10px;
   }
 }
 

@@ -53,6 +53,38 @@ export default function SharePanel({
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  /**
+   * ปุ่มคัดลอกลิงก์ — ต้องบอกผล**บนตัวปุ่ม** ไม่ใช่รอ Banner บนสุด
+   *
+   * ⚠️ ผู้ใช้สั่ง: *"ผมคลิก copy link แล้ว แต่ไม่รู้ว่ามัน copy ได้ ระบบแจ้งเตือนแต่อยู่บนสุด
+   *     โดยเฉพาะหน้าจอขนาดเล็ก"*
+   *
+   *   เดิมยืนยันผลแค่ผ่าน `notify()` = Banner ที่ Studio.tsx วางไว้**เหนือ**
+   *     `TemplateEditor` ทั้งก้อน (Studio.tsx:282) ส่วนการ์ด "ลิงก์สาธารณ" ที่ผู้ใช้
+   *     กดอยู่อยู่ท้ายแท็บขวา → ห่างกันหลายจอเล็ก พอเลื่อนไปมองที่กดปุ่ม
+   *     ป้ายเตือนก็เลย่อนไปแล้ว ผู้ใช้เลยคิดว่ากดไม่ติด
+   *
+   *   ยังเรียก `notify()` เหมือนเดิม เผื่อผู้ใช้เลื่อนขึ้นไปเจอ Banner
+   *   (แต่คราวนี้ไม่ต้องพึ่งมันแล้ว)
+   */
+  const [copied, setCopied] = useState<'ok' | 'err' | null>(null)
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // ปุ่มหายไปก่อนครบเวลา (สลับแท็บ/ปิดแม่แบบ) → ห้ามทิ้ง timer ค้าง
+  useEffect(
+    () => () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current)
+    },
+    []
+  )
+
+  /** กดคัดลอกแล้วเปลี่ยนป้ายปุ่มชั่วคราว แล้วคืนป้ายเดิม */
+  function flashCopied(next: 'ok' | 'err') {
+    setCopied(next)
+    if (copiedTimer.current) clearTimeout(copiedTimer.current)
+    copiedTimer.current = setTimeout(() => setCopied(null), 2000)
+  }
+
   const isOwner = access?.relation === 'owner'
 
   /**
@@ -394,21 +426,30 @@ export default function SharePanel({
               {publicUrl || '…'}
             </code>
             <button
-              className="ghost"
+              className={copied ? `ghost ${copied}` : 'ghost'}
               disabled={busy || !publicUrl}
               data-testid="share-copy-url"
               style={{ justifySelf: 'start' }}
+              // ⚠️ ให้ screen reader อ่านป้ายที่เปลี่ยนได้ ไม่งั้นผู้ใช้โปรแกรมอ่านหน้าจอ
+              //   ได้แต่ Banner ที่ห่างออกไปหลายจอ
+              aria-live="polite"
               onClick={() =>
                 void (async () => {
+                  const ok = await copyText(publicUrl)
+                  flashCopied(ok ? 'ok' : 'err')
                   notify(
-                    (await copyText(publicUrl))
+                    ok
                       ? 'คัดลอกลิงก์สาธารณแล้ว'
-                      : 'คัดลอกไม่สำเร็จ — ให้เลือกข้อความในกล่องด้านบนเอง',
+                      : 'คัดลอกไม่สำเร็จ — ให้เลือกข้อความในกล่องด้านบนเอง'
                   )
                 })()
               }
             >
-              คัดลอกลิงก์
+              {copied === 'ok'
+                ? 'คัดลอกแล้ว ✓'
+                : copied === 'err'
+                  ? 'คัดลอกไม่สำเร็จ'
+                  : 'คัดลอกลิงก์'}
             </button>
           </div>
         )}

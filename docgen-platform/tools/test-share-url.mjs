@@ -289,6 +289,56 @@ const toast = await evaluate(`(() => {
 check('กดแล้วมีข้อความตอบกลับ', toast.length > 0, toast || 'ไม่มี Banner')
 await shot('03-copied.png')
 
+// ── 4b · ปุ่มต้องบอกผล**บนตัวปุ่มเอง** ไม่ใช่รอ Banner บนสุด ───────────
+/**
+ * ⚠️ ผู้ใช้สั่ง: *"ผมคลิก copy link แล้ว แต่ไม่รู้ว่ามัน copy ได้
+ *   ระบบแจ้งเตือนแต่อยู่บนสุด โดยเฉพาะหน้าจอขนาดเล็ก"*
+ *
+ *   เดิมยืนยันผลแค่ผ่าน Banner ที่ `Studio.tsx` วางไว้**เหนือ** `TemplateEditor`
+ *   ทั้งก้อน ขณะที่ปุ่มที่ผู้ใช้กดอยู่ท้ายแท็บขวา → ห่างกันหลายจอเล็ก
+ *   พอเลื่อนไปมองที่ปุ่ม ป้ายเตือนก็หลุดไปแล้ว ผู้ใช้เลยคิดว่ากดไม่ติด
+ *
+ *   ต้องพิสูจน์สองอย่าง: ปุ่มเปลี่ยนป้าย**ทันที** และคืนป้ายเดิมเอง (ไม่ค้าง)
+ *
+ * ⚠️ ยิงซ้ำอีกครั้งก่อนอ่านค่า เพราะช่วงเปลี่ยนป้ายสั้นมาก (2 วินาที)
+ *    ถ้าใช้ผลจากกดครั้งก่อนหน้า จะขึ้นกับความเร็วของ screenshot ที่ผ่านมา
+ *
+ * ⚠️ เช็กว่าปุ่มยังอยู่ก่อนกด — `clickTestId` **ไม่มี timeout**
+ *    ถ้าปุ่มหาย (เช่นแท็บผิด/แม่แบบถูกลบไปแล้ว) สคริปต์จะค้างตลอดการทำงาน
+ *    แล้วทิ้ง Chrome ค้างไว้อีกหลายตัว
+ */
+const INLINE_OK = 'คัดลอกแล้ว ✓'
+const INLINE_ERR = 'คัดลอกไม่สำเร็จ'
+const btnNow = async () =>
+  evaluate(`(() => {
+  const b = document.querySelector('[data-testid="share-copy-url"]')
+  if (!b) return null
+  return { text: b.textContent.trim(), cls: b.className }
+})()`)
+
+const alive = await evaluate(`!!document.querySelector('[data-testid="share-copy-url"]')`)
+if (!alive) {
+  check('ยังมีปุ่มคัดลอกอยู่ตอนกดซ้ำ', false, 'ไม่เจอปุ่ม — ข้ามข้อตรวจส่วนนี้')
+} else {
+  check('ยังมีปุ่มคัดลอกอยู่ตอนกดซ้ำ', true)
+  const again = await clickTestId('share-copy-url')
+  check('กดปุ่มคัดลอกซ้ำได้', !!again?.ok, again?.why ?? '')
+  await sleep(400)
+  const b1 = await btnNow()
+  check(
+    'ปุ่มตอบบนตัวปุ่มเอง ไม่ต้องเลื่อนไปดู Banner',
+    !!b1 && (b1.text === INLINE_OK || b1.text === INLINE_ERR),
+    b1 ? b1.text : 'ไม่เจอปุ่ม'
+  )
+  check('ปุ่มเปลี่ยนสีตามผล (ok/err)', !!b1 && /\bok\b|\berr\b/.test(b1.cls), b1?.cls ?? '')
+
+  await shot('03b-copied-inline.png')   // ถ่ายตอนปุ่มยังแสดง "คัดลอกแล้ว ✓"
+  await sleep(2100)
+  const b2 = await btnNow()
+  check('รอแล้วป้ายกลับเป็น "คัดลอกลิงก์" (ไม่ค้าง)', b2?.text === 'คัดลอกลิงก์', b2?.text ?? 'ไม่เจอปุ่ม')
+  await shot('03c-copied-reset.png')
+}
+
 // ── 5. กลับเป็นแบบส่วนตัวอีกครั้ง (ยืนยันว่าเป็นวงจร ทั้งสองทาง) ──
 console.log('\n[5] สลับกลับไปเป็นแบบส่วนตัวอีกครั้ง')
 const back = await clickTestId('share-private')

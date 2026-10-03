@@ -637,24 +637,36 @@ function TemplateRow({
       <td className="muted mono" data-label="ชนิด">
         {tpl.type}
       </td>
-      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+      <td className="tplrow__acts" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
         <button
-          className="ghost"
+          className="ghost tplrow__i-star"
           onClick={onStar}
+          aria-pressed={starred}
+          aria-label={starred ? 'เอาออกจากบุ๊กมาร์ก' : 'เพิ่มในบุ๊กมาร์ก'}
           title={starred ? 'เอาออกจากบุ๊กมาร์ก' : 'เพิ่มในบุ๊กมาร์ก'}
           style={{ padding: '4px 9px', color: starred ? 'var(--warn)' : undefined }}
         >
           {starred ? '★' : '☆'}
         </button>{' '}
-        <button className="ghost" onClick={onOpen} disabled={busy}>
+        <button
+          className="ghost tplrow__i-open"
+          onClick={onOpen}
+          disabled={busy}
+          title="เปิดแม่แบบ"
+        >
           เปิด
         </button>{' '}
         <a href={`/api/templates/${encodeURIComponent(tpl.versionId)}`} download>
-          <button className="ghost" disabled={busy}>
+          <button className="ghost tplrow__i-dl" disabled={busy} title="ดาวน์โหลดไฟล์แม่แบบ">
             ดาวน์โหลด
           </button>
         </a>{' '}
-        <button className={confirming ? 'danger' : 'ghost'} onClick={remove} disabled={busy}>
+        <button
+          className={`${confirming ? 'danger' : 'ghost'} tplrow__i-del`}
+          onClick={remove}
+          disabled={busy}
+          title={confirming ? 'กดซ้ำอีกครั้งเพื่อยืนยันการลบ' : 'ลบแม่แบบนี้'}
+        >
           {confirming ? 'ยืนยันลบ?' : 'ลบ'}
         </button>
       </td>

@@ -257,6 +257,93 @@ if (target.miss) {
   check('กดแล้วเปิดหน้าแก้ไขได้จริง', opened, await evaluate('location.pathname'))
 }
 
+
+// ── 8 · ปุ่มจัดการเล็กลงและมีไอคอน ───────────────────────────────
+/**
+ * ⚠️ ผู้ใช้สั่ง: *"ทำให้ปุ่ม bookmark และปุ่มอื่นๆ เล็กลง เพิ่ม icon ให้ด้วย"*
+ *   (ภาพที่ผู้ใช้ถ่าย: จอ 579px ปุ่ม 4 ปุ่มยืดเต็มความกว้างจอเป็นแถวเดียว)
+ *
+ *   เดิมกฎจอแคบใช้ `flex: 1 1 0; min-width: 84px` → ปุ่มพอกันเต็มบรรทัด
+ *   แก้เป็น `flex: 0 0 auto` แล้วต้อง**วัดพื้นที่ที่ปุ่มกินจริง**
+ *   ไม่ใช่แค่เปลี่ยน CSS แล้วเชื่อว่าเล็กลง (เคยเจอกรณีแบบนี้มาแล้ว)
+ *
+ * ⚠️ ข้อสำคัญ: `textContent` ของปุ่มต้องยังเป็นคำเดียวเป๊ะ ๆ ("เปิด")
+ *   เพราะเทสต์หลายชุดเลือกปุ่มในแถวด้วยเงื่อนไขนี้ (รวมทั้งไฟล์นี้เอง
+ *   บรรทัด 138 / 240 / 242) → ทำให้ไอคอนเป็น `::before` ไม่ใช่ node ใน DOM
+ *   ข้อนี้คือ**กันดัก** ไม่ใช่แค่บันทึกว่าเลือกแบบนี้
+ *
+ * ⚠️ ความสูงขั้นต่ำ 36px ยังไม่ลด (ข้อ 3 ของชุดนี้)
+ *    "เล็กลง" จึงหมายถึงเล็กลงใน**แนวกว้าง**
+ *    ถ้าจะลดความสูงด้วย ต้องแก้ข้อ 3 ให้ตรงกันด้วย ไม่ใช่ปล่อยให้ตกเงียบ
+ */
+console.log('\nปุ่มจัดการเล็กลง + มีไอคอน')
+await send('Page.navigate', { url: `${WEB}/studio` })
+await waitFor('!document.querySelector(".bootveil")', 45000)
+const rowsBack = await waitFor(
+  "[...document.querySelectorAll('.tpllist tbody tr')].filter(tr => [...tr.querySelectorAll('button')].some(b => b.textContent.trim() === 'เปิด')).length > 0",
+  45000
+)
+check('กลับมาที่หน้ารายการได้', !!rowsBack)
+
+const rowBtns = () =>
+  evaluate(`(() => {
+  const tr = [...document.querySelectorAll('.tpllist tbody tr')].find((x) => [...x.querySelectorAll('button')].some((b) => b.textContent.trim() === 'เปิด'))
+  if (!tr) return { miss: 'ไม่เจอแถว' }
+  const cell = tr.querySelector('td.tplrow__acts')
+  if (!cell) return { miss: 'ไม่เจอ td.tplrow__acts' }
+  const btns = [...cell.querySelectorAll('button')]
+  const byText = (t) => btns.find((b) => b.textContent.trim() === t)
+  const icon = (el) => {
+    if (!el) return ''
+    const v = getComputedStyle(el, '::before').content
+    return v && v !== 'none' && v !== 'normal' ? v : ''
+  }
+  const box = cell.getBoundingClientRect()
+  const rects = btns.map((b) => b.getBoundingClientRect())
+  const left = Math.min(...rects.map((b) => b.left))
+  const right = Math.max(...rects.map((b) => b.right))
+  const star = btns.find((b) => '★☆'.includes(b.textContent.trim()))
+  return {
+    n: btns.length,
+    fill: box.width ? Math.round(((right - left) / box.width) * 100) : 0,
+    span: Math.round(right - left),
+    openText: (byText('เปิด') || {}).textContent?.trim() || '',
+    starW: star ? Math.round(star.getBoundingClientRect().width) : 0,
+    starLabel: star ? star.getAttribute('aria-label') || '' : '',
+    starPressed: star ? star.getAttribute('aria-pressed') : null,
+    icons: {
+      open: icon(byText('เปิด')),
+      dl: icon(byText('ดาวน์โหลด')),
+      del: icon(byText('ลบ')),
+    },
+  }
+})()`)
+
+for (const w of [579, 1440]) {
+  console.log(`\nจอ ${w}px`)
+  await setWidth(w)
+  await sleep(400)
+  const r = await rowBtns()
+  check('เจอปุ่มจัดการ 4 ปุ่ม', r.n === 4, `${r.n} ปุ่ม`)
+  check('textContent ยังเป็น "เปิด" เป๊ะ (กันเทสต์อื่นพัง)', r.openText === 'เปิด', JSON.stringify(r.openText))
+  check('มีไอคอนหน้า "เปิด"', !!r.icons.open, r.icons.open || 'ไม่มี')
+  check('มีไอคอนหน้า "ดาวน์โหลด"', !!r.icons.dl, r.icons.dl || 'ไม่มี')
+  check('มีไอคอนหน้า "ลบ"', !!r.icons.del, r.icons.del || 'ไม่มี')
+  check('ปุ่มดาวมี aria-label', !!r.starLabel, r.starLabel || 'ไม่มี')
+  check('ปุ่มดาวมี aria-pressed', r.starPressed !== null, String(r.starPressed))
+  check('ปุ่มดาวเล็กลง (≤ 40px)', r.starW > 0 && r.starW <= 40, `${r.starW}px`)
+  /*
+   * ⚠️ วัด "ไม่ยืดเต็มบรรทัด" **เฉพาะจอแคบ**
+   *   จอกว้างคอลัมน์ "จัดการ" จะหดตามเนื้อหาอยู่แล้ว → fill สูงเสมอ
+   *   ถ้าวัดที่จอกว้างด้วยจะได้ค่าที่ไม่ผ่าน ทั้งที่หน้าจอถูกต้องแล้ว
+   *   (เทสต์ที่ตกเพราะวัดผิดที่ = เทสต์ที่ทำให้คนแก้โค้ดเสีย)
+   */
+  if (w === 579) {
+    check('ปุ่มไม่ยืดเต็มบรรทัด (กินพื้นที่ < 90%)', r.fill < 90, `${r.fill}% (กว้าง ${r.span}px)`)
+    await shot('w579-small-buttons')
+  }
+}
+await setWidth(579)
 console.log(`\nผ่าน ${pass} · ตก ${fail}`)
 await send('Browser.close').catch(() => {})
 chrome.kill()

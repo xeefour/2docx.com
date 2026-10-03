@@ -215,8 +215,13 @@ export default function DownloadMenu({
    * ⚠️ เลือกรูปแบบไฟล์เองตามจำนวนหน้า ไม่ต้องมีตัวเลือก ZIP แยก
    *    (ผู้ใช้สั่ง: "ถ้ามีมากกว่า 1 รูป ให้ส่งออกมาเป็น zip ถ้าเลือกรูปเดียวส่งออกมาเป็น file รูป")
    */
-  async function downloadImages() {
-    if (!parsed.ok) {
+  async function downloadImages(force?: number[]) {
+    /**
+     * `force` = หน้าที่สั่งให้ใช้โดยไม่ผ่านช่องพิมพ์
+     *   ใช้ตอนเอกสารหน้าเดียว → ไม่ต้องเปิดกล่องให้ผู้ใช้เลือกอะไร
+     *   และต้องข้ามการเช็ค `parsed` เพราะผู้ใช้ยังไม่ได้พิมพ์อะไร
+     */
+    if (!force && !parsed.ok) {
       setError(parsed.reason)
       return
     }
@@ -227,7 +232,7 @@ export default function DownloadMenu({
       const pdf = await loadPdfForPng()
       // ถ้าผู้ใช้ยังไม่พิมพ์ช่วงหน้า → เอาทุกหน้าของ PDF ที่โหลดมา
       // (ใช้ allPages เพราะ pdf.count เป็นตัวเลข ไม่ใช่ array)
-      const want = pages.length > 0 ? pages : allPages(pdf.count)
+      const want = force?.length ? force : pages.length > 0 ? pages : allPages(pdf.count)
 
       if (want.length === 1) {
         setStatus('กำลังสร้างรูป…')
@@ -256,8 +261,21 @@ export default function DownloadMenu({
 
   const pick = (format: Format) => {
     if (format === 'png') {
-      // คลิกครั้งแรก = เปิดกล่องเลือกหน้า (ยังไม่ดาวน์โหลด)
       setError(null)
+      /**
+       * เอกสารหน้าเดียว → กดปุ่มรูปภาพแล้วได้ไฟล์ PNG เลย
+       *
+       * ผู้ใช้สั่ง: *"ถ้าคลิกปุ่ม รูปภาพ ถ้ามีแค่รูปเดียว download ส่งออกมาเป็นรูปเลย"*
+       * เดิมต้องกดรูปภาพ แล้วกดยืนยันอีกครั้ง ทั้งที่หน้าเดียวไม่มีอะไรให้เลือก
+       * บังคับหน้า 1 เสมอ เพราะ PDF ที่โหลดมาอาจมีหน้ามากกว่าที่พรีวิวบอก
+       *   (ถ้าปล่อย "ทุกหน้า" แล้วหลายหน้าจริง จะได้ ZIP ซึ่งขัดกับที่ผู้ใช้สั่ง)
+       */
+      if (pageCount === 1) {
+        setOpen(false)
+        void downloadImages([1])
+        return
+      }
+      // หลายหน้า = ยังต้องเลือกหน้า → เปิดกล่อง (คลิกครั้งแรกยังไม่ดาวน์โหลด)
       setImgOpen(true)
       return
     }

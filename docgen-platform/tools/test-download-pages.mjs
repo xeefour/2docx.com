@@ -11,6 +11,7 @@
  * 5. ชี้ที่ Word → บอกตรง ๆ ว่า Word ตัดหน้าไม่ได้ (ไม่ปล่อยให้เลือกแล้วไม่มีผล)
  * 6. ดาวน์โหลด ZIP → ไฟล์ .zip บนดิสก์ เปิดอ่านได้ และมีรูปครบตามหน้าที่เลือก
  * 7. ดาวน์โหลด PDF + เลือกหน้า → ไฟล์ PDF ที่เหลือ**เฉพาะหน้าที่เลือกจริง**
+ * 8. เอกสาร**หน้าเดียว** → กดปุ่มรูปภาพครั้งเดียวได้ไฟล์ .png เลย ไม่มีกล่องเลือกหน้า
  *
  * ⚠️ ข้อ 6–7 ต้องการเอกสารหลายหน้า ถ้าแม่แบบที่เปิดมีหน้าเดียว
  *    จะข้ามและ**ไม่นับว่าผ่าน** (ไม่ใช่ผ่านแบบเงียบ ๆ)
@@ -633,6 +634,128 @@ console.log('\n[9] ดาวน์โหลด PDF — ต้องได้ท�
   await shot('08-after-pdf.png')
 }
 
+
+// ── 10 · เอกสารหน้าเดียว: กดรูปภาพแล้วได้ PNG เลย ─────────────────────
+/**
+ * ผู้ใช้สั่ง: *"ถ้าคลิกปุ่ม รูปภาพ ถ้ามีแค่รูปเดียว download ส่งออกมาเป็นรูปเลย"*
+ *
+ * ── ทำไมต้องมีหัวข้อนี้ ────────────────────────────────────────────
+ *   เดิมส่งออกเป็น `.png` เมื่อได้ 1 หน้าอยู่แล้ว แต่ผู้ใช้ยังต้องกด 2 ครั้ง
+ *   (กดรูปภาพ → กดยืนยัน) เพื่อเลือก "หน้า 1" ทั้งที่เอกสารหน้าเดียวไม่มีอะไรให้เลือก
+ *   ตอนนี้กดปุ่มรูปภาพครั้งเดียวก็ได้ PNG เลย และไม่มีกล่องเลือกหน้าโผล่มา
+ *
+ * ⚠️ ต้องใช้แม่แบบ**หน้าเดียวของจริง** ไม่ใช่แม่แบบหลายหน้าของหัวข้อ [0]
+ *    เพราะเงื่อนไขผูกกับ `pageCount === 1` ที่วัดจากพรีวิว
+ *    และ**จำนวนหน้าจริงไม่รู้จากชื่อแม่แบบ** — ต้องเรนเดอร์แล้ววัดทีละตัว
+ *    (ครั้งแรกใช้ `TEST_TEMPLATES.onepage` = "มีเลขที่หนังสือ" แล้วออกมา 3 หน้า)
+ *
+ * ⚠️ คืนฟอร์มทุกตัวที่แตะทีเดียวท้ายสุด
+ *    `importTags` เขียนทับฟอร์มเดิม → ถ้าไม่คืน เทสต์ถัดไปจะเจอฟอร์มที่เราไปสร้าง
+ *    และพรีวิวที่เรนเดอร์ไว้จะไม่ตรงกับฟอร์มปัจจุบัน ทำให้สับสนตอนไล่
+ */
+console.log('\n[10] เอกสารหน้าเดียว — กด "รูปภาพ" แล้วได้ไฟล์ PNG เลย ไม่เปิดกล่องเลือกหน้า')
+/** เรียงตามความน่าจะเป็นหน้าเดียว — ลองทีละตัวจนกว่าจะเจอหน้าเดียวจริง */
+const ONEPAGE_CANDIDATES = [
+  'หนังสือรับรอง (ส่งสำเนาให้อัยการ',
+  'มีเลขที่หนังสือ',
+  'ทดสอบข้อความ',
+]
+
+/** เก็บไว้คืนฟอร์มทีเดียวตอนจบ ไม่ใช่ทีละตัว (การคืนกลางลูปอาจไปแตะพรีวิวที่เพิ่งได้) */
+const touched = []
+let one = null
+try {
+  for (const want of ONEPAGE_CANDIDATES) {
+    let tpl = null
+    try {
+      tpl = await pickTemplate(H, [want])
+    } catch {
+      continue
+    }
+    const k = keyOf(tpl)
+    if (touched.some((t) => t.key === k)) continue
+
+    touched.push({ key: k, name: tpl.name, snap: await snapshotForm(H, k) })
+    await importTags(H, tpl)
+    await send('Page.navigate', { url: `${WEB}/studio/${k}?tabs=form&pane=preview` })
+    await waitFor("!!document.querySelector('.dl__btn')", 45000)
+    await sleep(600)
+    const filled = await evaluate(FILL_FIELDS_JS)
+    await sleep(400)
+    await clickText('เรนเดอร์ตัวอย่าง')
+    const rendered = await waitFor(canvasDrawnJs(), 120000)
+    if (!rendered) {
+      console.log(`  · ${tpl.name}: เรนเดอร์ไม่ผ่าน — ข้าม`)
+      continue
+    }
+    const label = await evaluate("document.querySelector('.doctools .muted')?.textContent?.trim() ?? ''")
+    const n = Number(label.match(/\/\s*(\d+)/)?.[1] ?? 0)
+    console.log(`  · ${tpl.name}: ${label || 'อ่านจำนวนหน้าไม่ได้'}${filled ? ` (กรอก ${filled} ช่อง)` : ''}`)
+    if (n === 1) {
+      one = tpl
+      break
+    }
+  }
+
+  if (!one) {
+    skipCheck('เอกสารหน้าเดียว', `ลอง ${touched.length} แม่แบบแล้วไม่มีตัวไหนเป็นหน้าเดียวจริง`)
+  } else {
+    console.log(`ใช้แม่แบบหน้าเดียว: ${one.name} (key ${keyOf(one)})`)
+
+    /** จำของเดิมไว้ก่อน เพราะ DL เดียวกันถูกใช้ตั้งแต่หัวข้อ [7]/[8] แล้ว */
+    const beforeFiles = new Set(listDownloads())
+    const zipsBefore = listDownloads().filter((f) => f.endsWith('.zip')).length
+
+    if (!(await evaluate("!!document.querySelector('.dl__pop')"))) {
+      await realClick('.dl__btn')
+      await waitFor("!!document.querySelector('.dl__pop')", 8000)
+    }
+    check('หน้าเดียว: กดปุ่มรูปภาพได้', await clickOpt('รูปภาพ'))
+
+    /**
+     * ⚠️ ต้อง**รอก่อน**แล้วค่อยตัดสินว่าไม่มีกล่อง
+     *    ถ้าเช็คทันที React ยังไม่ได้ commit ก็จะผ่านทั้งที่กล่องกำลังจะโผล่
+     */
+    await sleep(900)
+    check(
+      'หน้าเดียว: ไม่มีกล่องเลือกหน้าโผล่ (ไม่มีอะไรให้เลือก)',
+      !(await evaluate("!!document.querySelector('.dl__imgpanel')"))
+    )
+    check('หน้าเดียว: เมนูปิดลงเอง (กดครั้งเดียวจบ)', await waitFor("!document.querySelector('.dl__pop')", 10000))
+    await shot('10-onepage-after-click.png')
+
+    /** รอไฟล์**ใหม่** ไม่นับของเก่าที่หัวข้อ [7]/[8] ทิ้งไว้ในโฟลเดอร์เดียวกัน */
+    const fresh = await (async () => {
+      const end = Date.now() + 180_000
+      while (Date.now() < end) {
+        const now = listDownloads().filter((f) => !beforeFiles.has(f))
+        if (now.length) {
+          await sleep(700)
+          return listDownloads().filter((f) => !beforeFiles.has(f))
+        }
+        await sleep(400)
+      }
+      return []
+    })()
+
+    check('หน้าเดียว: ได้ไฟล์ใหม่มา 1 ไฟล์', fresh.length === 1, fresh.join(', '))
+    check('หน้าเดียว: ได้ .png ไม่ใช่ .zip', fresh.some((f) => f.toLowerCase().endsWith('.png')), fresh.join(', '))
+    const zipsAfter = listDownloads().filter((f) => f.endsWith('.zip')).length
+    check('หน้าเดียว: ไม่มี .zip โผล่มาด้วย', zipsAfter === zipsBefore, `${zipsBefore} → ${zipsAfter}`)
+    const png = fresh.find((f) => f.toLowerCase().endsWith('.png'))
+    if (png) {
+      const bytes = new Uint8Array(readFileSync(join(DL, png)))
+      check('หน้าเดียว: ไฟล์เป็น PNG จริง (magic %PNG)', bytes[0] === 0x89 && bytes[1] === 0x50, `${bytes.length} ไบต์`)
+      check('หน้าเดียว: ชื่อไฟล์บอกเลขหน้า', /หน้า1\.png$/.test(png), png)
+      check('หน้าเดียว: รูปไม่ใช่ไฟล์ว่าง', bytes.length > 2000, `${bytes.length} ไบต์`)
+    }
+  }
+} catch (e) {
+  skipCheck('เอกสารหน้าเดียว', e?.message ?? String(e))
+} finally {
+  for (const t of touched) await restoreForm(H, t.key, t.snap)
+  if (touched.length) console.log(`  · คืนฟอร์ม ${touched.length} แม่แบบแล้ว`)
+}
 
 await cleanup()
 

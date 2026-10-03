@@ -594,8 +594,13 @@ export const api = {
     }),
 
   // ── ประวัติการสร้างเอกสารของแม่แบบ ────────────────────────
-  history: (templateKey: string) =>
-    call<TemplateHistory>(`/history/${encodeURIComponent(templateKey)}`),
+  history: (templateKey: string, page?: { limit?: number; skip?: number }) => {
+    const q = new URLSearchParams()
+    if (page?.limit) q.set('limit', String(page.limit))
+    if (page?.skip) q.set('skip', String(page.skip))
+    const suffix = q.toString() ? `?${q}` : ''
+    return call<TemplateHistory>(`/history/${encodeURIComponent(templateKey)}${suffix}`)
+  },
 
   /**
    * ประวัติส่วนตัว — เอาไว้กู้ค่าเดิมมาแก้ต่อ

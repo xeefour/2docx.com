@@ -805,7 +805,7 @@ export async function removeBookmark(
 export async function templateHistory(
   app: App,
   templateKey: string,
-  limit: number,
+  page: { limit: number; skip: number },
 ): Promise<TemplateHistory> {
   const versionIds = await versionIdsOf(app, templateKey)
   if (versionIds.length === 0) return { users: [], items: [], total: 0 }
@@ -814,7 +814,7 @@ export async function templateHistory(
   const col = app.mongo.collection<Record<string, unknown>>('documents')
 
   const [items, total, byUser] = await Promise.all([
-    col.find(filter).sort({ createdAt: -1 }).limit(limit).toArray(),
+    col.find(filter).sort({ createdAt: -1 }).skip(page.skip).limit(page.limit).toArray(),
     col.countDocuments(filter),
     col
       .aggregate<{ _id: string; name: string | null; count: number; lastAt: Date; ok: number; fail: number }>([
@@ -959,17 +959,32 @@ function searchableText(data: unknown, depth = 0): string {
   return ''
 }
 
-/** หา versionId ทุกเวอร์ชันของแม่แบบหนึ่งตัว */
+/** หา versionId ของแม่แบบหนึ่งตัว (เวอร์ชันที่ปล่อยอยู่) */
 async function versionIdsOf(app: App, templateKey: string): Promise<string[]> {
-  // key ที่เป็นเลข = Carbone templateId → ต้องกาม version ทั้งหมด
-  if (/^\d+$/.test(templateKey)) {
-    try {
-      const { items } = await carbone.listTemplates({ templateId: templateKey })
-      return items.map((t) => t.versionId)
-    } catch (err) {
-      app.log.warn({ templateKey, err: (err as Error).message }, 'หา version ของแม่แบบไม่ได้')
-      return []
-    }
+  // key ที่ไม่ใช่เลข = versionId โดยตรง
+  if (!/^\d+$/.test(templateKey)) return [templateKey]
+
+  /**
+   * ⚠️ **Carbone 5.x ไม่รู้จัก query `templateId` เลย** — ยิงไปก็ได้รายการเต็มกลับมา
+   *
+   *   ยืนยันแล้ว: ยิง `GET /templates` เท่าไรก็ได้ 22 รายการเท่ากันหมด
+   *   ทั้งที่ในระบบมีแม่แบบที่มี `id` แค่ 12 ตัว และไม่มี `id` อีก 10 ตัว
+   *
+   *   ถ้าเชื่อว่ามันกรองแล้วเอา `versionId` ทั้งหมดไป `$in`
+   *   → ได้ประวัติของ**ทั้งระบบ** ไม่ใช่ของแม่แบบนี้
+   *   (อาการที่เห็น: ทุกแม่แบบโชว์ 350 ฉบับ / 100 คน เท่ากันหมด ไม่ว่าจะเป็นตัวไหน)
+   *
+   *   → กรองด้วย `id` เองฝั่งเรา
+   *
+   * ⚠️ ข้อจำกัดที่หลีกเลี่ยงไม่ได้: Carbone ไม่มีประวัติเวอร์ชัน
+   *   คืนเวอร์ชันที่**ปล่อยอยู่** เท่านั้น → เอกสารที่สร้างจากเวอร์ชันเก่า
+   *   (ก่อนมีการกด "อัปโหลดแม่แบบใหม่แทน") จะไม่ปรากฏในประวัติ
+   */
+  try {
+    const { items } = await carbone.listTemplates({})
+    return items.filter((t) => String(t.id) === templateKey).map((t) => t.versionId)
+  } catch (err) {
+    app.log.warn({ templateKey, err: (err as Error).message }, 'หา version ของแม่แบบไม่ได้')
+    return []
   }
-  return [templateKey]
 }

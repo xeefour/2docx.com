@@ -270,11 +270,22 @@ export async function studioRoutes(app: App) {
           'ถ้าจะกู้ค่ามาแก้ต่อ ใช้ `/history/:key/mine` แทน',
         ].join('\n'),
         params: z.object({ key: z.string().min(1).max(200) }),
-        querystring: z.object({ limit: z.coerce.number().int().min(1).max(100).default(30) }),
+        querystring: z.object({
+          limit: z.coerce.number().int().min(1).max(100).default(30),
+          /**
+           * ข้ามกี่ฉบับ — ใช้แบ่งหน้า
+           *
+           * ⚠️ เพดานไว้ที่ 50,000 เพราะ `skip` ต้องไล่ทีละเอกสาร
+           *    ถ้าไม่เพดาน ผู้ใช้พิมพ์ `?skip=99999999` แล้วค้างจน docserver ตาย
+           *    (index `templateId + createdAt` รองรับอยู่แล้ว ไม่ต้องเพิ่ม)
+           */
+          skip: z.coerce.number().int().min(0).max(50_000).default(0),
+        }),
         response: { 200: TemplateHistory, 500: ErrorResponse },
       },
     },
-    async (req) => templateHistory(app, req.params.key, req.query.limit),
+    async (req) =>
+      templateHistory(app, req.params.key, { limit: req.query.limit, skip: req.query.skip }),
   )
 
   /**

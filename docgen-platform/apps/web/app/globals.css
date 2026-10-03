@@ -1251,6 +1251,20 @@ tbody tr:hover {
   border-bottom: none;
 }
 
+/**
+ * ปุ่มประจำแถว — "แก้ไข" + "ลบ"
+ *
+ * ต้องเป็นกล่องของตัวเอง (`flex: none`) ไม่งั้นสองปุ่มจะถูกยืดเต็มความกว้าง
+ * และบีบชื่อฉบับให้เหลือจอแคบมากตอนจอเล็ก
+ */
+.myhist__acts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+  align-items: stretch;
+}
+
 .myhist__top {
   display: flex;
   align-items: center;
@@ -1298,6 +1312,13 @@ tbody tr:hover {
   }
   .myhist__label {
     max-width: 100%;
+  }
+  /* จอแคบ: ปุ่มสองปุ่มเรียงแนวนอนเต็มความกว้างแทนซ้อนลงล่าง */
+  .myhist__acts {
+    flex-direction: row;
+  }
+  .myhist__acts button {
+    flex: 1;
   }
 }
 

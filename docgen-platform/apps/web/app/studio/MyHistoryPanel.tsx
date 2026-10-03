@@ -84,6 +84,17 @@ export default function MyHistoryPanel({
   const [q, setQ] = useState('')
   /** หน้าปัจจุบัน (เริ่มที่ 1) — server ตัดให้ทุกหน้า */
   const [page, setPage] = useState(1)
+  /**
+   * นับรอบการโหลด — ใช้เรียกซ้ำหลังลบเอกสาร
+   *
+   * ⚠️ ต้องอยู่ในเงื่อนไขกันยิงซ้ำของ effect ด้วย
+   *   ไม่งั้นกดลบแล้วรีโหลดจะถูก `return` ทิ้งเพราะคำค้น+หน้าไม่เปลี่ยน
+   */
+  const [reloadKey, setReloadKey] = useState(0)
+  /** แถวที่กด "ลบ" แล้วรอยืนยัน (หายเองใน 4 วิ) — เหมือนปุ่มลบแม่แบบในหน้ารายการ */
+  const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [delMsg, setDelMsg] = useState<string | null>(null)
 
   /**
    * รีเซ็ตเลขหน้าเมื่อเปลี่ยนแม่แบบหรือพิมพ์คำค้นใหม่ — ทำ**ระหว่าง render** ไม่ใช่ใน useEffect
@@ -109,20 +120,42 @@ export default function MyHistoryPanel({
   if (page > pageCount) setPage(pageCount)
 
   /**
-   * คำค้นที่ยิง API ไปแล้ว — ใช้กันยิงซ้ำ
+   * คำขอที่ยิงไปแล้ว — ใช้กันยิงซ้ำ
+   *
+   * ต้องรวม **คำค้น + หน้า + รอบโหลด** ไว้ด้วยกัน
+   *   · ขาดคำค้น → กดเปลี่ยนหน้าแล้วถูก `return` ทิ้ง (หน้าไม่เปลี่ยน)
+   *   · ขาดหน้า   → เปลี่ยนหน้าแล้วไม่ยิงใหม่
+   *   · ขาดรอบโหลด → กดลบเอกสารแล้วรีโหลดไม่เกิด (ข้อมูลเก่าค้างบนจอ)
    *
    * ⚠️ ต้องเริ่มเป็น `null` ไม่ใช่ `''`
-   *    ถ้าเริ่มเป็นค่าว่าง เงื่อนไข `next === sentQ.current` จะเป็นจริงตั้งแต่แรก
+   *    ถ้าเริ่มเป็นค่าว่าง เงื่อนไขจะเป็นจริงตั้งแต่แรก
    *    → effect return ทันที → **ไม่ยิง API เลยตอนเปิดหน้า** รายการว่างตลอด
    *    (เคยเจอ: พิมพ์คำค้นแล้วถึงจะมีข้อมูลปรากฏ)
    */
-  const sentQ = useRef<string | null>(null)
-  /**
-   * เลขหน้าที่ยิงไปแล้ว — แยกจาก `sentQ` เพราะกดเปลี่ยนหน้าแล้วต้องยิงใหม่
-   * แม้คำค้นจะยังเป็นคำเดิม (ถ้าใช้ตัวเดียวกัน กดหน้า 2 แล้วจะถูก `return` ทิ้ง)
-   */
-  const sentPage = useRef(0)
+  const sent = useRef<string | null>(null)
   const seq = useRef(0)
+
+  /**
+   * ลบเอกสารฉบับนั้น (ผู้ใช้สั่ง: *"เพิ่มปุ่มลบ ประวัติ"*)
+   *
+   * ⚠️ ลบถาวร ไม่มีถังขยะแบบแม่แบบ
+   *   เลยต้องยืนยันสองขั้นตอน + บอกผู้ใช้ตรง ๆ ว่าหายถาวรและไฟล์ผลลัพธ์หายด้วย
+   */
+  async function removeItem(id: string) {
+    if (busyId) return
+    setBusyId(id)
+    setDelMsg(null)
+    try {
+      await api.deleteDocument(id)
+      setConfirmId(null)
+      setDelMsg('ลบฉบับนี้แล้ว — ไฟล์ผลลัพธ์ถูกลบตามไปด้วย กู้คืนไม่ได้')
+      setReloadKey((k) => k + 1)
+    } catch (e) {
+      setDelMsg(e instanceof Error ? e.message : 'ลบไม่สำเร็จ')
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   /**
    * ค้นเมื่อหยุดพิมพ์ 350ms
@@ -134,9 +167,9 @@ export default function MyHistoryPanel({
   useEffect(() => {
     const t = setTimeout(() => {
       const next = q.trim()
-      if (next === sentQ.current && page === sentPage.current) return
-      sentQ.current = next
-      sentPage.current = page
+      const want = `${next}\u0000${page}\u0000${reloadKey}`
+      if (want === sent.current) return
+      sent.current = want
       const mine = ++seq.current
       setLoading(true)
       setError(null)
@@ -153,7 +186,7 @@ export default function MyHistoryPanel({
         })
     }, 350)
     return () => clearTimeout(t)
-  }, [q, templateKey, page])
+  }, [q, templateKey, page, reloadKey])
 
   const items = data?.items ?? []
 
@@ -166,7 +199,8 @@ export default function MyHistoryPanel({
         <p className="muted" style={{ margin: '0 0 10px', fontSize: 12 }}>
           เฉพาะฉบับที่คุณสั่งเรนเดอร์เองเท่านั้น ไม่มีของคนอื่นปนมา
           <br />
-          ค้นด้วยชื่อผู้รับหรือคำในเอกสาร แล้วกด “แก้ไข” เพื่อเอาค่าเดิมกลับมา
+          กด “ลบ” เพื่อเอาฉบับนั้นออกจากประวัติ — ลบถาวร กู้คืนไม่ได้
+หรือคำในเอกสาร แล้วกด “แก้ไข” เพื่อเอาค่าเดิมกลับมา
         </p>
         <input
           type="search"
@@ -221,18 +255,52 @@ export default function MyHistoryPanel({
                     </div>
                   )}
                 </div>
-                <button
-                  className="ghost"
-                  data-testid="myhistory-restore"
-                  disabled={!canRestore}
-                  onClick={() => onRestore(d.data)}
-                >
-                  แก้ไข
-                </button>
+                <div className="myhist__acts">
+                  <button
+                    className="ghost"
+                    data-testid="myhistory-restore"
+                    disabled={!canRestore}
+                    onClick={() => onRestore(d.data)}
+                  >
+                    แก้ไข
+                  </button>
+                  <button
+                    className={confirmId === d._id ? 'danger' : 'ghost'}
+                    data-testid="myhistory-delete"
+                    disabled={busyId !== null}
+                    title="ลบฉบับนี้ถาวร (ไฟล์ผลลัพธ์หายด้วย)"
+                    onClick={() => {
+                      if (busyId) return
+                      if (confirmId !== d._id) {
+                        // กดครั้งแรก = ขอยืนยัน · กดอีกครั้งภายใน 4 วิ = ลบจริง
+                        setConfirmId(d._id)
+                        setDelMsg(null)
+                        setTimeout(
+                          () => setConfirmId((c) => (c === d._id ? null : c)),
+                          4000,
+                        )
+                        return
+                      }
+                      void removeItem(d._id)
+                    }}
+                  >
+                    {busyId === d._id ? 'กำลังลบ…' : confirmId === d._id ? 'ยืนยันลบ?' : 'ลบ'}
+                  </button>
+                </div>
               </li>
             )
           })}
         </ul>
+      )}
+
+      {delMsg && (
+        <p
+          className={delMsg.startsWith('ลบฉบับนี้แล้ว') ? 'muted' : 'field-error'}
+          data-testid="myhistory-del-msg"
+          style={{ padding: '8px 16px', margin: 0, fontSize: 12, borderTop: '1px solid var(--line)' }}
+        >
+          {delMsg}
+        </p>
       )}
 
       {loading && items.length > 0 && (

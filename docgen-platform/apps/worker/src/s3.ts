@@ -1,4 +1,10 @@
-import { S3Client, PutObjectCommand, HeadBucketCommand, CreateBucketCommand } from '@aws-sdk/client-s3'
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  HeadBucketCommand,
+  CreateBucketCommand,
+} from '@aws-sdk/client-s3'
 import { env } from '@docgen/shared'
 
 const client = new S3Client({
@@ -47,6 +53,28 @@ export async function putObject(
   } catch (err) {
     // bucket หายกลางคันได้ (ถูกลบเอง, RustFS เพิ่งขึ้น, restore จาก backup)
     // → สร้างใหม่แล้วลองอีกครั้ง ไม่งั้นทุกงานจะล้มเหลวไปตลอดจนกว่าจะ restart
+    if (!isNoSuchBucket(err)) throw err
+    await ensureBucket()
+    await send()
+  }
+}
+
+/**
+ * ลบไฟล์ผลลัพธ์ทิ้ง
+ *
+ * ใช้ตอนเอกสารถูกลบไปแล้วระหว่างที่ worker กำลังเรนเดอร์
+ * (ผู้ใช้กด "ลบ" ในแท็บประวัติได้ตอนที่ยังสถานะเป็น "กำลังเรนเดอร์")
+ *
+ * ⚠️ ต้องลบตรงนี้ เพราะ record ใน Mongo ถูกลบไปแล้ว
+ *   → ไม่มี `storageKey` ให้ไล่ย้อนกลับมาลบทีหลัง (ไฟล์กำพร้าใน S3 ถาวร)
+ */
+export async function delObject(key: string): Promise<void> {
+  const send = () =>
+    client.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }))
+
+  try {
+    await send()
+  } catch (err) {
     if (!isNoSuchBucket(err)) throw err
     await ensureBucket()
     await send()

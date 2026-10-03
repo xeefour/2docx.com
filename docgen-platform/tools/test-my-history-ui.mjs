@@ -317,6 +317,47 @@ const backFull = await waitFor("document.querySelectorAll('.myhist__row').length
 check('ล้างคำค้นแล้วกลับหน้า 1 ครบ 10 แถว', backFull)
 check('กลับมาที่หน้า 1 ของ 2', (await rangeText()).includes('หน้า 1 / 2'), await rangeText())
 
+// ── 4c. ลบประวัติ ──────────────────────────────────────────────────
+console.log('\n[4c] ลบประวัติ — ต้องยืนยันก่อน แล้วค่อยหายจริง')
+/**
+ * ผู้ใช้สั่ง: *"เพิ่มปุ่มลบ ประวัติ"*
+ *
+ * ต้องพิสูจน์ให้ครบ ไม่ใช่แค่ปุ่มหาย
+ *   1. กดครั้งแรก = **ขอยืนยัน** ยังไม่ลบ (กันลบผิดฉบับ)
+ *   2. กดครั้งที่สอง = ลบจริง
+ *   3. จำนวนบน API ลดลง 1 → ไม่ใช่แค่ซ่อนแถวบนจอ
+ */
+const delTag = `${PAGE_TAG}-7`
+const totalFor = async (q) =>
+  (await (await fetch(`${API}/api/history/${tpl.id}/mine?limit=1&q=${encodeURIComponent(q)}`, { headers: H })).json())
+    .total
+
+await setSearch(delTag)
+const foundForDelete = await waitFor("document.querySelectorAll('.myhist__row').length === 1", 10000)
+check('ค้นเจอฉบับที่จะลบ', foundForDelete)
+const totalBefore = await totalFor(PAGE_TAG)
+check(
+  'มีปุ่มลบในแถวนั้น',
+  !!(await evaluate("!!document.querySelector('[data-testid=\"myhistory-delete\"]')")),
+)
+
+check('กดครั้งแรกได้', await realClick("document.querySelector('[data-testid=\"myhistory-delete\"]')"))
+const asking = await waitFor(
+  "document.querySelector('[data-testid=\"myhistory-delete\"]')?.textContent.includes('ยืนยันลบ')",
+  6000,
+)
+check('ปุ่มเปลี่ยนเป็น "ยืนยันลบ?"', asking)
+check('ยังไม่ลบจนกว่าจะกดยืนยัน', (await evaluate("document.querySelectorAll('.myhist__row').length")) === 1)
+await shot('04-delete-confirm.png')
+
+check('กดยืนยันได้', await realClick("document.querySelector('[data-testid=\"myhistory-delete\"]')"))
+const rowGone = await waitFor("document.querySelectorAll('.myhist__row').length === 0", 10000)
+check('แถวหายจากรายการ', rowGone)
+const delMsg = await evaluate("document.querySelector('[data-testid=\"myhistory-del-msg\"]')?.textContent ?? ''")
+check('มีข้อความบอกว่าลบแล้ว', delMsg.includes('ลบฉบับนี้แล้ว'), delMsg)
+const totalAfter = await totalFor(PAGE_TAG)
+check('จำนวนบน API ลดลง 1 ฉบับ', totalAfter === totalBefore - 1, `${totalBefore} → ${totalAfter}`)
+
 // ── 5. กดแก้ไข ──────────────────────────────────────────────
 console.log('\n[5] กด "แก้ไข" แล้วค่าต้องกลับเข้าฟอร์ม')
 // ค้นใหม่ก่อน เพราะข้อ 4b ล้างคำค้นไปแล้ว

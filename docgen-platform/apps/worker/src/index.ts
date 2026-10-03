@@ -8,7 +8,7 @@ import {
 } from 'nats'
 import { MongoClient, type Db } from 'mongodb'
 import { env, natsServers, resolveMongoUrl, now, RenderJob, type DocumentRecord } from '@docgen/shared'
-import { ensureBucket, putObject } from './s3.js'
+import { ensureBucket, putObject, delObject } from './s3.js'
 import { renderDocument, contentTypeFor } from './docserver.js'
 import { applyBranding } from './branding.js'
 
@@ -253,10 +253,30 @@ async function main() {
       const key = storageKeyFor(documentId, outputFormat)
       await putObject(key, branded, contentTypeFor(outputFormat))
 
-      await docs.updateOne(
+      const saved = await docs.updateOne(
         { _id: documentId } as never,
         { $set: { status: 'done', storageKey: key, updatedAt: now() } },
       )
+      if (saved.matchedCount === 0) {
+        /**
+         * เอกสารถูกลบไปแล้ว**ระหว่าง**ที่เรนเดอร์
+         * (ผู้ใช้กด "ลบ" ในแท็บประวัติตอนที่สถานะยังเป็น "กำลังเรนเดอร์")
+         *
+         * ⚠️ ต้องลบไฟล์ที่เพิ่งอัปขึ้นไปทิ้ง
+         *   record ใน Mongo หายไปแล้ว → ไม่มี `storageKey` ให้ตามย้อนกลับมาลบทีหลัง
+         *   ถ้าปล่อยไว้จะเป็นไฟล์กำพร้าใน S3 ที่ไม่มีใครอ้างถึงและลบไม่ได้
+         */
+        await delObject(key).catch((err: unknown) =>
+          logger.warn('ลบไฟล์ที่ค้างไม่สำเร็จ (เอกสารถูกลบไปแล้ว)', {
+            documentId,
+            key,
+            error: String(err),
+          }),
+        )
+        logger.info('เอกสารถูกลบระหว่างเรนเดอร์ — ลบไฟล์ผลลัพธ์ทิ้งแล้ว', { documentId, key })
+        msg.ack()
+        continue
+      }
       msg.ack()
 
       logger.info('เรนเดอร์สำเร็จ', {

@@ -234,19 +234,39 @@ console.log('\n[5] sticky — แท็บฝั่งขวาต้องเ�
 await clickPaneTab('left', 'ฟอร์ม')
 await clickPaneTab('right', 'ช่องฟอร์ม')
 await sleep(600)
-await evaluate('scrollTo(0, document.body.scrollHeight)')
+/**
+ * ⚠️ เลื่อนไป**กลางหน้า** ไม่ใช่ท้ายหน้าสุด
+ *
+ *   เดิมใช้ `scrollTo(0, scrollHeight)` = เลื่อนจนสุด แล้วคาดว่าแถบแท็บยังอยู่ในจอ
+ *   ซึ่งผูกผลกับ "คอลัมน์ไหนสูงกว่า" — ถ้าคอลัมน์ขวาสั้นกว่าจอ (ช่องน้อย)
+ *   พอเลื่อนสุดมันจะ**ต้อง**หลุดขึ้นไปพร้อมกล่องของมัน ซึ่งถูกต้องแล้ว
+ *   แต่เทสต์รายงานว่าพัง → ผลคือเทสต์ผูกกับจำนวนช่องในฟอร์มของแม่แบบจริง
+ *   (เคยตกเพราะมีช่องเพิ่มจากรอบก่อน ๆ ทำให้คอลัมน์เตี้ยลง 85px)
+ *
+ *   ตรวจที่กลางหน้าแทน = ทดสอบสิ่งที่ตั้งใจจะทดสอบจริง ๆ
+ *   (เลื่อนแล้วแท็บยังถูกหนีบไว้บนสุด) และไม่ผูกกับความสูงของเนื้อหา
+ */
+await evaluate('scrollTo(0, 500)')
 await sleep(600)
 const rightBar = await evaluate(`(() => {
   const col = document.querySelector('.editor-col--right')
   if (!col) return null
   const r = col.querySelector('.tabs').getBoundingClientRect()
-  return { y: Math.round(r.y), vh: innerHeight, sy: Math.round(scrollY), pos: getComputedStyle(col).position }
+  return {
+    y: Math.round(r.y),
+    vh: innerHeight,
+    sy: Math.round(scrollY),
+    pos: getComputedStyle(col).position,
+    colH: Math.round(col.getBoundingClientRect().height),
+  }
 })()`)
 check('หน้าเลื่อนได้จริง (ไม่ใช่ทดสอบกับหน้าที่สั้นเกินจนเลื่อนไม่ได้)', rightBar && rightBar.sy > 0, rightBar ? `scrollY=${rightBar.sy}` : 'ไม่พบ')
 check(
-  'แท็บที่ไม่ใช่พรีวิว: เลื่อนลงแล้วแถบแท็บยังอยู่ในจอ (sticky ทำงาน)',
-  rightBar && rightBar.pos === 'sticky' && rightBar.y >= 0 && rightBar.y < rightBar.vh,
-  rightBar ? `position=${rightBar.pos} · scrollY=${rightBar.sy} · แท็บ y=${rightBar.y} / จอสูง ${rightBar.vh}` : 'ไม่พบ',
+  'แท็บที่ไม่ใช่พรีวิว: เลื่อนแล้วแถบแท็บถูกหนีบไว้บนสุด (sticky ทำงาน)',
+  rightBar && rightBar.pos === 'sticky' && rightBar.y >= 0 && rightBar.y <= 40,
+  rightBar
+    ? `position=${rightBar.pos} · scrollY=${rightBar.sy} · แท็บ y=${rightBar.y} · คอลัมน์สูง ${rightBar.colH} / จอ ${rightBar.vh}`
+    : 'ไม่พบ',
 )
 await shot('04-scrolled.png')
 

@@ -445,7 +445,14 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
                 className={`viewtoggle__btn${listView === m ? ' is-on' : ''}`}
                 data-testid={`view-${m}`}
                 aria-pressed={listView === m}
+                /**
+                 * ผู้ใช้สั่ง: *"ไม่เข้าใจความหมาย ชิด ไม่ต้องใส่ข้อความ"*
+                 *   → ตัดคำว่า "ชิด"/"รายการ" ออก เหลือไอคอนอย่างเดียว
+                 *   คำอธิบายจึงต้องย้ายไป `title` (คนวางเมาส์เห็น)
+                 *   และ `aria-label` (โปรแกรมอ่านหน้าจออ่าน) — ไม่งั้นปุ่มจะไร้ชื่อ
+                 */
                 title={m === 'grid' ? 'แสดงเป็นชิด' : 'แสดงเป็นรายการ'}
+                aria-label={m === 'grid' ? 'แสดงเป็นชิด' : 'แสดงเป็นรายการ'}
                 onClick={() => {
                   setListView(m)
                   try {
@@ -458,7 +465,6 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
                 <span className="viewtoggle__i" aria-hidden="true">
                   {m === 'grid' ? '▦' : '☰'}
                 </span>
-                <span className="viewtoggle__t">{m === 'grid' ? 'ชิด' : 'รายการ'}</span>
               </button>
             ))}
           </div>

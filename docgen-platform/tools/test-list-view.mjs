@@ -5,6 +5,8 @@
  *
  * ── ต้องผ่าน ───────────────────────────────────────────────────
  * · ค่าเริ่มต้นเป็น "ชิด" (มีรูปให้ดู) และสลับเป็น "รายการ" ได้
+ * · ปุ่มสลับมุมมี**ไม่มีข้อความ** (ผู้ใช้สั่ง *"ไม่เข้าใจความหมาย ชิด ไม่ต้องใส่ข้อความ"*)
+ *   ต้องมี `aria-label` + `title` แทน และปุ่มสี่เหลี่ยมจับนิ้วได้ (≥36px)
  * · ค่าที่เลือก**จำไว้ข้ามหน้า** (localStorage) — ไม่ใช่แค่เปลี่ยนในหน้าจอนี้
  * · โหมดชิดโชว์ภาพย่อ · โหมดรายการ**ซ่อน**ภาพย่อ (แต่ td ยังอยู่)
  * · คอลัมน์ภาพย่ออยู่**ท้ายสุด** → data-label ของหมวด/แท็ก/ชนิดไฟล์บนมือถือไม่เพี้ยน
@@ -133,6 +135,49 @@ check('ค่าเริ่มต้นเป็นมุมมีชิด', i
 check('ปุ่มชิดถูกกดอยู่', initial?.gridOn === 'true')
 check('ปุ่มรายการไม่ถูกกด', initial?.listOn === 'false')
 await shot('01-grid.png')
+
+console.log('\n[1b] ปุ่มสลับมุมมี — ต้องไม่มีข้อความ (เหลือไอคอนอย่างเดียว)')
+/**
+ * ผู้ใช้สั่ง: *"ไม่เข้าใจความหมาย ชิด ไม่ต้องใส่ข้อความ"*
+ *
+ * ⚠️ ตัดข้อความแล้วปุ่มจะ**ไร้ชื่อ** ถ้าไม่ย้ายความหมายไป `title`/`aria-label`
+ *    โปรแกรมอ่านหน้าจอจะอ่านได้แค่ "ปุ่ม" และคนวางเมาส์ก็ไม่รู้ว่ากดได้อะไร
+ */
+const toggle = await evaluate(`(() => {
+  const btns = [...document.querySelectorAll('.viewtoggle__btn')]
+  return btns.map((b) => {
+    const r = b.getBoundingClientRect()
+    return {
+      // ไอคอนเป็นอักขระเดียว (▦ / ☰) จึงยอมให้เหลือยาว 1
+      text: b.textContent.trim(),
+      label: b.getAttribute('aria-label') || '',
+      title: b.getAttribute('title') || '',
+      w: Math.round(r.width),
+      h: Math.round(r.height),
+    }
+  })
+})()`)
+check('มีปุ่มสลับครบ 2 ปุ่ม', toggle?.length === 2, JSON.stringify(toggle))
+check(
+  'ปุ่มสวิตช์ไม่มีข้อความให้อ่าน (เหลือไอคอน)',
+  Array.isArray(toggle) && toggle.every((b) => [...b.text].length <= 1),
+  toggle?.map((b) => JSON.stringify(b.text)).join(' ')
+)
+check(
+  'ทุกปุ่มมี aria-label (โปรแกรมอ่านหน้าจอต้องรู้ชื่อ)',
+  Array.isArray(toggle) && toggle.every((b) => b.label.length > 0),
+  toggle?.map((b) => b.label).join(' · ')
+)
+check(
+  'ทุกปุ่มมี title (คนวางเมาส์เห็นคำอธิบาย)',
+  Array.isArray(toggle) && toggle.every((b) => b.title.length > 0),
+  toggle?.map((b) => b.title).join(' · ')
+)
+check(
+  'ปุ่มสี่เหลี่ยมจับนิ้วได้ (≥36px)',
+  Array.isArray(toggle) && toggle.every((b) => b.w >= 36 && b.h >= 36),
+  toggle?.map((b) => `${b.w}×${b.h}`).join(' · ')
+)
 
 const toList = await clickTestId('view-list')
 check('กดสลับเป็นรายการได้', !!toList?.ok, toList?.why ?? toList?.miss ?? '')

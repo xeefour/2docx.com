@@ -190,6 +190,11 @@ const probe = () =>
     cols: rows[0] ? rows[0].children.length : 0,
     emptyHidden: cells.filter((td) => td.classList.contains('is-empty')).every((td) => getComputedStyle(td).display === 'none'),
     emptyTotal: cells.filter((td) => td.classList.contains('is-empty')).length,
+    /** display ของช่องภาพย่อ — ต้องเห็นรูปเฉพาะโหมดชิด */
+    thumbShown: (() => {
+      const td = document.querySelector('.tpllist tbody tr td.tplrow__thumb')
+      return td ? getComputedStyle(td).display : 'ไม่มี td'
+    })(),
     labels: [...new Set([...document.querySelectorAll('.tpllist tbody td[data-label]')].map((td) => getComputedStyle(td, '::before').content).filter((c) => c && c !== 'none' && c !== 'normal'))],
   }
 })()`)
@@ -204,6 +209,13 @@ for (const w of [360, 414, 579]) {
   check('หัวตารางซ่อน (กลายเป็นการ์ด)', !p.theadShown && p.rowDisplay === 'flex', `thead=${p.theadShown} tr=${p.rowDisplay}`)
   check('ปุ่มสูงพอแตะนิ้ว (≥36px)', p.minH >= 36, `${p.minH}px`)
   check('ช่องว่างถูกซ่อน', p.emptyHidden, `มี ${p.emptyTotal} ช่องว่าง`)
+  /**
+   * ⚠️ ภาพย่อโชว์**เฉพาะโหมดชิด** — ผู้ใช้สั่ง:
+   *    *"ผมเลือกแบบรายการ ไม่ควรจะมีรูป"*
+   *    เคยหลุดเพราะกฎ `.tpllist td { display: block }` ใน media query
+   *    มี specificity สูงกว่า `.tplrow__thumb { display: none }` → รูปโผล่ท้ายการ์ด
+   */
+  check('ชิด: มีภาพย่อให้ดู', p.thumbShown === 'block', p.thumbShown)
   check('มีป้ายกำกับแทนคอลัมน์', p.labels.length >= 2, p.labels.join(' '))
   if (w === 579) console.log('  ภาพ:', await shot('w579'))
 }
@@ -267,6 +279,7 @@ check('รายการ: กลับมาเป็นตาราง (tr=tab
 check('รายการ: หัวตารางยังอยู่', l.theadShown === true)
 check('รายการ: คอลัมน์ครบ 6 ช่อง (รวมภาพย่อท้ายสุด)', l.cols === 6, `${l.cols} ช่อง`)
 check('รายการ: หน้าไม่ล้นแนวนอน', l.overflow <= 0, `ล้น ${l.overflow}px`)
+check('รายการ: ซ่อนภาพย่อ', l.thumbShown === 'none', l.thumbShown)
 await shot('w1440-list')
 
 /**
@@ -287,6 +300,12 @@ check(
 )
 check('รายการจอแคบ: ปุ่มสูงพอแตะนิ้ว (≥36px)', n.minH >= 36, `${n.minH}px`)
 check('รายการจอแคบ: ช่องว่างถูกซ่อน', n.emptyHidden, `มี ${n.emptyTotal} ช่องว่าง`)
+/**
+ * ⚠️ ข้อนี้คือบั๊กที่ผู้ใช้เจอ และเทสต์เดิมตรวจไม่ได้เลย
+ *   เพราะกตรวจแค่ที่จอกว้าง ซึ่งกฎจอแคบไม่ทำงาน → ผ่านมาตลอด
+ *   ตอนจอแคบ กฎ td { display: block } ชนะ display:none ของช่องรูป
+ */
+check('รายการจอแคบ: ไม่มีภาพย่อโผล่ท้ายการ์ด', n.thumbShown === 'none', n.thumbShown)
 check('รายการจอแคบ: มีป้ายกำกับแทนคอลัมน์', n.labels.length >= 2, n.labels.join(' '))
 await shot('w579-list')
 

@@ -353,16 +353,24 @@ button.danger:hover:not(:disabled) {
   border-radius: 8px;
   background: var(--bg-2);
 }
+/**
+ * ผู้ใช้สั่ง: *"ไม่เข้าใจความหมาย ชิด ไม่ต้องใส่ข้อความ"*
+ *   -> เหลือไอคอนอย่างเดียว คำอธิบายอยู่ใน title/aria-label ที่ Studio.tsx
+ *
+ * ⚠️ 36x36 ไม่ใช่ตัวเลขสวย ๆ — เป็นพื้นที่นิ้วขั้นต่ำเดียวกับปุ่มจัดการในแถว
+ *    และเป็นเกณฑ์เดียวกับที่ test-list-mobile ตรวจ
+ */
 .viewtoggle__btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--ink-2);
-  font-size: 13px;
   cursor: pointer;
 }
 .viewtoggle__btn.is-on {
@@ -370,7 +378,7 @@ button.danger:hover:not(:disabled) {
   color: #fff;
 }
 .viewtoggle__i {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1;
 }
 
@@ -530,6 +538,25 @@ tbody tr:hover {
    */
   .tpllist td.is-empty {
     display: none;
+  }
+  /**
+   * ภาพย่อต้องโชว์**เฉพาะโหมดชิด** — ผู้ใช้สั่ง:
+   * *"ผมเลือกแบบรายการ ไม่ควรจะมีรูป"*
+   *
+   * ⚠️ บั๊กที่ทำให้หลุด: กฎ .tpllist td { display: block } ข้างบน
+   *    มี specificity (0,1,1) ซึ่ง**สูงกว่า** .tplrow__thumb { display: none } (0,1,0)
+   *    ผลคือ display: block ชนะ -> รูปโผล่ท้ายการ์ดในโหมดรายการทุกครั้งที่จอแคบ
+   *    ที่จอกว้างไม่เจอเพราะกฎจอแคบไม่ทำงาน (เทสต์เดิมผ่านมาตลอดเลย)
+   *
+   * ⚠️ กฎ .tpllist--grid ... ต้องอยู่**หลัง**เสมอ
+   *    เพราะ specificity เท่ากัน (0,2,1) กติกา media query ไม่ได้เพิ่มน้ำหนักให้
+   *    ถ้าสลับลำดับ จะไปซ่อนรูปในโหมดชิดแทน (ซึ่งเป็นที่เดียวที่ควรเห็นรูป)
+   */
+  .tpllist td.tplrow__thumb {
+    display: none;
+  }
+  .tpllist--grid td.tplrow__thumb {
+    display: block;
   }
   /*
    * ⚠️ ห้ามย้อนกลับไปใช้ `td:last-child` ในกลุ่มกฎนี้

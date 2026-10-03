@@ -2,6 +2,7 @@ import type { App } from '../../types.js'
 import { AppError } from '@docgen/shared'
 import { getAccessView, who } from '../studio/service.js'
 import * as carbone from './carbone.js'
+import { deleteAllPreviews } from './previews.js'
 
 /** โครง request ที่ service layer ใช้ — ทำซ้ำที่นี่เพราะ `studio/service.ts` ไม่ export ออกมา */
 type Req = { user?: { sub: string; name?: string } | null }
@@ -195,6 +196,9 @@ export async function listTombstoneKeys(app: App): Promise<Set<string>> {
 export async function purgeTemplate(app: App, templateKey: string): Promise<void> {
   await carbone.deleteTemplate(templateKey)
   await Promise.all([
+    // ⚠️ ลบรูปตัวอย่างด้วย — ไม่งั้นไฟล์ใน S3 ค้างตลอดไป
+    //   (Mongo หายแล้วเราหาทางชี้กลับไป S3 ไม่ได้อีก = รั่วพื้นที่เงียบ ๆ)
+    deleteAllPreviews(app, templateKey),
     app.mongo.collection(TOMBSTONES).deleteOne({ _id: templateKey } as never),
     app.mongo.collection('template_access').deleteOne({ _id: templateKey } as never),
     app.mongo.collection('form_schemas').deleteOne({ _id: templateKey } as never),

@@ -7,6 +7,7 @@ import {
 } from '@docgen/shared'
 import type { App } from '../../types.js'
 import * as carbone from './carbone.js'
+import * as previews from './previews.js'
 import { readTemplateTags } from './tags.js'
 import { assertCanEdit, assertCanReplace, assertCanView, claimOwner, who } from '../studio/service.js'
 import {
@@ -208,6 +209,187 @@ export async function templateRoutes(app: App) {
   )
 
   // POST /api/templates — อัปโหลดแม่แบบใหม่
+  // ── ตัวอย่างแม่แบบเป็นรูป ─────────────────────────────────────────
+  const PreviewSchema = z.object({
+    id: z.string(),
+    url: z.string(),
+    contentType: z.string(),
+    kind: z.enum(['auto', 'upload']),
+    by: z.string(),
+    byName: z.string().nullable(),
+    createdAt: z.string(),
+  })
+
+  // GET /api/templates/:id/previews
+  app.get(
+    '/templates/:id/previews',
+    {
+      schema: {
+        tags,
+        summary: 'รูปตัวอย่างของแม่แบบ',
+        description: [
+          'คนที่ดูแม่แบบได้ดูตัวอย่าง (ไม่ต้องเป็นเจ้าของ)',
+          'แต่**เพิ่ม/ลบ** ได้เฉพาะเจ้าของเท่านั้น',
+          '',
+          '`url` เป็น presigned URL (อายุ 1 ชั่วโมง)',
+          'หน้าเว็บควรโหลดผ่าน `/previews/:pid/file` แทน เพราะ RustFS ไม่มี CORS',
+        ].join('\n'),
+        params: z.object({ id: z.string().min(1).max(200) }),
+        response: {
+          200: z.object({ items: z.array(PreviewSchema) }),
+          403: ErrorResponse,
+          500: ErrorResponse,
+        },
+      },
+    },
+    async (req) => ({ items: await previews.listPreviews(app, req.params.id, req) }),
+  )
+
+  // POST /api/templates/:id/previews
+  app.post(
+    '/templates/:id/previews',
+    {
+      schema: {
+        tags,
+        summary: 'เพิ่มรูปตัวอย่างของแม่แบบ',
+        description: [
+          '⚠️ เจ้าของเท่านั้น (หรือแม่แบบที่ยังไม่มีเจ้าของ = คนแรกที่กดคุม)',
+          '',
+          'ชนิดไฟล์ตรวจจาก**ไบต์จริง** ไม่เชื่อ Content-Type ที่ client ส่งมา',
+        ].join('\n'),
+        consumes: ['multipart/form-data'],
+        params: z.object({ id: z.string().min(1).max(200) }),
+        response: {
+          201: PreviewSchema,
+          400: ErrorResponse,
+          403: ErrorResponse,
+          409: ErrorResponse,
+          500: ErrorResponse,
+        },
+      },
+    },
+    async (req, reply) => {
+      if (!req.isMultipart()) {
+        return reply.code(400).send({
+          code: 'EXPECTED_MULTIPART',
+          message: 'ต้องส่งไฟล์แบบ multipart/form-data',
+        })
+      }
+
+      const file = await req.file()
+      if (!file) {
+        return reply.code(400).send({ code: 'NO_FILE', message: 'ไม่พบไฟล์รูป' })
+      }
+
+      // field อื่นมาในส่วน form ไม่ใช่ไฟล์ — อ่านค่าก่อน consume ทิ้ง
+      const parts = file.fields as Record<string, { value?: unknown }>
+      const kind = parts.kind?.value === 'auto' ? 'auto' : 'upload'
+
+      const view = await previews.addPreview(
+        app,
+        req.params.id,
+        await file.toBuffer(),
+        kind,
+        req,
+      )
+      return reply.code(201).send(view)
+    },
+  )
+
+  // GET /api/templates/:id/previews/:pid/file
+  //
+  // ⚠️ ไม่ใส่ `response` schema — Zod serializer จะพยายาม parse Buffer เป็น JSON
+  //    route ที่ตอบไฟล์ต้องปล่อยให้ Fastify ส่ง Buffer ผ่านตรง ๆ
+  app.get(
+    '/templates/:id/previews/:pid/file',
+    {
+      schema: {
+        tags,
+        summary: 'ไฟล์รูปตัวอย่าง',
+        params: z.object({
+          id: z.string().min(1).max(200),
+          pid: z.string().min(1).max(120),
+        }),
+      },
+    },
+    async (req, reply) => {
+      const { body, contentType } = await previews.getPreviewFile(
+        app,
+        req.params.id,
+        req.params.pid,
+        req,
+      )
+      return reply
+        .header('content-type', contentType)
+        .header('content-length', String(body.length))
+        // รูปคงที่อยู่จนกว่าจะถูกลบ → cache ได้
+        .header('cache-control', 'private, max-age=3600')
+        .send(body)
+    },
+  )
+
+  // DELETE /api/templates/:id/previews/:pid
+  app.delete(
+    '/templates/:id/previews/:pid',
+    {
+      schema: {
+        tags,
+        summary: 'ลบรูปตัวอย่าง',
+        params: z.object({
+          id: z.string().min(1).max(200),
+          pid: z.string().min(1).max(120),
+        }),
+        response: {
+          204: z.null(),
+          403: ErrorResponse,
+          404: ErrorResponse,
+          500: ErrorResponse,
+        },
+      },
+    },
+    async (req, reply) => {
+      await previews.deletePreview(app, req.params.id, req.params.pid, req)
+      return reply.code(204).send(null)
+    },
+  )
+
+  // GET /api/templates/thumbs — ภาพย่อของหลายแม่แบบในคำขอเดียว
+  //
+  // ⚠️ ต้องประกาศ**ก่อน** `/templates/:id`
+  //    ไม่งั้น Fastify จะจับ "thumbs" ไปเป็นค่า `id` แล้วตอบ 404
+  app.get(
+    '/templates/thumbs',
+    {
+      schema: {
+        tags,
+        summary: 'ภาพย่อของหลายแม่แบบ',
+        description: [
+          'หน้ารายการมีหลายแถว → ถ้ายิงทีละแถวจะเป็น N+1',
+          '',
+          'คืนค่า null สำหรับแม่แบบที่ยังไม่มีรูปตัวอย่าง',
+          'และสำหรับแม่แบบที่ผู้เรียก**ดูไม่ได้** (ไม่ใช่แค่ไม่มีรูป)',
+        ].join('\n'),
+        querystring: z.object({
+          keys: z.string().min(1).max(8000),
+        }),
+        response: {
+          200: z.object({
+            items: z.record(
+              z.string(),
+              z.object({ id: z.string(), url: z.string() }).nullable(),
+            ),
+          }),
+          500: ErrorResponse,
+        },
+      },
+    },
+    async (req) => {
+      // กรองค่าว่างและซ้ำออกก่อน — ป้องกัน query ยาวเปล่ว ๆ
+      const keys = [...new Set(req.query.keys.split(',').map((k) => k.trim()).filter(Boolean))]
+      return { items: await previews.listThumbs(app, keys, req) }
+    },
+  )
+
   app.post(
     '/templates',
     {

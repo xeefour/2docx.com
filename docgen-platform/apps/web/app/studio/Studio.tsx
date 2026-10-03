@@ -30,6 +30,27 @@ import Tabs from './Tabs'
 import TemplateEditor from './TemplateEditor'
 import { readParam, readTemplateKey, setUrl, studioPath, TAB_PARAM } from './lib/urlState'
 
+/**
+ * ── มุมมีหน้ารายการ: รายการ / ชิด ─────────────────────────────────
+ *
+ * ผู้ใช้สั่ง: *"ในหน้าหลักสามารถเลือกได้ว่าจะแสดงเป็นรายการ หรือ grid"*
+ *
+ * ⚠️ เก็บใน localStorage เพราะเป็นค่ากำหนดส่วนตัวของผู้ใช้แต่ละคน
+ *   ไม่ใช่การตั้งค่าของระบบ → ไม่ต้องเก็บใน Mongo และไม่ต้องรอ API
+ * `grid` เป็นค่าเริ่มต้นเพราะมีรูปตัวอย่างให้ดู (ค่าเริ่มต้นเดิมคือรายการ)
+ */
+const VIEW_KEY = 'studio.listView'
+const readStoredView = (): 'list' | 'grid' => {
+  // SSR ไม่มี window → ค่าเริ่มต้นต้องไม่แตะ storage
+  if (typeof window === 'undefined') return 'grid'
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid'
+  } catch {
+    // โหมดส่วนตัว/ปิด storage → ใช้ค่าเริ่มต้น (ไม่ควรทำให้ทั้งหน้าพัง)
+    return 'grid'
+  }
+}
+
 const ACCEPT = '.docx,.xlsx,.pptx,.odt,.ods,.odp'
 const MAX_MB = 20
 
@@ -58,6 +79,11 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
   const [templates, setTemplates] = useState<Template[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [access, setAccess] = useState<Record<string, AccessView>>({})
+  /** มุมมีรายการ: รายการ | ชิด (จำค่าไว้ต่อคนใน localStorage) */
+  const [listView, setListView] = useState<'list' | 'grid'>(readStoredView)
+  /** key → รูปตัวอย่างแรก (null = ยังไม่มีรูป หรือดูไม่ได้) */
+  const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
+
   const [bookmarks, setBookmarks] = useState<BookmarkRecord[]>([])
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
@@ -272,6 +298,45 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
     })
   }, [templates, search, category, tab, access, bookmarkKeys])
 
+  /**
+   * ดึงภาพย่อของทุกแม่แบบที่เห็นในรายการ ใน**คำขอเดียว**
+   *
+   * ⚠️ ถ้ายิงทีละแถวจะเป็น N+1 — หน้าแรกยิงหลายสิบคำขอพร้อมกัน
+   *   และแต่ละอันยังยิง S3 เพื่อออก presigned URL อีกที
+   *
+   * ⚠️ ภาพย่อโหลดไม่สำเร็จ = ไม่ทำให้หน้ารายการพัง
+   *   ตัวอย่างคือตกหลุดออกไป ไม่ใช่ตัวหลักของหน้านี้ → โหลดไม่สำเร็จก็ปล่อยเป็นค่าว่าง
+   */
+  useEffect(() => {
+    if (loading || filtered.length === 0) {
+      setThumbs({})
+      return
+    }
+    let alive = true
+    const keys = [...new Set(filtered.map(templateKeyOf))]
+    void api
+      .thumbs(keys)
+      .then(({ items }) => {
+        if (!alive) return
+        setThumbs(
+          Object.fromEntries(
+            Object.entries(items).map(([k, v]) => [
+              k,
+              v ? api.previewFileUrl(k, v.id) : null,
+            ]),
+          ),
+        )
+      })
+      .catch(() => {
+        // เงียบไว้ — ภาพย่อเป็นของเสริม ไม่ใช่ตัวหลักของหน้า
+        if (alive) setThumbs({})
+      })
+    return () => {
+      alive = false
+    }
+  }, [loading, filtered])
+
+
   if (open) {
     return (
       <>
@@ -372,7 +437,32 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
           placeholder="ค้นหาจากชื่อ แท็ก หรือ versionId"
           style={{ maxWidth: 320 }}
         />
-        <select value={category} onChange={(e) => setCategory(e.target.value)} style={{ maxWidth: 200 }}>
+          <div className="viewtoggle" role="group" aria-label="วิธีแสดงรายการ">
+            {(['grid', 'list'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                className={`viewtoggle__btn${listView === m ? ' is-on' : ''}`}
+                data-testid={`view-${m}`}
+                aria-pressed={listView === m}
+                title={m === 'grid' ? 'แสดงเป็นชิด' : 'แสดงเป็นรายการ'}
+                onClick={() => {
+                  setListView(m)
+                  try {
+                    window.localStorage.setItem(VIEW_KEY, m)
+                  } catch {
+                    // storage ใช้ไม่ได้ = เลือกได้แต่จำข้ามหน้า
+                  }
+                }}
+              >
+                <span className="viewtoggle__i" aria-hidden="true">
+                  {m === 'grid' ? '▦' : '☰'}
+                </span>
+                <span className="viewtoggle__t">{m === 'grid' ? 'ชิด' : 'รายการ'}</span>
+              </button>
+            ))}
+          </div>
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">ทุกหมวด</option>
           {categories.map((c) => (
             <option key={c} value={c}>
@@ -419,7 +509,7 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
            *    แยกได้ว่าตารางไหนคือรายการแม่แบบ (หน้านี้) ไม่ไปกระทบตารางอื่น
            *    เช่นตารางประวัติใน `HistoryPanel` ที่ยังต้องการเป็นตารางเหมือนเดิม
            */
-          <table className="tpllist">
+          <table className={`tpllist${listView === 'grid' ? ' tpllist--grid' : ''}`}>
             <thead>
               <tr>
                 <th>ชื่อ</th>
@@ -439,6 +529,7 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
                     tpl={t}
                     view={view}
                     starred={bookmarkKeys.has(key)}
+                    thumb={thumbs[key] ?? null}
                     // ⚠️ ต้อง `.catch()` — `toggleBookmark` โยน error ต่อให้ผู้เรียก
                     //   แต่ตรงนี้ข้อความแสดงผ่าน `setError` ของหน้านี้อยู่แล้ว
                     //   ถ้าไม่จับ promise จะกลายเป็น unhandledrejection (หน้าจอแดง)
@@ -559,6 +650,7 @@ function TemplateRow({
   tpl,
   view,
   starred,
+  thumb,
   onStar,
   onOpen,
   onChanged,
@@ -568,6 +660,8 @@ function TemplateRow({
   tpl: Template
   view?: AccessView
   starred: boolean
+  /** URL ภาพย่อ (null = ยังไม่มีรูปตัวอย่าง) */
+  thumb?: string | null
   onStar: () => void
   onOpen: () => void
   onChanged: () => Promise<void>
@@ -729,6 +823,31 @@ function TemplateRow({
           </button>
         )}
       </td>
+        {/*
+         * ภาพย่อ — **ต่อท้ายสุดเท่านั้น**
+         *   กฎจอแคบใน globals.css ใช้ `td:nth-child(2..4)` เป็น data-label
+         *   ถ้าแทรกคอลัมน์ตรงกลาง หมวด/แท็ก/ชนิดไฟล์จะเลื่อนตำแหน่ง
+         *   แล้วป้ายกำกับบนมือถือผิดทั้งชุด
+         *   โชว์เฉพาะตอนเป็นมุมมีชิด (ซ่อนด้วย CSS)
+         */}
+        <td className="tplrow__thumb" data-label="ตัวอย่าง">
+          {thumb ? (
+            <img
+              src={thumb}
+              alt=""
+              loading="lazy"
+              data-testid="row-thumb"
+              onError={(e) => {
+                // รูปเสีย = ไม่ใช่ตัวหลัก → ซ่อนทิ้ง ไม่ปล่อยกรอบเสียค้างไว้ให้รกหน้าจอ
+                e.currentTarget.style.visibility = 'hidden'
+              }}
+            />
+          ) : (
+            <span className="tplrow__noimg" aria-hidden="true">
+              ไม่มีตัวอย่าง
+            </span>
+          )}
+        </td>
     </tr>
   )
 }

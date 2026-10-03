@@ -7,8 +7,9 @@
  * ขวา: ใครมีสิทธิ์ใช้แม่แบบนี้ — เก็บใน Mongo ของเราเอง
  */
 import { useEffect, useRef, useState } from 'react'
-import { api, ApiError, type AccessView, type Template } from './lib/api'
+import { api, ApiError, templateKeyOf, type AccessView, type Template } from './lib/api'
 import { copyText } from './lib/copy'
+import TemplatePreviews from './TemplatePreviews'
 
 /** ชนิดไฟล์ที่ Carbone รับได้ — ต้องตรงกับ ALLOWED_EXT ของ API */
 const ACCEPT = '.docx,.xlsx,.pptx,.odt,.ods,.odp,.doc,.odf'
@@ -237,6 +238,37 @@ export default function SharePanel({
            */}
           {canManage ? (
             <>
+              {/**
+               * ── ตัวอย่างเอกสารเป็นรูป ──
+               *
+               * ผู้ใช้สั่ง: *"เพิ่ม ตัวอย่างแม่แบบที่เป็นรูป สร้างให้อันโนมัติ มีได้หลายรูป
+               *   สามารถเพิ่มรูปที่เจ้าของแม่แบบอัพโหลดเองได้"*
+               *
+               * วางไว้ในการ์ด "ข้อมูลแม่แบบ" เพราะเป็นเรื่องของแม่แบบตัวนั้น
+               * ไม่ใช่เรื่องการแชร์ → ไม่ควรไปโผล่ในการ์ด "การแชร์และสิทธิ์"
+               *
+               * ⚠️ เจ้าของเท่านั้นที่เพิ่ม/ลบรูปได้ (กติกาอยู่ใน component เอง)
+               *   คนอื่นที่เปิดดูได้อยู่แล้ว
+               */}
+              <div
+                style={{
+                  marginTop: 18,
+                  paddingTop: 14,
+                  borderTop: '1px solid var(--line)',
+                }}
+              >
+                <div className="lbl" style={{ marginBottom: 8 }}>
+                  ตัวอย่างเอกสารเป็นรูป
+                </div>
+                <TemplatePreviews
+                  templateKey={access?.templateKey ?? templateKeyOf(template)}
+                  versionId={template.versionId}
+                  name={template.name}
+                  view={access ?? undefined}
+                  notify={notify}
+                />
+              </div>
+
               <input
                 ref={fileRef}
                 type="file"

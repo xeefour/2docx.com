@@ -62,6 +62,62 @@ function retryAfterMs(res: Response): number | null {
   return Number.isFinite(n) ? Math.max(0, n * 1000) : null
 }
 
+/**
+ * อัปโหลดรูปตัวอย่างหนึ่งรูป
+ *
+ * ⚠️ **ห้ามใช้ `call()` ตรง ๆ**
+ *   `call()` ตั้ง `content-type: application/json` ทุกครั้งที่มี body
+ *   ถ้าใช้กับ FormData เบราว์เซอร์จะ**ไม่เติม boundary ของ multipart**
+ *   แล้ว Fastify อ่านไฟล์ไม่ออก (`req.file()` คืน undefined → 400 NO_FILE)
+ *   และถ้า content-type ไม่ตรง Fastify จะไม่ยอมเข้า content-type parser
+ *
+ * ⚠️ ไม่ลองซ้ำอัตโนมัติ เพราะอัปโหลดเป็นการเขียน — ลองซ้ำ = อาจได้รูปซ้ำ
+ *   (ต่างจาก GET ที่ retry ซ้ำได้)
+ */
+async function uploadPreview(
+  templateKey: string,
+  blob: Blob,
+  filename: string,
+  kind: 'auto' | 'upload',
+): Promise<PreviewImage> {
+  const form = new FormData()
+  form.set('kind', kind)
+  form.set('file', blob, filename)
+
+  const res = await fetch(
+    `${BASE}/templates/${encodeURIComponent(templateKey)}/previews`,
+    {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: form, // ⚠️ ห้ามตั้ง content-type เอง — ปล่อยให้เบราว์เซอร์เติม boundary
+    },
+  )
+
+  if (res.status === 401) {
+    window.location.href = '/auth/login'
+    throw new ApiError(401, 'UNAUTHORIZED', 'ยังไม่ได้เข้าสู่ระบบ')
+  }
+
+  const text = await res.text()
+  let body: unknown = null
+  try {
+    body = text ? JSON.parse(text) : null
+  } catch {
+    body = null
+  }
+
+  if (!res.ok) {
+    const m = (body as { message?: string } | null)?.message
+    throw new ApiError(
+      res.status,
+      (body as { code?: string } | null)?.code ?? 'UNKNOWN',
+      m ?? (res.status === 413 ? 'ไฟล์รูปใหญ่เกินไป' : `บันทึกรูปไม่สำเร็จ (${res.status})`),
+    )
+  }
+
+  return body as PreviewImage
+}
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   /**
    * ⚠️ อย่าตั้ง content-type เมื่อไม่มี body
@@ -255,6 +311,21 @@ export type FieldDef = {
   options?: FieldOption[]
   rules?: FieldRule
   ai?: { enabled: boolean; hint?: string }
+}
+
+/**
+ * รูปตัวอย่างของแม่แบบหนึ่งรูป
+ *
+ * `kind`: ของระบบสร้างให้ (`auto`) หรือเจ้าของอัปโหลดเอง (`upload`)
+ */
+export type PreviewImage = {
+  id: string
+  url: string
+  contentType: string
+  kind: 'auto' | 'upload'
+  by: string
+  byName: string | null
+  createdAt: string
 }
 
 export type AccessView = {
@@ -569,6 +640,38 @@ export const api = {
    *   · pdf.js ต้องดึงไฟล์มาทั้งก้อนเพื่อวาดหน้าเป็นรูป
    */
   fileUrl: (id: string) => `/api/documents/${encodeURIComponent(id)}/file`,
+
+  // ── ตัวอย่างแม่แบบเป็นรูป ─────────────────────────────────────
+  /**
+   * ภาพย่อของหลายแม่แบบในคำขอเดียว (หน้ารายการ)
+   *
+   * @returns key → รูปแรก หรือ `null` (ยังไม่มีรูป / ดูไม่ได้)
+   */
+  thumbs: (keys: string[]) =>
+    call<{ items: Record<string, { id: string; url: string } | null> }>(
+      `/templates/thumbs?keys=${encodeURIComponent(keys.join(','))}`,
+    ),
+
+  listPreviews: (templateKey: string) =>
+    call<{ items: PreviewImage[] }>(`/templates/${encodeURIComponent(templateKey)}/previews`),
+
+  addPreview: uploadPreview,
+
+  deletePreview: (templateKey: string, id: string) =>
+    call<void>(
+      `/templates/${encodeURIComponent(templateKey)}/previews/${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+    ),
+
+  /**
+   * URL รูปสำหรับ `<img src>`
+   *
+   * ⚠️ ใช้ route ของ API ไม่ใช่ `PreviewImage.url` (presigned URL)
+   *   RustFS ไม่ตอบ OPTIONS → ไม่มี CORS และชี้ไปที่ endpoint ภายใอผ่าน tailnet
+   *   ถ้าโหลดไม่ได้จะเห็นกรอบรูปเสียทั้งการ์ด
+   */
+  previewFileUrl: (templateKey: string, id: string) =>
+    `/api/templates/${encodeURIComponent(templateKey)}/previews/${encodeURIComponent(id)}/file`,
 
   // ── ฟอร์มที่ผู้ใช้ออกแบบเอง ─────────────────────────────────
   getForm: (templateKey: string) =>

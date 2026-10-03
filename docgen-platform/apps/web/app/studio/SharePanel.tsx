@@ -252,7 +252,17 @@ export default function SharePanel({
               {template.versionId}
             </div>
           </div>
-          <button onClick={() => void saveMeta()} disabled={!canEdit || busy} data-testid="template-save-meta">
+          {/**
+           * ⚠️ `justifySelf: 'start'` — ผู้ใช้สั่ง *"อันนี้ก็ใหญ่"*
+           *   กล่องนี้เป็น grid ปุ่มจึงถูกยืดเต็มคอลัมน์จนกว้างเท่าทั้งการ์ด
+           *   กำหนดเองเพื่อให้ชิดซ้ายตามความกว้างข้อความจริง
+           */}
+          <button
+            onClick={() => void saveMeta()}
+            disabled={!canEdit || busy}
+            data-testid="template-save-meta"
+            style={{ justifySelf: 'start' }}
+          >
             บันทึกข้อมูลแม่แบบ
           </button>
         </div>
@@ -274,7 +284,12 @@ export default function SharePanel({
             href={api.templateFileUrl(templateKeyOfTemplate(template))}
             download
             data-testid="template-download"
-            style={{ textAlign: 'center', textDecoration: 'none' }}
+            /**
+             * ⚠️ ผู้ใช้สั่ง *"ปรับเหมือนกัน"* — หดตามเนื้อหา
+             *   เอา textAlign:'center' ออกด้วย ไม่งั้นข้อความจะเบี้ยว
+             *   ในกล่องที่หดตามความกว้างจริง
+             */
+            style={{ justifySelf: 'start', textDecoration: 'none' }}
           >
             ⬇️ ดาวน์โหลดแม่แบบ
           </a>
@@ -331,6 +346,8 @@ export default function SharePanel({
                 disabled={busy}
                 data-testid="template-replace"
                 onClick={() => fileRef.current?.click()}
+                /* จุดเดียวกันกับปุ่มอื่นในกล่อง → ต้องหดเหมือนกัน */
+                style={{ justifySelf: 'start' }}
               >
                 ⬆️ อัปโหลดแม่แบบใหม่แทน
               </button>
@@ -355,6 +372,8 @@ export default function SharePanel({
                   disabled={busy}
                   data-testid="template-trash"
                   onClick={() => setConfirmDelete(true)}
+                  /* ผู้ใช้สั่ง *"ปรับปุ่มส่วนนี้ ทำไมใหญ่จัง"* */
+                  style={{ justifySelf: 'start' }}
                 >
                   🗑️ ลบแม่แบบ
                 </button>

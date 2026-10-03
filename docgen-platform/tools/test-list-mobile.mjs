@@ -12,6 +12,7 @@
  *    ต้องกลายเป็นการ์ดพร้อมป้ายกำกับคอลัมน์เหมือนกัน
  * 6. กฎมือถือต้องไม่รั่วไปกระทบตารางอื่น (ตารางที่ไม่มี `.tpllist`)
  * 7. ที่จอแคบ ปุ่ม "เปิด" ต้อง**กดได้จริง** ไม่ใช่แค่มองเห็น
+ * 8. จอมือถือ (390px) → แถบแท็บ**เห็นครบ 2 แถว ไม่มี scrollbar แนวนอน** และกดสลับได้จริง
  *
  * ── บั๊กที่เคยเจอและกฎกันไว้ ───────────────────────────────────
  * · การ์ดรอบตารางมี `overflow: hidden` ปุ่มที่ล้นออกไปจะ**ถูกตัดจนกดไม่ได้**
@@ -457,6 +458,92 @@ for (const w of [579, 1440]) {
     await shot('w579-small-buttons')
   }
 }
+/**
+ * ── 9 · แถบแท็บบนมือถือ ──────────────────────────────────────────────
+ * ผู้ใช้สั่ง: *"ทำให้รองรับหน้าจอแบบมือถือ"*
+ * (ภาพจาก /studio ที่ 481×539 — แท็บที่ 4 หลุดนอกจอ + scrollbar แนวนอนโผล่)
+ *
+ * ⚠️ เดิมเป็น `display:flex; overflow-x:auto` = เลื่อนแนวนอนได้
+ *    ซึ่งแย่มากบนมือถือ
+ *    · scrollbar กินความสูงจอ และมือถือหลายเครื่องซ่อนมันอยู่แล้ว
+ *      → เห็นแถบเลื่อนตัวเองเฉย ๆ แต่ไม่รู้ว่าต้องเลื่อน
+ *    · แท็บที่ 4 ซ่อนนอกจอ ผู้ใช้เลยไม่รู้ว่ามีแท็บนั้น
+ *    · แก้เป็นกริด 2 คอลัมน์ → เห็นครบทุกแท็บโดยไม่ต้องเลื่อนอะไรเลย
+ *
+ * ⚠️ ตรวจที่ 390px ไม่ใช่ 481px
+ *    481 คือจอที่ผู้ใช้ถ่าย แต่ของจริงที่ใช้บนมือถือเล็กกว่านั้นอีก
+ *    ถ้าแก้แล้วผ่านที่ 481 แต่พังที่ 390 = แก้ไม่จริง
+ */
+console.log('\n[9] แถบแท็บบนมือถือ (390px) — ต้องเห็นครบ ไม่ต้องเลื่อนแนวนอน')
+await setWidth(390)
+const bar = await evaluate(`(() => {
+  const el = document.querySelector('.tabs')
+  if (!el) return null
+  const r = el.getBoundingClientRect()
+  const tabs = [...el.querySelectorAll('.tabs__tab')]
+  return {
+    vw: innerWidth,
+    barLeft: Math.round(r.left),
+    barRight: Math.round(r.right),
+    // เกินจอ = มี scrollbar แนวนอน
+    overflow: el.scrollWidth - el.clientWidth,
+    rows: new Set(tabs.map((t) => Math.round(t.getBoundingClientRect().top))).size,
+    tabs: tabs.map((t) => {
+      const b = t.getBoundingClientRect()
+      return {
+        text: t.textContent.trim().replace(/\\s+/g, ' ').slice(0, 14),
+        w: Math.round(b.width),
+        h: Math.round(b.height),
+        outRight: Math.round(Math.max(0, b.right - innerWidth)),
+        outLeft: Math.round(Math.max(0, -b.left)),
+        on: t.classList.contains('tabs__tab--on'),
+      }
+    }),
+  }
+})()`)
+check('เจอแถบแท็บ', !!bar, bar ? '' : 'ไม่เจอ .tabs')
+if (!bar) {
+  skipCheck('แท็บบนมือถือ', 'ไม่เจอแถบแท็บ')
+} else {
+  check('มีแท็บครบ 4 อัน', bar.tabs.length === 4, `${bar.tabs.length} แท็บ`)
+  check('ไม่ล้นแนวนอน (ไม่มี scrollbar)', bar.overflow <= 0, `ล้น ${bar.overflow}px`)
+  check('ไม่มีแท็บหลุดออกนอกจอ', bar.tabs.every((t) => t.outRight === 0 && t.outLeft === 0), JSON.stringify(bar.tabs.map((t) => t.outRight)))
+  check('ทุกแท็บกดได้ (สูงพอแตะนิ้ว ≥36px)', bar.tabs.every((t) => t.h >= 36), JSON.stringify(bar.tabs.map((t) => t.h)))
+  check('ทุกแท็บกว้างพอให้เห็น (≥60px)', bar.tabs.every((t) => t.w >= 60), JSON.stringify(bar.tabs.map((t) => t.w)))
+  check('แท็บถูกจัดเป็น 2 แถว (ไม่ล้นจอ)', bar.rows === 2, `${bar.rows} แถว`)
+  check('มีแท็บที่เลือกอยู่ถูกไฮไลต์', bar.tabs.some((t) => t.on), bar.tabs.find((t) => t.on)?.text ?? 'ไม่มี')
+  await shot('w390-tabs')
+
+  /**
+   * ⚠️ ต้องกดได้จริง ไม่ใช่แค่วางไว้สวย
+   *   กริดใหม่เปลี่ยนพิกัดปุ่มทุกปุ่ม → ถ้ามีอะไรบังจุดกด
+   *   หรือ `elementFromPoint` ไม่โดนปุ่ม ข้อนี้จะตก
+   */
+  const box = await evaluate(`(() => {
+    const t = [...document.querySelectorAll('.tabs__tab')].find((x) => !x.classList.contains('tabs__tab--on'))
+    if (!t) return null
+    t.scrollIntoView({ block: 'nearest' })
+    const r = t.getBoundingClientRect()
+    const x = r.x + r.width / 2, y = r.y + r.height / 2
+    const hit = document.elementFromPoint(x, y)
+    return { ok: !!hit && (hit === t || t.contains(hit)), label: t.textContent.trim().replace(/\\s+/g, ' ').slice(0, 14), x, y }
+  })()`)
+  check('จุดกดแท็บไม่ถูกอะไรบัง', !!box?.ok, box?.ok ? box.label : 'มีอย่างอื่นบังจุดกด')
+  if (box?.ok) {
+    for (const type of ['mousePressed', 'mouseReleased'])
+      await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 })
+    await sleep(400)
+    const after = await evaluate(`(() => {
+      const t = [...document.querySelectorAll('.tabs__tab')].find((x) => x.classList.contains('tabs__tab--on'))
+      return t ? t.textContent.trim().replace(/\\s+/g, ' ').slice(0, 14) : null
+    })()`)
+    check('กดแท็บบนมือถือแล้วเปลี่ยนจริง', !!after && after !== bar.tabs.find((t) => t.on)?.text, `${bar.tabs.find((t) => t.on)?.text} → ${after}`)
+    // กลับแท็บแรกไว้ที่เดิม ไม่ให้ผู้ใช้เจอหน้าที่เปลี่ยนไปแล้วคิดว่าระบบพัง
+    await evaluate(`document.querySelector('.tabs__tab')?.click()`)
+    await sleep(250)
+  }
+}
+
 await setWidth(579)
 console.log(`\nผ่าน ${pass} · ตก ${fail}`)
 await send('Browser.close').catch(() => {})

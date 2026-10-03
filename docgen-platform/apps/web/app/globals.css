@@ -1127,6 +1127,48 @@ tbody tr:hover {
   text-align: center;
 }
 
+/* ── แท็บบนมือถือ: 2 คอลัมน์ ไม่ต้องเลื่อนแนวนอน ────────────────────── */
+@media (max-width: 720px) {
+  .tabs {
+    /*
+     * grid แทน flex+overflow-x
+     * เดิมเป็น display:flex + overflow-x:auto แท็บที่ 4 หลุดนอกจอ
+     * และ scrollbar แนวนอนโผล่กินความสูงจอโดยผู้ใช้ไม่ได้กดมัน
+     * กริด 2 คอลัมน์ทำให้แท็บ 3-4 อันเห็นครบโดยไม่ต้องเลื่อนอะไรเลย
+     */
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* กริดไม่ต้องมี overflow แล้ว — ถ้ายังเหลือจะกลับไปโผล่ scrollbar */
+    overflow-x: visible;
+    column-gap: 0;
+  }
+  .tabs__tab {
+    justify-content: center;
+    /* min-width: 0 กันข้อความยาวดันกริดให้เกินจอ (รายการยาว ๆ จะถูกตัดเป็น …) */
+    min-width: 0;
+    padding: 10px 8px;
+    font-size: 13.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* สูงพอแตะนิ้วเท่าปุ่มอื่นบนจอแคบ */
+    min-height: 42px;
+  }
+  .tabs__count {
+    flex: none;
+  }
+  /*
+   * ปุ่มดาวบุ๊กมาร์ก (หน้าแก้ไขแม่แบบ)
+   *   เดิมใช้ margin-left:auto เพื่อดันไปปลายแถว
+   *   ในกริดไม่มีแถวว่างให้ดัน ต้องให้กินช่องของมันเอง
+   *   ไม่งั้นจะไปหนีชิดซ้ายทั้งที่ผู้ใช้สั่งให้อยู่ "ขวามือ"
+   */
+  .tabs__star {
+    margin-left: 0;
+    justify-content: center;
+    min-height: 42px;
+  }
+}
+
 /* ── ช่องฟอร์ม ──────────────────────────────────────────── */
 .fieldset {
   display: grid;

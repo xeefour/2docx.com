@@ -12,6 +12,8 @@
  * 4. กดซ้ำแล้วกลับเป็น ☆ และ API ไม่มีแล้ว
  * 5. ปุ่มมี aria-pressed / aria-label (โปรแกรมอ่านหน้าจอต้องรู้ว่าเปิดอยู่ไหม)
  * 6. เก็บกวาด: ดาวกลับเป็นสถานะเดิมเสมอ ไม่ทิ้งบุ๊กมาร์กค้างไว้
+ * 7. มือถือ (390px) → แถบแท็บต้องพับ 2 แถว ไม่มี scrollbar แนวนอน
+ *    และ**ปุ่มดาวยังอยู่ขวากว่าแท็บตัวสุดท้าย** (กริดไม่มีแถวว่างให้ดันด้วย margin-left:auto แล้ว)
  */
 import { spawn } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -237,6 +239,72 @@ const flipped2 = await waitFor(
 const nowOff = (await bookmarks()).some((b) => b.templateKey === key)
 check('ดาวกลับเป็น ☆', flipped2)
 check('API ไม่มีบุ๊กมาร์กแล้ว', !nowOff)
+
+/**
+ * ── 8 · แถบแท็บบนมือถือ (หน้าแก้ไขแม่แบบ) ───────────────────────────
+ * ผู้ใช้สั่ง: *"ทำให้รองรับหน้าจอแบบมือถือ"*
+ *
+ * ── ทำไมต้องตรวจซ้ำกับหน้ารายการ ──────────────────────────────────
+ *   หน้านี้มี**ปุ่มดาวบุ๊กมาร์ก** อยู่ปลายแถบแท็บฝั่งซ้าย
+ *   เดิมดันมันด้วย `margin-left: auto` (ดันไปปลายแถว)
+ *   แต่พอแถบเปลี่ยนเป็นกริด 2 คอลัมน์บนมือถือ จะ**ไม่มีแถวว่างให้ดัน**
+ *   → ดาวจะไปเกาะซ้าย ซึ่งขัดกับที่ผู้ใช้สั่งไว้ว่า *"ปุ่มดาว… ขวามือ"*
+ *
+ * ⚠️ ตรวจที่ 390px ไม่ใช่ 481px — 390 คือมือถือจริงที่ใช้บ่อยกว่า
+ */
+console.log('\n[8] แถบแท็บหน้าแก้ไขบนมือถือ (390px)')
+await send('Emulation.setDeviceMetricsOverride', {
+  width: 390,
+  height: 844,
+  deviceScaleFactor: 1,
+  mobile: false,
+})
+await sleep(700)
+const mob = await evaluate(`(() => {
+  const bar = document.querySelector('.tabs')
+  if (!bar) return null
+  const star = bar.querySelector('.tabs__star')
+  const tabs = [...bar.querySelectorAll('.tabs__tab')]
+  const sr = star ? star.getBoundingClientRect() : null
+  const last = tabs[tabs.length - 1].getBoundingClientRect()
+  const hit = sr ? document.elementFromPoint(sr.x + sr.width / 2, sr.y + sr.height / 2) : null
+  return {
+    overflow: bar.scrollWidth - bar.clientWidth,
+    tabCount: tabs.length,
+    rows: new Set(tabs.map((t) => Math.round(t.getBoundingClientRect().top))).size,
+    minTabH: Math.round(Math.min(...tabs.map((t) => t.getBoundingClientRect().height))),
+    outRight: Math.round(Math.max(0, ...tabs.map((t) => t.getBoundingClientRect().right - innerWidth))),
+    hasStar: !!star,
+    // ดาวต้องอยู่ขวากว่าแท็บตัวสุดท้ายเสมอ ไม่ว่าจอกว้างหรือแคบ
+    starRightOfLast: sr ? sr.right > last.right : false,
+    starOnScreen: sr ? sr.left >= -0.5 && sr.right <= innerWidth + 0.5 : false,
+    starH: sr ? Math.round(sr.height) : 0,
+    starClickable: !!hit && (hit === star || star.contains(hit)),
+  }
+})()`)
+check('เจอแถบแท็บ', !!mob, mob ? '' : 'ไม่เจอ .tabs')
+if (!mob) {
+  skipCheck('แถบแท็บมือถือ (หน้าแก้ไข)', 'ไม่เจอแถบแท็บ')
+} else {
+  check('มีปุ่มดาวอยู่จริง', mob.hasStar, '')
+  check('แถบแท็บไม่ล้นแนวนอน (ไม่มี scrollbar)', mob.overflow <= 0, `ล้น ${mob.overflow}px`)
+  check('ไม่มีแท็บหลุดออกนอกจอ', mob.outRight === 0, `ล้น ${mob.outRight}px`)
+  check('แท็บถูกจัดเป็น 2 แถว', mob.rows === 2, `${mob.rows} แถว`)
+  check('ทุกแท็บสูงพอแตะนิ้ว (≥36px)', mob.minTabH >= 36, `${mob.minTabH}px`)
+  check('ปุ่มดาวยังอยู่ขวากว่าแท็บตัวสุดท้าย (ผู้ใช้สั่ง "ขวามือ")', mob.starRightOfLast, '')
+  check('ปุ่มดาวอยู่ในจอ', mob.starOnScreen, '')
+  check('ปุ่มดาวสูงพอแตะนิ้ว', mob.starH >= 36, `${mob.starH}px`)
+  check('ปุ่มดาวกดได้จริง', mob.starClickable, '')
+  await shot('08-mobile-tabs.png')
+  // คืนจอกว้างก่อนจบ ไม่ให้ผลของหัวข้ออื่น (ถ้ารันต่อ) เพี้ยน
+  await send('Emulation.setDeviceMetricsOverride', {
+    width: 1600,
+    height: 1000,
+    deviceScaleFactor: 1,
+    mobile: false,
+  })
+  await sleep(400)
+}
 
 // ── เก็บกวาด: คืนสถานะเดิมเสมอ ─────────────────────────────────
 const nowHas = (await bookmarks()).some((b) => b.templateKey === key)

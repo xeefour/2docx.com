@@ -614,6 +614,52 @@ button.ghost.err:hover:not(:disabled) {
   color: var(--err);
 }
 
+/**
+ * ── ปุ่มคัดลอกลิงก์สาธารณ: ทำให้เด่น ────────────────────────────
+ * ผู้ใช้สั่ง: *"ทำให้เด่นกว่านี้"* (ชี้ปุ่ม "คัดลอกลิงก์" ในกล่องลิงก์สาธารณ)
+ *
+ * เดิมใช้ `ghost` = พื้นโปร่งใส ตัวอักษรเทาอ่อน ขอบบาง จมหายไปกับกล่องรอบ
+ *   ทั้งที่เป็นการกระทำหลักของกล่องนี้ (กดครั้งเดียวได้ลิงก์ไปแชร์ต่อ)
+ *   และกล่องรอบพื้นเป็น `--brand-soft` (#f3ecfc) สีม่วงจางมาก
+ *   เทียบกันแล้วไม่มีอะไรดึงสายตาเลย
+ *
+ * ⚠️ ไอคอนต้องเป็น `::before` ห้ามใส่ emoji ใน JSX
+ *    เทสต์ test-share-url เทียบ `textContent.trim()` กับ
+ *    "คัดลอกลิงก์" / "คัดลอกแล้ว ✓" แบบตรงตัว ถ้าใส่ในข้อความจะพังทั้งชุด
+ *
+ * ⚠️ คลาสนี้ต้องอยู่คู่กับ `ghost ok` / `ghost err` เสมอ
+ *    ช่องสีเขียว/แดงตอนคัดลอกสำเร็จ/ไม่สำเร็จยังทำงานทับอยู่
+ *    เพราะ `button.ghost.ok` = (0,2,1) เฉพาะกว่า `button.copybtn` = (0,1,1)
+ */
+button.copybtn {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+  font-weight: 600;
+  padding: 9px 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  box-shadow: 0 2px 8px rgb(109 59 191 / 28%);
+}
+button.copybtn:hover:not(:disabled) {
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
+}
+/* ยังกดไม่ได้ (ยังไม่มีลิงก์) → ต้องดูจางเหมือนปุ่มรอง
+   ไม่ใช่เป็นปุ่มหลักเข้ม ๆ ที่กดไม่ได้ ซึ่งชวนให้ผู้ใช้กดเปล่า ๆ */
+button.copybtn:disabled {
+  background: transparent;
+  color: var(--ink-2);
+  border-color: var(--line);
+  box-shadow: none;
+}
+button.copybtn::before {
+  content: '\1f4cb';
+  font-size: 14px;
+  line-height: 1;
+}
+
 input,
 select,
 textarea {

@@ -527,7 +527,13 @@ export default function SharePanel({
             </code>
             <button
               ref={copyBtnRef}
-              className={copied ? `ghost ${copied}` : 'ghost'}
+              /**
+               * ⚠️ `copybtn` อยู่ตลอดเวลา ไม่ว่าจะคัดลอกสำเร็จหรือไม่
+               *   เพื่อให้ไอคอนไม่หายไปตอนปุ่มเปลี่ยนเป็นสีเขียว/แดง
+               *   `ghost ok` / `ghost err` ยังทำงานทับอยู่ เพราะจำเพาะกว่า
+               *   (ผู้ใช้สั่ง *"ทำให้เด่นกว่านี้"*)
+               */
+              className={'copybtn' + (copied ? ` ghost ${copied}` : '')}
               disabled={busy || !publicUrl}
               data-testid="share-copy-url"
               style={{ justifySelf: 'start' }}

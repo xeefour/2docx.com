@@ -339,6 +339,140 @@ if (!alive) {
   await shot('03c-copied-reset.png')
 }
 
+
+// ── 4c · popup เล็ก ๆ บอกว่าคัดลอกสำเร็จ ──────────────────────────
+/**
+ * ⚠️ ผู้ใช้สั่ง: *"เมื่อคลิกที่ปุ่มนี้แล้ว มี toats หรือ popup หรืออื่นๆ เล็กๆ
+ *   ทำให้รู้ว่า copy สำเร็จ"* — เดิมยืนยันผลแค่เปลี่ยนป้ายบนตัวปุ่ม
+ *   ซึ่งผู้ใช้บอกว่ายังไม่พอ (และตอนจอแคบป้ายสั้นมากจนแทบมองไม่ทัน)
+ *
+ *   ภาพที่ผู้ใช้ส่งมาถูกถ่ายที่จอ **579×539** → ต้องวัดตอนจอแคบจริงด้วย
+ *   ถ้าทดสอบแค่ที่ 1600px จะผ่านมั่วตลอด แล้วซีเมล่อจริงโดน popup ล้นขอบจอ
+ */
+const popGeo = () =>
+  evaluate(`(() => {
+    const p = document.querySelector('[data-testid="copy-popup"]')
+    const b = document.querySelector('[data-testid="share-copy-url"]')
+    if (!p || !b) return null
+    const pr = p.getBoundingClientRect()
+    const br = b.getBoundingClientRect()
+    const cs = getComputedStyle(p)
+    return {
+      text: p.textContent.trim(),
+      pos: cs.position,
+      below: p.getAttribute('data-below'),
+      z: Number(cs.zIndex),
+      outLeft: Math.round(pr.left),
+      outRight: Math.round(window.innerWidth - pr.right),
+      outTop: Math.round(pr.top),
+      w: Math.round(pr.width),
+      h: Math.round(pr.height),
+      /** ห่างจากกึ่งกลางปุ่มแนวนอน — ต้องติดปุ่ม ไม่ใช่ลอยไว้มุมอื่นของจอ */
+      dx: Math.round(Math.abs((pr.left + pr.width / 2) - (br.left + br.width / 2))),
+      /** popup ทับตัวปุ่มหรือเปล่า (ถ้าทับ กดซ้ำไม่ได้) */
+      coversBtn: pr.bottom > br.top && pr.top < br.bottom && pr.right > br.left && pr.left < br.right,
+      pe: cs.pointerEvents,
+      painted: pr.width > 0 && pr.height > 0,
+    }
+  })()`)
+
+/**
+ * ⚠️ กันดักหลักของ `position: fixed`
+ *   ถ้าบรรพบุรุษมี transform / filter / will-change / contain:paint
+ *   ตำแหน่ง fixed จะถูกผูกกับ**การ์ดนั้น**แทนหน้าจอ
+ *   → overflow ของการ์ดจะตัด popup ทิ้งทันที แล้วผู้ใช้ไม่เห็นอะไรเลย
+ *   (ตอนนี้ยังไม่เจอ แต่เป็นกับดักที่จะเงียบ ๆ พังวันหน้า CSS เปลี่ยน)
+ */
+const popClipRisk = () =>
+  evaluate(`(() => {
+    const p = document.querySelector('[data-testid="copy-popup"]')
+    if (!p) return null
+    const bad = []
+    for (let el = p.parentElement; el; el = el.parentElement) {
+      const cs = getComputedStyle(el)
+      if (
+        cs.transform !== 'none' ||
+        cs.filter !== 'none' ||
+        (cs.backdropFilter && cs.backdropFilter !== 'none') ||
+        cs.willChange !== 'auto' ||
+        cs.perspective !== 'none' ||
+        (cs.contain && cs.contain.includes('paint'))
+      ) {
+        bad.push(el.tagName + '.' + (el.className || ''))
+      }
+    }
+    return bad
+  })()`)
+
+const popCheck = async (label, shotName) => {
+  const g = await popGeo()
+  check(`${label}: popup โผล่ขึ้นมา`, !!g, g ? '' : 'ไม่เจอ [data-testid="copy-popup"]')
+  if (!g) return null
+  check(`${label}: มีข้อความบอกผล`, g.text.length > 0, g.text)
+  check(`${label}: ใช้ position:fixed (ไม่โดน overflow ตัด)`, g.pos === 'fixed', g.pos)
+  check(`${label}: ติดปุ่ม ไม่ลอยผิดมุม`, g.dx <= 2, `ห่างแนวนอน ${g.dx}px`)
+  check(
+    `${label}: ไม่ล้นออกนอกจอซ้าย/ขวา`,
+    g.outLeft >= 0 && g.outRight >= 0,
+    `ซ้ายล้น ${g.outLeft}px · ขวาล้น ${g.outRight}px`
+  )
+  check(
+    `${label}: ไม่ทับปุ่มจนกดซ้ำไม่ได้`,
+    !g.coversBtn,
+    g.coversBtn ? 'popup ทับตัวปุ่ม' : ''
+  )
+  check(`${label}: ไม่กินคลิกทั้งยวง`, g.pe === 'none', `pointer-events: ${g.pe}`)
+  check(`${label}: ทับแถบ URL ได้ (z-index สูงพอ)`, g.z >= 2147482600, String(g.z))
+  check(`${label}: มีขนาดจริง (ไม่โดนตัดจนหาย)`, g.painted, `${g.w}×${g.h}px`)
+  const risky = await popClipRisk()
+  check(
+    `${label}: ไม่มีบรรพบุรุษที่ดัก position:fixed`,
+    Array.isArray(risky) && risky.length === 0,
+    Array.isArray(risky) ? risky.join(', ') : 'ไม่ได้อ่านได้'
+  )
+  await shot(shotName)
+  return g
+}
+
+console.log('\n[4c] popup เล็ก ๆ บอกว่าคัดลอกสำเร็จ')
+if (!(await evaluate('!!document.querySelector("[data-testid=\'share-copy-url\']")'))) {
+  check('ยังมีปุ่มคัดลอกอยู่ตอนทดสอบ popup', false, 'ไม่เจอปุ่ม — ข้ามชุดตรวจ popup')
+} else {
+  // ── จอกว้าง ──
+  const p1 = await clickTestId('share-copy-url')
+  check('กดปุ่มคัดลอกเพื่อทดสอบ popup ได้', !!p1?.ok, p1?.why ?? '')
+  await waitFor('!!document.querySelector("[data-testid=\'copy-popup\']")', 3000)
+  const wide = await popCheck('จอกว้าง', '03d-copypop-wide.png')
+  check('จอกว้าง: popup ลอยเหนือปุ่ม', wide?.below === '0', `data-below=${wide?.below}`)
+
+  // ── จอแคบตามที่ผู้ใช้ใช้จริง (579×539) ──
+  await send('Emulation.setDeviceMetricsOverride', { width: 579, height: 539, deviceScaleFactor: 1, mobile: false })
+  await sleep(700)
+  const p2 = await clickTestId('share-copy-url')
+  check('กดปุ่มคัดลอกที่จอ 579px ได้', !!p2?.ok, p2?.why ?? '')
+  await waitFor('!!document.querySelector("[data-testid=\'copy-popup\']")', 3000)
+  const narrow = await popCheck('จอแคบ 579px', '03e-copypop-narrow.png')
+  check('จอแคบ: popup ยังลอยเหนือปุ่ม ไม่ตกไปใต้ปุ่ม', narrow?.below === '0', `data-below=${narrow?.below}`)
+
+  /**
+   * ⚠️ ต้องพิสูจน์ว่ามัน "ตามปุ่ม" จริง ไม่ใช่แค่โผล่ครั้งเดียวแล้วลอยค้าง
+   *   popup ใช้ position:fixed ถ้าไม่ผูกกับ scroll ผู้ใช้เลื่อนหน้า
+   *   แล้วมันจะค้างอยู่กลางจอทั้งที่ปุ่มหายไปได้แล้ว
+   */
+  await evaluate('window.scrollBy(0, 60)')
+  await sleep(250)
+  const scrolled = await popGeo()
+  check('เลื่อนหน้าแล้ว popup ยังติดปุ่ม (ไม่ลอยค้าง)', !!scrolled && scrolled.dx <= 2, `ห่าง ${scrolled?.dx}px`)
+  await evaluate('window.scrollBy(0, -60)')
+  await sleep(200)
+
+  // ── ต้องหายเอง ไม่ค้างบังหน้า ──
+  const gone = await waitFor('!document.querySelector("[data-testid=\'copy-popup\']")', 5000)
+  check('popup หายเองภายใน 2 วินาที (ไม่ค้างบังหน้า)', gone)
+  await send('Emulation.setDeviceMetricsOverride', { width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false })
+  await sleep(400)
+}
+
 // ── 5. กลับเป็นแบบส่วนตัวอีกครั้ง (ยืนยันว่าเป็นวงจร ทั้งสองทาง) ──
 console.log('\n[5] สลับกลับไปเป็นแบบส่วนตัวอีกครั้ง')
 const back = await clickTestId('share-private')

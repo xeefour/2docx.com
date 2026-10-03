@@ -177,6 +177,91 @@ button.danger:hover:not(:disabled) {
   font-size: 12px;
 }
 
+/* ── popup บอกว่าคัดลอกสำเร็จ ──────────────────────────────────
+   ผู้ใช้สั่ง: *"เมื่อคลิกที่ปุ่มนี้แล้ว มี toats หรือ popup หรืออื่นๆ เล็กๆ
+   ทำให้รู้ว่า copy สำเร็จ"* — เดิมมีแค่เปลี่ยนป้ายบนตัวปุ่ม ซึ่งน่าเบื่อเกินไป
+
+   ⚠️ ต้องเป็น position: fixed
+      ถ้าใช้ absolute ตามการ์ด จะโดน overflow ของการ์ดตัดทิ้ง
+      แถว้างคำนวณจากปุ่มจริงใน SharePanel.tsx ทุกครั้งที่โผล่
+      (ดู measurePop()) จึงต้องกำกับ left/top เองและใช้ transform เลื่อนกึ่งกลาง
+
+   ⚠️ z-index สูงกว่าแถบ URL (2147482500) ไม่งั้นซ้อนใต้แถบตอนจอแคบ
+      แต่ต่ำกว่าผ้าคลุมตอนเปลี่ยนหน้า (2147482000/…3000/…4000) เพราะตอนนั้นผู้ใช้
+      กำลังรอหน้าใหม่อยู่ ไม่ต้องเห็น popup ค้าง */
+.copypop {
+  position: fixed;
+  z-index: 2147482600;
+  transform: translate(-50%, -100%);
+  padding: 5px 11px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgb(26 21 35 / 24%);
+  animation: copypop-in 140ms ease-out;
+}
+/* หางชี้ปุ่ม
+   ⚠️ ต้องเขียนเป็นสามเหลี่ยมด้วย border ล้วน ไม่ใช่สี่เหลี่ยมหมุน 45°
+      เพราะกล่องมีมุมโค้ง ถ้าใช้วิธีหมุน หางจะโผล่ล้นออกมานอกกรอบตอน fade-in */
+.copypop::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 0;
+  height: 0;
+  margin-left: -5px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+}
+.copypop[data-below='0']::after {
+  top: 100%;
+  border-top: 5px solid var(--ink);
+}
+.copypop[data-below='1']::after {
+  bottom: 100%;
+  border-bottom: 5px solid var(--ink);
+}
+.copypop--err {
+  background: var(--err);
+}
+.copypop--err[data-below='0']::after {
+  border-top-color: var(--err);
+}
+.copypop--err[data-below='1']::after {
+  border-bottom-color: var(--err);
+}
+/* ลอยใต้ปุ่ม (ด้านบนไม่พอที่) → ไม่ต้องเลื่อนขึ้น */
+.copypop[data-below='1'] {
+  transform: translate(-50%, 0);
+}
+@keyframes copypop-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -100%) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+  }
+}
+.copypop[data-below='1'] {
+  animation-name: copypop-in-below;
+}
+@keyframes copypop-in-below {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 0) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
 /* ── มุมมีชิดของหน้ารายการ ────────────────────────────────────
  * ผู้ใช้สั่ง: *"ในหน้าหลักสามารถเลือกได้ว่าจะแสดงเป็นรายการ หรือ grid"*
  *
@@ -1841,7 +1926,11 @@ label {
 /* คนที่ตั้งค่าลด animation ไว้ ให้เหลือแค่สีบอกสถานะ ไม่ต้องกะพริบ */
 @media (prefers-reduced-motion: reduce) {
   .topbar,
-  .spinner {
+  .spinner,
+  /* ต้องรวม [data-below] ด้วย ไม่งั้น specificity สูงกว่าจะดัน .copypop แล้ว
+     animation กลับมาเต้นตอนคนตั้งค่าลด animation ไว้ */
+  .copypop,
+  .copypop[data-below='1'] {
     animation: none;
   }
   .spinner {

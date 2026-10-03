@@ -70,6 +70,11 @@ export default function SharePanel({
    */
   const [copied, setCopied] = useState<'ok' | 'err' | null>(null)
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copyBtnRef = useRef<HTMLButtonElement>(null)
+  /** ตำแหน่ง popup ในพิกัดจอ (fixed) — วัดจากปุ่มจริงทุกครั้งที่โผล่ */
+  const [popAt, setPopAt] = useState<{ top: number; left: number; below: boolean } | null>(
+    null
+  )
 
   // ปุ่มหายไปก่อนครบเวลา (สลับแท็บ/ปิดแม่แบบ) → ห้ามทิ้ง timer ค้าง
   useEffect(
@@ -79,11 +84,55 @@ export default function SharePanel({
     []
   )
 
-  /** กดคัดลอกแล้วเปลี่ยนป้ายปุ่มชั่วคราว แล้วคืนป้ายเดิม */
+  /**
+   * วัดตำแหน่งปุ่มเพื่อวาง popup เหนือปุ่มพอดี
+   *
+   * จำกัดขอบซ้าย/ขวาไว้ในจอ เพราะหน้าจอแคบ (579px) ป๊ายจะล้นออกไปนอกจอ
+   * ซึ่งผู้ใช้เจอปัญหานี้มาแล้วกับส่วนอื่นของหน้านี้
+   */
+  function measurePop() {
+    const el = copyBtnRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const GAP = 8
+    const HALF = 90 // ครึ่งความกว้างโดยประมาณของ popup
+    const left = Math.min(Math.max(r.left + r.width / 2, HALF + 8), window.innerWidth - HALF - 8)
+    // ด้านบนไม่พอให้ลอยเหนือ (เช่น ปุ่มอยู่ชิดขอบบน/ใต้แถบ URL) → ไปลอยใต้ปุ่มแทน
+    const below = r.top - GAP < 44
+    setPopAt({ top: below ? r.bottom + GAP : r.top - GAP, left, below })
+  }
+
+  // เลื่อนหน้า/หมุนจอแล้วปุ่มขยับ → ต้องวาง popup ใหม่ มิฉะนั้นมันลอยค้างที่เดิม
+  useEffect(() => {
+    if (!copied) return
+    /**
+     * ⚠️ วัดซ้ำทันทีด้วย ไม่ใช่พึ่งแค่ตอนกด
+     *   ตอน `flashCopied()` วัด ปุ่มยังเป็นป้ายเดิม ("คัดลอกลิงก์")
+     *   พอ React สลับไป "คัดลอกแล้ว ✓" ปุ่มก็**กว้างขึ้น** แล้วกึ่งกลางขยับ
+     *   → popup ที่วางไว้จะเลื่อนตามไปหลายพิกเซล (เจอ 8px ตอนทดสอบ)
+     *   วัดซ้ำตรงนี้ได้ตำแหน่งที่ถูกหลังจาก DOM อัปเดตแล้ว
+     *   (เหลือแค่กระพริบไม่เห็นตอน fade-in 140ms)
+     */
+    const re = () => measurePop()
+    re()
+    window.addEventListener('scroll', re, true)
+    window.addEventListener('resize', re)
+    return () => {
+      window.removeEventListener('scroll', re, true)
+      window.removeEventListener('resize', re)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [copied])
+
+  /** กดคัดลอกแล้วเปลี่ยนป้ายปุ่มชั่วคราว + โผล่ popup แล้วคืนป้ายเดิม */
   function flashCopied(next: 'ok' | 'err') {
     setCopied(next)
+    measurePop()
     if (copiedTimer.current) clearTimeout(copiedTimer.current)
-    copiedTimer.current = setTimeout(() => setCopied(null), 2000)
+    copiedTimer.current = setTimeout(() => {
+      setCopied(null)
+      setPopAt(null)
+    }, 2000)
   }
 
   const isOwner = access?.relation === 'owner'
@@ -458,13 +507,14 @@ export default function SharePanel({
               {publicUrl || '…'}
             </code>
             <button
+              ref={copyBtnRef}
               className={copied ? `ghost ${copied}` : 'ghost'}
               disabled={busy || !publicUrl}
               data-testid="share-copy-url"
               style={{ justifySelf: 'start' }}
-              // ⚠️ ให้ screen reader อ่านป้ายที่เปลี่ยนได้ ไม่งั้นผู้ใช้โปรแกรมอ่านหน้าจอ
-              //   ได้แต่ Banner ที่ห่างออกไปหลายจอ
-              aria-live="polite"
+              // ⚠️ เดิมใส่ aria-live ที่ปุ่ม เพราะยืนยันผลได้แค่ Banner ที่ห่างออกไปหลายจอ
+              //   ตอนนี้มี popup อยู่ติดปุ่มแล้ว (`role="status"` ด้านล่าง) จึง**ถอดออก**
+              //   ไม่งั้น screen reader จะอ่านสองข้อความซ้ำทั้งที่เกิดพร้อมกัน
               onClick={() =>
                 void (async () => {
                   const ok = await copyText(publicUrl)
@@ -483,6 +533,17 @@ export default function SharePanel({
                   ? 'คัดลอกไม่สำเร็จ'
                   : 'คัดลอกลิงก์'}
             </button>
+            {copied && popAt && (
+              <div
+                className={`copypop${copied === 'err' ? ' copypop--err' : ''}`}
+                style={{ top: popAt.top, left: popAt.left }}
+                data-below={popAt.below ? '1' : '0'}
+                role="status"
+                data-testid="copy-popup"
+              >
+                {copied === 'ok' ? 'คัดลอกลิงก์แล้ว' : 'คัดลอกไม่สำเร็จ'}
+              </div>
+            )}
           </div>
         )}
 

@@ -170,7 +170,7 @@ export default function SharePanel({
               {template.versionId}
             </div>
           </div>
-          <button onClick={() => void saveMeta()} disabled={!canEdit || busy}>
+          <button onClick={() => void saveMeta()} disabled={!canEdit || busy} data-testid="template-save-meta">
             บันทึกข้อมูลแม่แบบ
           </button>
         </div>
@@ -197,7 +197,13 @@ export default function SharePanel({
             ⬇️ ดาวน์โหลดแม่แบบ
           </a>
 
-          {canEdit ? (
+          {/**
+           * ⚠️ ผูกกับ `canManage` ไม่ใช่ `canEdit`
+           *   เปิดสาธารณ = ทุกคนแก้ฟอร์มได้ แต่ "เขียนทับไฟล์แม่แบบ/ลบ" ทำไม่ได้
+           *   ถ้าใช้ canEdit ปุ่มลบจะโผล่ให้ทุกคนแล้วโดน API ตอบ 403 ตอนกด
+           *   (ฝั่ง API ใช้ assertCanReplace — กติกาเดียวกัน)
+           */}
+          {canManage ? (
             <>
               <input
                 ref={fileRef}
@@ -317,7 +323,9 @@ export default function SharePanel({
             </>
           ) : (
             <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>
-              คุณมีสิทธิ์แค่ดูอย่างเดียว — จึงดาวน์โหลดได้แต่แทนไฟล์ไม่ได้
+              {canEdit
+                ? 'แก้ไขฟอร์มได้ตามปกติ แต่เปลี่ยนหรือลบไฟล์แม่แบบไม่ได้ — ต้องเป็นเจ้าของเท่านั้น'
+                : 'คุณมีสิทธิ์แค่ดูอย่างเดียว — จึงดาวน์โหลดได้แต่แก้ไขไม่ได้'}
             </p>
           )}
         </div>

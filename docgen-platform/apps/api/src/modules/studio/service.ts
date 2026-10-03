@@ -211,7 +211,10 @@ function toView(doc: AccessDoc | null, templateKey: string, sub: string): Access
     templateKey,
     relation,
     role: isOwner ? 'editor' : (shared?.role ?? null),
-    canEdit: isOwner || shared?.role === 'editor',
+    // ⚠️ เปิดสาธารณ = แก้ได้ทุกคน (หน้าเว็บเขียนไว้ตรงนี้ตั้งแต่แรก)
+    //   เคยคิดว่า published แค่ "ดูได้" → พอมีเอกสารสิทธิ์ปุ๊บ แม่แบบที่เปิดสาธารณ
+    //   กลับกลายเป็น "แก้ได้คนเดียว" ทั้งที่ข้อความบนหน้าจอยังบอกว่าทุกคนแก้ได้
+    canEdit: isOwner || shared?.role === 'editor' || doc.visibility === 'published',
     visibility: doc.visibility,
     owner: doc.owner,
     ownerName: doc.ownerName,
@@ -253,6 +256,65 @@ export async function assertCanEdit(app: App, templateKey: string, sub: string):
  * ⚠️ แม่แบบส่วนตัวที่ไม่ได้แชร์ให้เรา = ห้ามดาวน์โหลด
  *    ไม่งั้นใครก็กด URL ได้ แม้หน้าเว็บจะไม่โชว์ปุ่ม
  */
+/**
+ * ผู้อัปโหลดแม่แบบใหม่ = เป็นเจ้าของแม่แบบนั้นทันที
+ *
+ * ผู้ใช้สั่ง: *"สิทธิ์เจ้าของแม่แบบ — เสนอให้ผู้อัปโหลดเป็นเจ้าของอัตโนมัติ"*
+ *
+ * ⚠️ **แย่งไม่ได้** — ถ้ามีเจ้าของอยู่แล้วจะไม่ทำอะไรเลย ไม่ว่าจะอัปโหลดกี่ครั้ง
+ * ⚠️ เรียกจาก route ที่ "สร้างแม่แบบใหม่" เท่านั้น ห้ามเรียกจาก `replace`
+ *    เพราะ replace คือการเขียนทับของเดิม สิทธิ์เดิมต้องไม่ขยับ
+ *
+ * คืน `claimed` = ตั้งเจ้าของให้แล้ว · `kept` = มีเจ้าของอยู่แล้ว · `skipped` = ไม่มี key ให้ทำ
+ */
+export async function claimOwner(
+  app: App,
+  templateKey: string,
+  req: Req,
+): Promise<'claimed' | 'kept' | 'skipped'> {
+  const user = who(req)
+  if (!templateKey) return 'skipped'
+
+  const existing = await loadAccess(app, templateKey)
+  if (existing?.owner) return 'kept'
+
+  const doc: AccessDoc = {
+    _id: templateKey,
+    templateKey,
+    // ค่าเริ่มต้นเป็นเปิดสาธารณ ไม่ใช่ส่วนตัว
+    //   ถ้าใส่ private ตั้งแต่แรก ผู้ใช้ที่เพิ่งอัปโหลดจะเอาลิงก์ไปส่งให้ใครไม่ได้เลย
+    visibility: existing?.visibility ?? 'published',
+    owner: user.sub,
+    ownerName: user.name,
+    sharedWith: existing?.sharedWith ?? [],
+    updatedAt: now(),
+  }
+
+  await app.mongo
+    .collection<AccessDoc>(ACCESS)
+    .replaceOne({ _id: templateKey } as never, doc as never, { upsert: true })
+
+  app.log.info({ templateKey, owner: user.sub }, 'ผู้อัปโหลดกลายเป็นเจ้าของแม่แบบอัตโนมัติ')
+  return 'claimed'
+}
+
+/**
+ * ตรวจว่า**เขียนทับไฟล์แม่แบบ**ได้ไหม — เข้มกว่าการแก้ฟอร์ม
+ *
+ * ผู้ใช้เลือกกติกานี้เอง: *"แก้ฟอร์มได้ทุกคน แต่เปลี่ยนไฟล์แม่แบบต้องเป็นเจ้าของเท่านั้น"*
+ *   เพราะการเขียนทับกระทบคนที่ใช้แม่แบบนี้อยู่ทุกคน ไม่ใช่แค่แก้ช่องกรอกของตัวเอง
+ *
+ * ⚠️ แม่แบบที่**ยังไม่มีเจ้าของ** = ยังไม่มีใครคุม (ที่อัปโหลดไว้ก่อนมีระบบนี้)
+ *   ให้ผ่านไปก่อน เหมือนกติกาของ `setVisibility` กับ `trashTemplate`
+ *   ไม่งั้นแม่แบบเก่าทั้งหมดจะกลายเป็น "แก้ไขไม่ได้เลย" ใครก็ทำอะไรไม่ได้
+ */
+export async function assertCanReplace(app: App, templateKey: string, sub: string): Promise<void> {
+  const view = toView(await loadAccess(app, templateKey), templateKey, sub)
+  if (view.owner && view.relation !== 'owner') {
+    throw new AppError('FORBIDDEN', 'เปลี่ยนไฟล์แม่แบบได้เฉพาะเจ้าของเท่านั้น', 403)
+  }
+}
+
 export async function assertCanView(app: App, templateKey: string, sub: string): Promise<void> {
   const view = toView(await loadAccess(app, templateKey), templateKey, sub)
   if (view.visibility === 'private' && view.relation !== 'owner' && view.relation !== 'shared') {
@@ -274,8 +336,13 @@ export async function setVisibility(
   const existing = await loadAccess(app, input.templateKey)
 
   // ถ้ามีเจ้าของอยู่แล้วและเราไม่ใช่ → ไม่ยอมให้เปลี่ยน
-  if (existing && existing.owner !== user.sub) {
-    await assertCanEdit(app, input.templateKey, user.sub)
+  //
+  // ⚠️ ห้ามใช้ `assertCanEdit` ตรงนี้
+  //   เพราะ `canEdit` บอกว่า "เปิดสาธารณ = ทุกคนแก้ได้" (กติกาใหม่)
+  //   ถ้าใช้ตรงนี้ คนอื่นจะพลิกแม่แบบของเจ้าของเป็นส่วนตัวได้
+  //   การเปลี่ยน visibility เป็นการจัดการ ไม่ใช่การแก้ฟอร์ม → ต้องเจ้าของเท่านั้น
+  if (existing?.owner && existing.owner !== user.sub) {
+    throw new AppError('FORBIDDEN', 'เฉพาะเจ้าของแม่แบบเท่านั้นที่เปลี่ยนการมองเห็นได้', 403)
   }
 
   const doc: AccessDoc = {

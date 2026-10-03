@@ -8,7 +8,7 @@ import {
 import type { App } from '../../types.js'
 import * as carbone from './carbone.js'
 import { readTemplateTags } from './tags.js'
-import { assertCanEdit, assertCanView, who } from '../studio/service.js'
+import { assertCanEdit, assertCanReplace, assertCanView, claimOwner, who } from '../studio/service.js'
 import {
   listTombstoneKeys,
   listTombstones,
@@ -298,6 +298,22 @@ export async function templateRoutes(app: App) {
         sampleJson: str('data'),
       })
 
+      /**
+       * ผู้อัปโหลด = เจ้าของแม่แบบนั้นทันที (ผู้ใช้สั่ง)
+       *
+       * ⚠️ ทำ**หลัง**อัปโหลดสำเร็จเท่านั้น และล้มเหลวก็ปล่อยไป ไม่ให้ไฟล์ที่อัปโหลดแล้วหาย
+       *    เพราะตั้งเจ้าของไม่ได้ — แม่แบบยังใช้งานได้ปกติ แค่ยังไม่มีเจ้าของเหมือนเดิม
+       *
+       * ⚠️ `templateKey` ต้องเป็น `id` ก่อน ไม่ใช่ `versionId`
+       *    คีย์ที่หน้าเว็บใช้เปิดแม่แบบคือ `t.id ?? t.versionId` (ดู GET /templates)
+       */
+      const templateKey = String(result.id ?? result.versionId)
+      try {
+        await claimOwner(app, templateKey, req)
+      } catch (err) {
+        app.log.warn({ err, templateKey }, 'ตั้งเจ้าของแม่แบบไม่สำเร็จ — แม่แบบยังอัปโหลดได้ปกติ')
+      }
+
       app.log.info(
         { versionId: result.versionId, id: result.id, name: str('name') },
         'อัปโหลดแม่แบบแล้ว',
@@ -345,7 +361,7 @@ export async function templateRoutes(app: App) {
         })
       }
 
-      await assertCanEdit(app, req.params.id, user.sub)
+      await assertCanReplace(app, req.params.id, user.sub)
 
       if (!req.isMultipart()) {
         return reply.code(400).send({
@@ -451,6 +467,12 @@ export async function templateRoutes(app: App) {
       },
     },
     async (req, reply) => {
+      /**
+       * ⚠️ เคยไม่เช็คสิทธิ์เลย → ใครก็แก้ชื่อ/หมวด/แท็กของแม่แบบส่วนตัวของคนอื่นได้
+       *   metadata เป็นเรื่องของคนใช้ร่วมกัน → ใช้สิทธิ์เดียวกับแก้ฟอร์ม
+       *   (เข้มกว่านั้นคือเปลี่ยนไฟล์แม่แบบ ซึ่งใช้ assertCanReplace)
+       */
+      await assertCanEdit(app, req.params.id, who(req).sub)
       await carbone.updateTemplate(req.params.id, req.body)
       app.log.info({ templateId: req.params.id, patch: Object.keys(req.body) }, 'แก้แม่แบบแล้ว')
       return reply.code(204).send(null)

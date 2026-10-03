@@ -446,8 +446,17 @@ tbody tr:hover {
   .tpllist td.is-empty {
     display: none;
   }
+  /*
+   * ⚠️ ห้ามย้อนกลับไปใช้ `td:last-child` ในกลุ่มกฎนี้
+   *   คอลัมน์ภาพย่อ (`tplrow__thumb`) ถูกย้ายมา**ต่อท้ายสุด** โดยตั้งใจ
+   *   เพื่อไม่ให้กฎ `td:nth-child(2..4)` ที่ใช้เป็น data-label บนมือถือเพี้ยน
+   *   → `last-child` เลยชี้ไปที่ช่องรูป ไม่ใช่ช่องปุ่ม
+   *     และ `min-height: 36px` (พื้นที่นิ้วขั้นต่ำ) หายไปเงียบ ๆ
+   *     ปุ่มจัดการบนจอแคบจึงเหลือสูงแค่ 20px
+   *   เจอตอนรัน `test-list-mobile` ซ้ำ — ไม่ใช่จากงาน popup
+   */
   /* ปุ่มจัดการ — เต็มบรรทัด ยืดหยุ่นตามจอ และสูงพอให้นิ้วแตะ */
-  .tpllist td:last-child {
+  .tpllist td.tplrow__acts {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
@@ -464,14 +473,26 @@ tbody tr:hover {
    *    แก้เป็น `flex: 0 0 auto` = กดง่ายขึ้น เหลือพื้นที่ให้ชื่อแม่แบบยาว ๆ
    *    ยังคง `min-height: 36px` ไว้ เพราะเป็นพื้นที่นิ้วขั้นต่ำ (ดูหัวข้อด้านบน)
    */
-  .tpllist td:last-child a {
+  .tpllist td.tplrow__acts a {
     display: inline-flex;
     text-decoration: none;
   }
-  .tpllist td:last-child button {
+  .tpllist td.tplrow__acts button {
     flex: 0 0 auto;
     min-height: 36px;
     padding: 5px 10px;
+  }
+  /*
+   * ⚠️ ต้องดับกฎของโหมดชิดด้วย ไม่งั้นปุ่มยืดเต็มบรรทัดกลับมา
+   *   `.tpllist--grid td.tplrow__acts button { flex: 1 1 auto }` อยู่**นอก** media query
+   *   และมี specificity สูงกว่า (0,3,2 เทียบกับ 0,2,2) → ชนะเสมอ
+   *   ผลคือปุ่ม 4 ปุ่มกันเต็มความกว้างจอ เป็นแถวเดียว
+   *   ซึ่งคือปัญหาที่ผู้ใช้เคยส่งภาพมาแก้ไปแล้ว (commit ปุ่มเล็กลง)
+   *   → จอแคบต้องใช้ปุ่มหดตามเนื้อหาเหมือนโหมดรายการ
+   */
+  .tpllist--grid td.tplrow__acts a,
+  .tpllist--grid td.tplrow__acts button {
+    flex: 0 0 auto;
   }
 }
 

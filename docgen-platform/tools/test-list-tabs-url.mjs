@@ -280,7 +280,11 @@ console.log('\n[7] เปิดแม่แบบแล้วกดกลับ 
 const star = await read(`(() => {
   // ⚠️ ปุ่มแรกในแถวคือ**ชื่อแม่แบบ** (คลิกแล้วเปิดหน้าแก้ไขทันที) ไม่ใช่ปุ่มดาว
   //    ปุ่มดาวอยู่ปุ่มแรกในเซลล์สุดท้าย (คอลัมน์ "จัดการ") และข้อความเป็น ★/☆
-  const cells = [...document.querySelectorAll('table tbody tr td:last-child')]
+  // ⚠️ ช่องปุ่มต้องเลือกด้วย**คลาส** ไม่ใช่ td:last-child
+  //    ตอนนี้คอลัมน์ภาพย่อ (tplrow__thumb) อยู่ต่อท้ายสุดแล้ว
+  //    → td:last-child ชี้ไปที่ช่องรูป ซึ่งไม่มีปุ่มเลย
+  //    (เจอตอนรันซ้ำหลังเพิ่มฟีเจอร์รูปตัวอย่าง ชุดนี้ตก 4 ข้อรวด)
+  const cells = [...document.querySelectorAll('.tpllist tbody tr td.tplrow__acts')]
   const btn = cells.length ? cells[0].querySelector('button') : null
   if (!btn || !'★☆'.includes(btn.textContent.trim())) return null
   btn.scrollIntoView({ block: 'center' })

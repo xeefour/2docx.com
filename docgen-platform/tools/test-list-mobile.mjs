@@ -8,7 +8,8 @@
  * 2. จอ ≤ 720px → หัวตารางหายไป (กลายเป็นการ์ด) และมีป้ายกำกับแทนคอลัมน์
  * 3. จอ ≤ 720px → ปุ่มสูง ≥ 36px (แตะนิ้วได้)
  * 4. ช่องที่ไม่มีข้อมูล (ไม่มีหมวด/ไม่มีแท็ก) ต้อง**ถูกซ่อน** ไม่ใช่โชว์ "—" เปล่า ๆ
- * 5. จอกว้าง (1440px) → ต้องยังเป็น**ตารางเหมือนเดิม** คอลัมน์ครบ 5 ช่อง
+ * 5. จอกว้าง (1440px) → **ทั้งสองมุมมี** (ชิด/รายการ) ต้องไม่ล้น และจอแคบของมุมรายการ
+ *    ต้องกลายเป็นการ์ดพร้อมป้ายกำกับคอลัมน์เหมือนกัน
  * 6. กฎมือถือต้องไม่รั่วไปกระทบตารางอื่น (ตารางที่ไม่มี `.tpllist`)
  * 7. ที่จอแคบ ปุ่ม "เปิด" ต้อง**กดได้จริง** ไม่ใช่แค่มองเห็น
  *
@@ -157,10 +158,20 @@ const probe = () =>
   const de = document.documentElement
   const rows = [...document.querySelectorAll('.tpllist tbody tr')]
   const info = rows.map((tr) => {
-    const c = tr.lastElementChild
-    const btns = [...c.querySelectorAll('button, a')]
+    /**
+     * ⚠️ เก็บปุ่มจาก**ช่องจัดการ** ไม่ใช่เซลล์สุดท้าย และไม่ใช่ทั้งแถว
+     *   · เดิมอ่าน tr.lastElementChild → หลังเพิ่มคอลัมน์ภาพย่อท้ายสุด
+     *     กลายเป็นช่องรูปที่ไม่มีปุ่มอยู่เลย → minH = 0 → ตกทุกครั้ง
+     *   · ถ้าเก็บทั้งแถวจะไปติด**ปุ่มชื่อแม่แบบ** ด้วย ซึ่งทำเป็นลิงก์ข้อความ
+     *     (padding: 0 สูงราว 21px) นั่นไม่ใช่ปุ่มจัดการ และไม่ต้อง 36px
+     *     เกณฑ์ ≥36px เป็นของปุ่มจัดการที่ต้องแตะนิ้ว
+     */
+    const acts = tr.querySelector('td.tplrow__acts')
+    const btns = acts
+      ? [...acts.querySelectorAll('button, a')].filter((b) => b.getClientRects().length)
+      : []
     return {
-      right: Math.round(c.getBoundingClientRect().right),
+      right: Math.round(tr.getBoundingClientRect().right),
       /** ปุ่มที่โดนจอขอาง — นี่คือ "ถูกตัดจนกดไม่ได้" */
       out: btns.filter((x) => x.getBoundingClientRect().right > innerWidth + 0.5).length,
       h: btns.length ? Math.min(...btns.map((x) => Math.round(x.getBoundingClientRect().height))) : 0,
@@ -197,15 +208,93 @@ for (const w of [360, 414, 579]) {
   if (w === 579) console.log('  ภาพ:', await shot('w579'))
 }
 
-// ── 5 · จอกว้างต้องยังเป็นตารางเหมือนเดิม ──────────────────────────
-console.log('\nจอ 1440px (ต้องไม่กระทบเดสก์ท็อป)')
-await setWidth(1440)
-const d = await probe()
-check('ยังเป็นตาราง (tr=table-row)', d.rowDisplay === 'table-row', d.rowDisplay)
-check('หัวตารางยังอยู่', d.theadShown === true)
-check('คอลัมน์ครบ 5 ช่อง', d.cols === 5, `${d.cols} ช่อง`)
-check('ช่องว่างกลับมาเป็นตารางปกติ', d.emptyHidden === false || d.emptyTotal === 0, `ซ่อนไป ${d.emptyHidden}`)
+// ── 5 · จอกว้าง: ทั้งสองมุมมีต้องไม่พัง ───────────────────────────
+/**
+ * ⚠️ เขียนไว้ก่อนมีสวิตช์ "รายการ/ชิด"
+ *   เดิมคาดว่าหน้ารายการเป็นตารางเสมอ แต่ตอนนี้**ค่าเริ่มต้นคือ "ชิด"**
+ *   (`.tpllist--grid` = การ์ดเรียงตามกริด) ซึ่งตั้งใจให้
+ *   · `thead` ถูกซ่อน
+ *   · `tr` เป็น `flex`
+ *   · มีคอลัมน์ภาพย่อต่อท้ายสุด → 6 ช่อง
+ *   เกณฑ์เดิมจึงตก 4 ข้อ ทั้งที่ CSS ถูกอยู่แล้ว
+ *   (เจอตอนรันซ้ำหลังเพิ่มฟีเจอร์นี้ ไม่ใช่จากงาน popup)
+ *
+ *   แก้โดย**เช็กทั้งสองมุมมี** ไม่ใช่แค่แก้ตัวเลขให้ผ่าน
+ *   เพราะกติกาจอแควของสองโหมดต่างกันจริง: โหมดรายการใช้ `td[data-label]::before`
+ *   ส่วนโหมดชิดไม่ต้องป้ายกำกับเลย (การ์ดต่อการ์ดอยู่แล้ว)
+ *
+ * ⚠️ ไม่วัดความสูงปุ่มที่ 1440px
+ *   เกณฑ์ ≥36px เป็นกติกา**จอแคบ** (ข้อ 3) ปุ่มจอกว้างหดตามเนื้อหา
+ *   วัดที่จอกว้างแล้วได้ค่าที่ไม่ผ่าน ทั้งที่หน้าจอถูกต้อง (เคยเจะเป็นกับ `fill`)
+ */
+const clickSel = async (sel) => {
+  const box = await evaluate(`(() => {
+    const el = document.querySelector(${JSON.stringify(sel)})
+    if (!el) return null
+    el.scrollIntoView({ block: 'center' })
+    const r = el.getBoundingClientRect()
+    const x = r.x + r.width / 2, y = r.y + r.height / 2
+    const hit = document.elementFromPoint(x, y)
+    return { ok: !!hit && (hit === el || el.contains(hit)), x, y, disabled: !!el.disabled }
+  })()`)
+  if (!box?.ok)
+    return { ...(box ?? {}), ok: false, why: box?.disabled ? 'ปุ่มถูก disable' : 'มีอย่างอื่นบังจุดกด' }
+  for (const type of ['mousePressed', 'mouseReleased'])
+    await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 })
+  return box
+}
 
+console.log('\nจอ 1440px · มุม "ชิด" (ค่าเริ่มต้น)')
+await setWidth(1440)
+const g = await probe()
+check('ชิด: เป็นการ์ดเรียงกริด (tr=flex)', g.rowDisplay === 'flex', g.rowDisplay)
+check('ชิด: หัวตารางถูกซ่อนตั้งใจ', g.theadShown === false, `thead โชว์=${g.theadShown}`)
+check('ชิด: มีคอลัมน์ภาพย่อต่อท้าย (6 ช่อง)', g.cols === 6, `${g.cols} ช่อง`)
+check('ชิด: หน้าไม่ล้นแนวนอน', g.overflow <= 0, `ล้น ${g.overflow}px`)
+check(
+  'ช่องว่างกลับมาโชว์ที่จอกว้าง (กฎซ่อนช่องว่างใช้เฉพาะจอแคบ)',
+  g.emptyHidden === false || g.emptyTotal === 0,
+  `มี ${g.emptyTotal} ช่องว่าง · ซ่อน=${g.emptyHidden}`
+)
+await shot('w1440-grid')
+
+console.log('\nจอ 1440px · มุม "รายการ" (ต้องยังเป็นตารางเหมือนเดิม)')
+const sw = await clickSel('[data-testid="view-list"]')
+check('กดสวิตช์สลับเป็นมุมรายการได้', !!sw.ok, sw.why ?? '')
+await sleep(500)
+const l = await probe()
+check('รายการ: กลับมาเป็นตาราง (tr=table-row)', l.rowDisplay === 'table-row', l.rowDisplay)
+check('รายการ: หัวตารางยังอยู่', l.theadShown === true)
+check('รายการ: คอลัมน์ครบ 6 ช่อง (รวมภาพย่อท้ายสุด)', l.cols === 6, `${l.cols} ช่อง`)
+check('รายการ: หน้าไม่ล้นแนวนอน', l.overflow <= 0, `ล้น ${l.overflow}px`)
+await shot('w1440-list')
+
+/**
+ * ⚠️ ต้องเช็กจอแคบของโหมดรายการด้วย
+ *   กติกา `td:nth-child(2..4)` + `data-label::before` ที่ทำให้ตาราง
+ *   กลายเป็นการ์ดตอนจอแคบ ผูกอยู่กับโหมดรายการ
+ *   เดิมชุดนี้วัดแค่โหมดชิดตอนจอแคบ → กติกานี้ไม่เคยถูกตรวจเลย
+ */
+console.log('\nจอ 579px · มุม "รายการ" (กติกาป้ายกำกับคอลัมน์อยู่โหมดนี้)')
+await setWidth(579)
+const n = await probe()
+check('รายการจอแคบ: หน้าไม่ล้นแนวนอน', n.overflow <= 0, `ล้น ${n.overflow}px`)
+check('รายการจอแคบ: ปุ่มอยู่ในจอทุกแถว', n.outRows === 0, `ล้น ${n.outRows}/${n.rows} แถว`)
+check(
+  'รายการจอแคบ: หัวตารางซ่อน กลายเป็นการ์ด',
+  !n.theadShown && n.rowDisplay === 'flex',
+  `thead=${n.theadShown} tr=${n.rowDisplay}`
+)
+check('รายการจอแคบ: ปุ่มสูงพอแตะนิ้ว (≥36px)', n.minH >= 36, `${n.minH}px`)
+check('รายการจอแคบ: ช่องว่างถูกซ่อน', n.emptyHidden, `มี ${n.emptyTotal} ช่องว่าง`)
+check('รายการจอแคบ: มีป้ายกำกับแทนคอลัมน์', n.labels.length >= 2, n.labels.join(' '))
+await shot('w579-list')
+
+// กลับเป็น "ชิด" ก่อนจบ ให้ผู้ใช้เจอค่าเริ่มต้นเหมือนเดิม (ค่านี้จำใน localStorage)
+const backGrid = await clickSel('[data-testid="view-grid"]')
+check('กดสวิตช์กลับเป็นชิดได้', !!backGrid.ok, backGrid.why ?? '')
+await sleep(300)
+await setWidth(390)
 // ── 6 · กฎต้องไม่รั่วไปตารางอื่น ───────────────────────────────────
 console.log('\nไม่กระทบตารางอื่น')
 await setWidth(390)

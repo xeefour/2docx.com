@@ -126,6 +126,10 @@ button.danger:hover:not(:disabled) {
 .tplrow__i-del::before {
   content: '\1F5D1\FE0E';
 }
+/* ปุ่มสำเนา — ใช้กับคนที่ไม่ใช่เจ้าของ (แทนปุ่มลบ) */
+.tplrow__i-clone::before {
+  content: '\1F4CB';
+}
 
 /**
  * ── ปุ่มที่ยืนยันผลบนตัวปุ่มเอง ───────────────────────────────────

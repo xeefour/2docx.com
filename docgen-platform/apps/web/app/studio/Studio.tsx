@@ -17,6 +17,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   api,
   ApiError,
+  canDeleteTemplate,
+  cloneName,
   templateKeyOf,
   type AccessView,
   type BookmarkRecord,
@@ -599,6 +601,40 @@ function TemplateRow({
     }
   }
 
+  /**
+   * สำเนาแม่แบบ — ปุ่มสำหรับคนที่**ไม่ใช่เจ้าของ**
+   *
+   * ผู้ใช้สั่ง: *"ปุ่มลบแม่แบบ จะแสดงเฉพาะผู้ที่เป็นเจ้าของเท่านั้น
+   *   แทนที่ด้วยปุ่มสำเนาแม่แบบ แทน"*
+   *
+   * ⚠️ เดิมคนที่ไม่ใช่เจ้าของก็เห็นปุ่ม "ลบ" แล้วได้ 403 ตอนกด
+   *   แสดงปุ่มที่กดไม่ได้ = หลอกผู้ใช้ว่าเขาลบได้ (แล้วเขาจะไปหาทางอื่น
+   *   หรือคิดว่าระบบเพี้ยน ซึ่งแย่กว่าไม่มีปุ่ม)
+   *
+   * ⚠️ กติกา "ใครเห็นอะไร" อยู่ใน `canDeleteTemplate()` จุดเดียวกับที่ `SharePanel`
+   *    ใช้ เพื่อไม่ให้สองที่ drift จนคนกดลบแม่แบบคนอื่นได้อีก
+   *
+   * ⚠️ `cloneTemplate()` ดึงไฟล์มาอัปโหลดเป็นแม่แบบใหม่ → ต้นฉบับไม่ถูกแตะ
+   *    คนที่แชร์อยู่จึงยังใช้ต้นฉบับได้ตามเดิม
+   */
+  async function clone() {
+    setBusy(true)
+    try {
+      const name = cloneName(tpl.name)
+      await api.cloneTemplate(templateKeyOf(tpl), {
+        name,
+        category: tpl.category ?? '',
+        tags: tpl.tags,
+      })
+      notify(`เก็บเป็น "${name}" แล้ว — แก้ได้อิสระ ไม่กระทบต้นฉบับ`)
+      await onChanged()
+    } catch (e) {
+      onError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <tr>
       <td>
@@ -661,14 +697,37 @@ function TemplateRow({
             ดาวน์โหลด
           </button>
         </a>{' '}
-        <button
-          className={`${confirming ? 'danger' : 'ghost'} tplrow__i-del`}
-          onClick={remove}
-          disabled={busy}
-          title={confirming ? 'กดซ้ำอีกครั้งเพื่อยืนยันการลบ' : 'ลบแม่แบบนี้'}
-        >
-          {confirming ? 'ยืนยันลบ?' : 'ลบ'}
-        </button>
+        {/*
+         * ปุ่มช่องสุดท้ายของแถว — สลับตามสิทธิ์
+         *
+         * ⚠️ ต้องมีปุ่ม**เสมอ** ไม่ว่าจะเป็นเจ้าของหรือไม่
+         *    ถ้าปล่อยให้หายไปเมื่อไม่ใช่เจ้าของ ผู้ใช้จะสับสนว่ากดอะไรไม่ได้
+         *    (แถวนี้มีปุ่มนี้อยู่ตลอด เพิ่งเปลี่ยนมาเป็น "สำเนา")
+         *
+         * ⚠️ เงื่อนไขอยู่ใน `canDeleteTemplate()` ไม่ใช่เขียน `relation === 'owner'` ซ้ำ
+         *    เพราะฝั่ง API ยังให้ลบได้เมื่อแม่แบบยังไม่มีเจ้าของ (ดูคอมเมนต์ในไฟล์นั้น)
+         */}
+        {canDeleteTemplate(view) ? (
+          <button
+            className={`${confirming ? 'danger' : 'ghost'} tplrow__i-del`}
+            data-testid="row-delete"
+            onClick={remove}
+            disabled={busy}
+            title={confirming ? 'กดซ้ำอีกครั้งเพื่อยืนยันการลบ' : 'ลบแม่แบบนี้'}
+          >
+            {confirming ? 'ยืนยันลบ?' : 'ลบ'}
+          </button>
+        ) : (
+          <button
+            className="ghost tplrow__i-clone"
+            data-testid="row-clone"
+            onClick={() => void clone()}
+            disabled={busy}
+            title="เก็บสำเนาไว้ใช้เอง — แม่แบบต้นฉบับไม่เปลี่ยน"
+          >
+            สำเนา
+          </button>
+        )}
       </td>
     </tr>
   )

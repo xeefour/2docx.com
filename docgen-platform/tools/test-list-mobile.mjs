@@ -308,13 +308,14 @@ const rowBtns = () =>
     fill: box.width ? Math.round(((right - left) / box.width) * 100) : 0,
     span: Math.round(right - left),
     openText: (byText('เปิด') || {}).textContent?.trim() || '',
+    lastLabel: byText('ลบ') ? 'ลบ' : byText('สำเนา') ? 'สำเนา' : '',
     starW: star ? Math.round(star.getBoundingClientRect().width) : 0,
     starLabel: star ? star.getAttribute('aria-label') || '' : '',
     starPressed: star ? star.getAttribute('aria-pressed') : null,
     icons: {
       open: icon(byText('เปิด')),
       dl: icon(byText('ดาวน์โหลด')),
-      del: icon(byText('ลบ')),
+      del: icon(byText('ลบ') || byText('สำเนา')),
     },
   }
 })()`)
@@ -324,6 +325,11 @@ for (const w of [579, 1440]) {
   await setWidth(w)
   await sleep(400)
   const r = await rowBtns()
+  check(
+    'ปุ่มช่องสุดท้ายยังมีอยู่ (ลบ หรือ สำเนา) — ไม่หายไปทั้งดุ้น',
+    ['ลบ', 'สำเนา'].includes(r.lastLabel),
+    JSON.stringify(r.lastLabel)
+  )
   check('เจอปุ่มจัดการ 4 ปุ่ม', r.n === 4, `${r.n} ปุ่ม`)
   check('textContent ยังเป็น "เปิด" เป๊ะ (กันเทสต์อื่นพัง)', r.openText === 'เปิด', JSON.stringify(r.openText))
   check('มีไอคอนหน้า "เปิด"', !!r.icons.open, r.icons.open || 'ไม่มี')

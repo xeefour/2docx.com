@@ -13,7 +13,7 @@
  * ปุ่ม clone จึงเป็นทางรอดที่เดียวที่พอสมเหตุสมผล (ไฟล์ยังอยู่ครบ 14 วัน)
  */
 import { useState } from 'react'
-import { api, ApiError, type Tombstone } from './lib/api'
+import { api, ApiError, cloneName, type Tombstone } from './lib/api'
 
 /** วันที่อ่านง่ายสำหรับคนไทย — ไม่ใช้ `toLocaleDateString` เพราะผลขึ้นกับ locale ของเครื่อง */
 function thaiDate(iso: string): string {
@@ -125,7 +125,7 @@ export default function TrashBanner({
             onClick={() =>
               void run('สำเนาแม่แบบให้แล้ว', async () => {
                 await api.cloneTemplate(trash.templateKey, {
-                  name: `${templateName} (สำเนา)`,
+                  name: cloneName(templateName),
                   category: trash.category,
                   tags: trash.tags,
                 })

@@ -97,7 +97,7 @@ export default function TrashBanner({
 
       {!gone && (
         <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--ink-2)' }}>
-          ใครที่ใช้แม่แบบนี้อยู่ ให้กด <b>clone เก็บไว้ใช้เอง</b> ก่อน
+          ใครที่ใช้แม่แบบนี้อยู่ ให้กด <b>สำเนาเก็บไว้ใช้เอง</b> ก่อน
           เพราะพอครบกำหนดแล้วลิงก์นี้จะเปิดไม่ได้อีก
         </div>
       )}
@@ -123,7 +123,7 @@ export default function TrashBanner({
             disabled={busy}
             data-testid="trash-clone"
             onClick={() =>
-              void run('clone แม่แบบให้แล้ว', async () => {
+              void run('สำเนาแม่แบบให้แล้ว', async () => {
                 await api.cloneTemplate(trash.templateKey, {
                   name: `${templateName} (สำเนา)`,
                   category: trash.category,
@@ -132,7 +132,7 @@ export default function TrashBanner({
               })
             }
           >
-            clone เก็บไว้ใช้เอง
+            สำเนาเก็บไว้ใช้เอง
           </button>
         )}
       </div>

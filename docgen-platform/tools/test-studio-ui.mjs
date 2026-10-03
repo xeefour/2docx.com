@@ -340,6 +340,34 @@ console.log('\n[5] แท็บช่องฟอร์ม — ออกแบ�
   await shot('5-fields.png')
 }
 
+// ── รีเซ็ตสิทธิ์ก่อนทดสอบการแชร์ ───────────────────────────────
+/**
+ * ⚠️ ต้องล้าง `template_access` ของแม่แบบที่**เปิดจริง** ก่อน
+ *
+ *   เทสต์เปิดแม่แบบจากแถวแรกของรายการ (`realClick('table tbody tr td button.ghost')`)
+ *   ซึ่งอาจเป็นแม่แบบที่**ผู้ใช้จริงเป็นเจ้าของ** (เคยเจอ: เจ้าของ Teerasak Payuhagrit)
+ *   ถ้ามีเจ้าของอยู่แล้ว ปุ่มจัดการการแชร์จะถูกซ่อนจาก session ของเทสต์
+ *   (กติกาใหม่: จัดการการแชร์ = เจ้าของเท่านั้น) → ข้อ 6–7 ตก
+ *
+ *   ลบผ่าน Mongo เพราะ `DELETE /api/access/:key` เช็คว่าต้องเป็นเจ้าของ
+ *   คนที่ไม่ใช่เจ้าของจะลบไม่ได้ (ถูกต้องเรื่องความปลอดภัย แต่ทำให้เทสต์ตั้งต้นไม่ได้)
+ */
+{
+  const openKey = await evaluate("location.pathname.split('/')[2] ?? ''")
+  if (openKey) {
+    const { MongoClient } = await import('mongodb')
+    const { resolveMongoUrl } = await import('@docgen/shared')
+    const c = new MongoClient(await resolveMongoUrl(() => {}))
+    await c.connect()
+    await c.db(process.env.MONGO_DB ?? 'app').collection('template_access').deleteOne({ _id: openKey })
+    await c.close()
+    console.log(`\n[เตรียมข้อมูล] ล้างสิทธิ์ของแม่แบบ ${openKey} ให้เป็น "ยังไม่มีเจ้าของ"`)
+    await send('Page.reload')
+    await waitFor('!document.querySelector(".bootveil")', 45000)
+    await waitFor("document.querySelectorAll('.editor-split > .editor-col').length === 2", 25000)
+  }
+}
+
 // ── 6. ข้อมูลแม่แบบ ─────────────────────────────────────────
 console.log('\n[6] แท็บข้อมูลแม่แบบ')
 {

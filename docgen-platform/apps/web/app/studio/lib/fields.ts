@@ -35,6 +35,24 @@ export function fieldDomId(key: string): string {
   return `f-${slug}-${h.toString(36)}`
 }
 
+/**
+ * `key` ของกลุ่มฟิลด์ที่**นิ่ง** ไม่ขยับตอนผู้ใช้พิมพ์
+ *
+ * ⚠️ ห้ามใช้ชื่อกลุ่มเป็น key
+ *
+ *   ชื่อกลุ่มเปลี่ยนทุกตัวอักษรที่พิมพ์ในช่อง "กลุ่ม" (`field-group-N`)
+ *   ถ้าใช้ชื่อเป็น key → React ถอดกลุ่มทิ้งแล้วใส่ใหม่ทุกครั้ง
+ *   → โฟกัสในช่องที่กำลังพิมพ์หลุดทันที (ผู้ใช้เจอและรายงานแล้ว)
+ *
+ *   ใช้ "ลำดับของช่องตัวแรกในกลุ่ม" แทน ซึ่งเปลี่ยนเฉพาะตอนเพิ่ม/ลบ/ย้ายช่อง
+ *   ซึ่งเป็นความตั้งใจของผู้ใช้อยู่แล้ว
+ */
+export function groupKey(group: { fields: FieldDef[] }, all: FieldDef[]): string {
+  const idxs = group.fields.map((f) => all.indexOf(f)).filter((i) => i >= 0)
+  // กลุ่มสังเคราะห์ (ช่องที่ยังไม่ได้ทำเป็นฟอร์ม) ไม่มีใน all → ใช้ชื่อกลุ่มซึ่งไม่เคยเปลี่ยน
+  return `g-${idxs.length ? Math.min(...idxs) : group.group}`
+}
+
 // ── dot path ────────────────────────────────────────────────
 
 export function getPath(data: Record<string, unknown>, path: string): unknown {
@@ -83,11 +101,32 @@ export function sortFields(fields: FieldDef[]): FieldDef[] {
   })
 }
 
+/**
+ * จัดกลุ่มฟิลด์
+ *
+ * ⚠️ **ลำดับกลุ่มต้องไม่ผูกกับชื่อกลุ่ม**
+ *
+ *   เดิมเรียงด้วย `sortFields()` ซึ่งเรียงตามชื่อกลุ่ม (a→z แบบไทย)
+ *   พิมพ์ชื่อกลุ่มในช่อง "กลุ่ม" (`field-group-N`) แล้วกลุ่มจะย้ายตำแหน่ง
+ *   **ทันทีทุกตัวอักษร** → React ย้าย DOM node ของทั้งกลุ่ม
+ *   (ซึ่งกำลังมีโฟกัสอยู่) → โฟกัสหลุด
+ *
+ *   อาการที่ผู้ใช้เจอ: *"พิมพ์ 1 ตัวอักษา แล้วหลุด focus ต้องคลิกใหม่ถึงจะพิมพ์ได้"*
+ *   และ IME ไทยพังหนักกว่านั้น เพราะ input ที่กำลัง "เรียงพิมพ์" ถูกย้ายกลางคัน
+ *
+ *   แก้แล้ว: เรียงกลุ่มตาม**ช่องตัวแรกที่อยู่ในกลุ่ม** (ลำดับที่ผู้ใช้จัดเองด้วยปุ่ม ↑↓)
+ *   → พิมพ์ชื่อกลุ่มแล้วไม่มีอะไรขยับ → โฟกัสอยู่ตรงที่
+ */
 export function groupFields(
   fields: FieldDef[],
 ): Array<{ group: string; fields: FieldDef[] }> {
+  const byOrder = [...fields].sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order
+    return a.key.localeCompare(b.key, 'th')
+  })
+
   const map = new Map<string, FieldDef[]>()
-  for (const f of sortFields(fields)) {
+  for (const f of byOrder) {
     const g = f.group || 'ทั่วไป'
     const list = map.get(g)
     if (list) list.push(f)

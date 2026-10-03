@@ -13,7 +13,7 @@
  * → แสดงเป็นกลุ่ม "ยังไม่ได้จัดกลุ่ม" เพื่อไม่ให้ข้อมูลหายจากสายตา
  */
 import { useMemo } from 'react'
-import { fieldDomId, fieldLabel, getPath, groupFields, setPath } from './lib/fields'
+import { fieldDomId, fieldLabel, getPath, groupFields, groupKey, setPath } from './lib/fields'
 import FieldAi from './FieldAi'
 import type { FieldDef, TemplateTag } from './lib/api'
 
@@ -87,7 +87,7 @@ export default function FormFields({
   return (
     <div className="fieldset">
       {groups.map((g) => (
-        <fieldset className="fieldset__group" key={g.group} style={{ margin: 0 }}>
+        <fieldset className="fieldset__group" key={groupKey(g, fields)} style={{ margin: 0 }}>
           <legend className="fieldset__legend">{g.group}</legend>
           <div className="fieldset">
             {g.fields.map((f, i) => (
@@ -97,8 +97,11 @@ export default function FormFields({
                  *    ช่องใหม่จะมี `key` ว่างหลายช่องพร้อมกัน → key ซ้ำ
                  *    และถ้าใช้ `f.key` การแก้ชื่อช่องจะทำให้ React ถอด/ใส่ใหม่ทั้งตัว
                  *    → ช่องที่กำลังพิมพ์หลุดโฟกัส (IME ไทยพักด้วย)
+                 *
+                 * ⚠️ ห้ามผูกกับ `g.group` ด้วย — ชื่อกลุ่มเปลี่ยนได้จากแท็บ "ช่องฟอร์ม"
+                 *    ใช้ `groupKey()` ซึ่งผูกกับลำดับช่องแทน (เหตุผลเดียวกับที่ผู้ใช้เจอโฟกัสหลุด)
                  */
-                key={`${g.group}-${i}`}
+                key={`${groupKey(g, fields)}-${i}`}
                 field={f}
                 value={getPath(data, f.key)}
                 error={errors[f.key]}

@@ -14,7 +14,7 @@
  */
 import { useState } from 'react'
 import type { FieldDef, FieldType, TemplateTag } from './lib/api'
-import { groupFields, sortFields } from './lib/fields'
+import { groupFields, groupKey, sortFields } from './lib/fields'
 
 const TYPES: Array<{ id: FieldType; label: string }> = [
   { id: 'text', label: 'ข้อความสั้น (input)' },
@@ -314,7 +314,12 @@ export default function FieldBuilder({
       )}
 
       {groups.map((g) => (
-        <div key={g.group}>
+        /**
+         * ⚠️ `key` ต้องเป็น `groupKey(g, draft)` ไม่ใช่ `g.group`
+         *   ชื่อกลุ่มเปลี่ยนทุกตัวอักษรที่พิมพ์ในช่อง "กลุ่ม" → ถ้าใช้ชื่อเป็น key
+         *   React จะถอดกลุ่มทิ้งแล้วใส่ใหม่ → โฟกัสหลุดทุกตัวอักษร
+         */
+        <div key={groupKey(g, draft)}>
           <div className="fieldset__legend" style={{ marginBottom: 8 }}>
             {g.group}
           </div>
@@ -391,6 +396,7 @@ export default function FieldBuilder({
                     <button
                       className="ghost"
                       style={{ padding: '3px 8px', fontSize: 12 }}
+                      data-testid={`field-edit-${i}`}
                       onClick={() => setEditing(open ? null : i)}
                     >
                       {open ? 'ปิด' : 'แก้ไข'}

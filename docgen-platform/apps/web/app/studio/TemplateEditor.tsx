@@ -81,6 +81,18 @@ export default function TemplateEditor({
   const [err, setErr] = useState<string | null>(null)
   const [showErrors, setShowErrors] = useState(false)
   const [previewDoc, setPreviewDoc] = useState<string | null>(null)
+  /**
+   * ข้อมูล**ณ ตอนที่เรนเดอร์ล่าสุด** เก็บเป็น JSON string
+   *
+   * ผู้ใช้สั่ง: *"เมื่อ form หรือ json มีการแก้ไขข้อมูล ให้ส่วนของ preview มี overlay
+   * ขึ้นมาเตือนผู้ใช้ว่าต้องการจะเรนเดอร์ใหม่หรือไม่"*
+   *
+   * เก็บเป็น string (ไม่ใช่ object) เพราะ `data` เป็น object ใหม่ทุกครั้งที่แก้
+   * เทียบด้วย reference ไม่ได้ แต่ string เทียบด้วยค่าได้
+   */
+  const [renderedData, setRenderedData] = useState<string | null>(null)
+  /** ข้อมูลเวอร์ชันที่ผู้ใช้เลือก "ใช้ผลเดิมต่อไป" — ถ้าแก้เพิ่มจะกลับมาเตือนใหม่ */
+  const [staleDismissed, setStaleDismissed] = useState<string | null>(null)
   const [pdf, setPdf] = useState<LoadedPdf | null>(null)
   const [aiOpen, setAiOpen] = useState(true)
 
@@ -173,6 +185,9 @@ export default function TemplateEditor({
     setFields([])
     setAccess(null)
     setPreviewDoc(null)
+    // เปลี่ยนแม่แบบ = ตัวอย่างเดิมใช้ไม่ได้แล้ว
+    setRenderedData(null)
+    setStaleDismissed(null)
 
     void (async () => {
       try {
@@ -211,6 +226,18 @@ export default function TemplateEditor({
   }, [template.versionId, templateKey])
 
   const errors = useMemo(() => validateFormData(fields, data), [fields, data])
+
+  /**
+   * ตัวอย่างที่เห็นอยู่เก่ากว่าข้อมูลปัจจุบันไหม
+   *
+   * ⚠️ ครอบคลุมทั้งแท็บ "ฟอร์ม" และ "JSON" เพราะทั้งคู่แก้ `data` ตัวเดียวกัน
+   *   (ผู้ใช้สั่งให้เตือนเมื่อ "form หรือ json" เปลี่ยน)
+   *
+   * ⚠️ เงื่อนไข `renderedData !== null` กันไม่ให้ overlay โผล่ตอนยังไม่เคยเรนเดอร์
+   */
+  const dataJson = useMemo(() => JSON.stringify(data), [data])
+  const stale = !!previewDoc && renderedData !== null && dataJson !== renderedData
+  const showStaleOverlay = stale && dataJson !== staleDismissed
   const errorCount = Object.keys(errors).length
   const canEdit = access?.canEdit ?? true
 
@@ -269,6 +296,12 @@ export default function TemplateEditor({
       if (doc.status === 'failed') throw new Error(doc.error ?? 'เรนเดอร์ไม่สำเร็จ')
       setStatus('เสร็จแล้ว')
       setPreviewDoc(api.fileUrl(_id))
+      /**
+       * จำข้อมูลชุดนี้ไว้เทียบภายหลัง — ถ้าผู้ใช้แก้ฟอร์มหรือ JSON ต่อ
+       * ตัวอย่างจะถือว่า "เก่า" แล้วและต้องขึ้น overlay เตือน
+       */
+      setRenderedData(JSON.stringify(data))
+      setStaleDismissed(null)
       // พาผู้ใช้ไปดูผลลัพธ์ทันที — ไม่งั้นต้องเดาว่าผลอยู่ฝั่งไหน
       setPane('preview')
     } catch (e) {
@@ -372,7 +405,29 @@ export default function TemplateEditor({
         </div>
         {!canEdit && <span className="pill">ดูอย่างเดียว</span>}
         {access?.visibility === 'private' && <span className="pill">🔒 ส่วนตัว</span>}
-        <button onClick={() => void render_()} disabled={busy || !canEdit}>
+        {/**
+         * ป้ายเตือนบนแถบเครื่องมือ
+         *
+         * ⚠️ overlay อยู่ในแท็บตัวอย่างเท่านั้น ถ้าผู้ใช้สลับไปแก้แท็บอื่น
+         *   (เช่น ข้อมูลแม่แบบ / การแชร์) จะไม่เห็น overlay เลย
+         *   ป้ายนี้จึงอยู่ตลอดจนกว่าจะเรนเดอร์ใหม่
+         */}
+        {stale && (
+          <span
+            className="pill warn"
+            data-testid="preview-stale-badge"
+            style={{ cursor: 'pointer' }}
+            onClick={() => setPane('preview')}
+            title="ข้อมูลเปลี่ยนแล้ว — กดเพื่อไปเรนเดอร์ใหม่"
+          >
+            ข้อมูลเปลี่ยนแล้ว · เรนเดอร์ใหม่
+          </span>
+        )}
+        <button
+          onClick={() => void render_()}
+          disabled={busy || !canEdit}
+          data-testid="render-preview"
+        >
           {busy ? (status ?? 'กำลังทำงาน…') : 'เรนเดอร์ตัวอย่าง'}
         </button>
       </div>
@@ -525,7 +580,68 @@ export default function TemplateEditor({
           {pane === 'preview' && (
             // ไม่มีหัวการ์ดแยก — ไม่มีข้อความ "ตัวอย่างเอกสาร" ซ้ำกับชื่อแท็บ
             // และไม่มี dropdown เลือกรูปแบบ (เดิมบีบจนหัวการ์ดสูงเปล่า ~67px)
-            <div className="editor-preview card" style={{ overflow: 'hidden' }}>
+            <div className="editor-preview card" style={{ overflow: 'hidden', position: 'relative' }}>
+              {/**
+               * overlay เตือนว่าข้อมูลเปลี่ยนแล้ว (ผู้ใช้สั่ง)
+               *
+               * ⚠️ ทับ**ทั้งการ์ด** ไม่ใช่แค่แถบเครื่องมือ
+               *   เพราะตัวอย่างด้านล่างคือผลจากข้อมูลเก่า ถ้าให้ยังเลื่อน/ซูมได้
+               *   ผู้ใช้จะเผลอดูผลลัพธ์ผิดชุดแล้วคิดว่าเป็นของใหม่
+               *
+               * ⚠️ "ใช้ผลเดิมต่อไป" จำค่า `data` เวอร์ชันที่กดไว้
+               *   ถ้าผู้ใช้แก้เพิ่ม → `dataJson` เปลี่ยน → overlay กลับมาโผล่ใหม่
+               */}
+              {showStaleOverlay && (
+                <div
+                  data-testid="preview-stale"
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    zIndex: 6,
+                    background: 'rgba(255, 255, 255, 0.88)',
+                    backdropFilter: 'blur(2px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 16,
+                  }}
+                >
+                  <div
+                    style={{
+                      maxWidth: 400,
+                      textAlign: 'center',
+                      padding: 18,
+                      borderRadius: 12,
+                      border: '1px solid var(--line)',
+                      background: '#fff',
+                      boxShadow: '0 10px 30px rgba(26, 21, 35, 0.18)',
+                    }}
+                  >
+                    <strong style={{ fontSize: 14.5 }}>ข้อมูลเปลี่ยนแล้ว</strong>
+                    <p className="muted" style={{ fontSize: 12.5, margin: '6px 0 14px' }}>
+                      ตัวอย่างที่เห็นยังเป็นผลจากข้อมูลก่อนแก้
+                      <br />
+                      ต้องการเรนเดอร์ใหม่เพื่อดูตัวอย่างล่าสุดไหม
+                    </p>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => void render_()}
+                        disabled={busy}
+                        data-testid="preview-stale-render"
+                      >
+                        {busy ? 'กำลังเรนเดอร์…' : 'เรนเดอร์ใหม่'}
+                      </button>
+                      <button
+                        className="ghost"
+                        onClick={() => setStaleDismissed(dataJson)}
+                        data-testid="preview-stale-dismiss"
+                      >
+                        ใช้ผลเดิมต่อไป
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
               {previewDoc ? (
                 <DocumentPreview
                   key={previewDoc}

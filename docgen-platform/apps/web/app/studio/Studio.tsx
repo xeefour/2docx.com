@@ -430,12 +430,12 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
       <Tabs tabs={tabs} active={tab} onChange={(id) => pickListTab(id as ListTab)} />
 
       {/* ตัวกรอง — ไม่ใส่ margin แล้ว ใช้ gap ของพ่อแทน ไม่งั้นจะเป็น 14 + 16 = 30px */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      <div className="filters">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="ค้นหาจากชื่อ แท็ก หรือ versionId"
-          style={{ maxWidth: 320 }}
+          className="filters__q"
         />
           <div className="viewtoggle" role="group" aria-label="วิธีแสดงรายการ">
             {(['grid', 'list'] as const).map((m) => (
@@ -468,7 +468,11 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
               </button>
             ))}
           </div>
-          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+          <select
+            className="filters__cat"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
           <option value="">ทุกหมวด</option>
           {categories.map((c) => (
             <option key={c} value={c}>
@@ -481,7 +485,7 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
             ล้างตัวกรอง
           </button>
         )}
-        <div className="muted" style={{ alignSelf: 'center', fontSize: 13, marginLeft: 'auto' }}>
+        <div className="muted filters__count">
           แสดง {filtered.length} จาก {templates.length}
         </div>
       </div>

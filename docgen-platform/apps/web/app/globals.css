@@ -138,6 +138,55 @@ button.danger:hover:not(:disabled) {
  * ⚠️ ใช้ object-fit: cover + ความสูงคงที่ เพราะแม่แบบแต่ละอันสัดส่วนต่างกัน
  *   ถ้าไม่กำหนด การ์ดจะสูงไม่เท่ากันและตารางซ้อนกันเละ
  */
+/* ── แถวตัวกรองหน้ารายการ ───────────────────────────────────────
+ * ผู้ใช้สั่ง: *"ถ้าหน้าจอเล็ก ปรับให้เหมาะสม"* (ชี้ที่ช่องค้นหา)
+ *
+ * ⚠️ เดิมช่องค้นหามีแค่ max-width 320 และไม่มี flex
+ *    → ที่ความกว้างฐานมันดันแถวจนเกินจอเล็ก flex-wrap พาปุ่มสวิตช์ไปตกบรรทัดใหม่
+ *      เหลือช่องว่างเปล่าข้าง ๆ ~250px ดูเหมือนจัดวางไม่เสร็จ
+ *
+ * ⚠️ ต้องเป็นคลาส CSS ไม่ใช่ inline style
+ *    media query ทำงานกับ inline style ไม่ได้
+ *    และถ้าทำเป็น inline จะไม่มีข้อตรวจในเทสต์เทียบได้
+ */
+.filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+/* flex ตรงนี้คือหัวใจ — ยืดได้ หดได้ เลยไม่มีวันดันจนต้องตัดบรรทัด */
+.filters__q {
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 320px;
+}
+.filters__cat {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 220px;
+}
+.filters__count {
+  align-self: center;
+  font-size: 13px;
+  margin-left: auto;
+}
+@media (max-width: 720px) {
+  /* จอเล็ก = ใช้พื้นที่ให้หมด ไม่เหลือช่องว่างข้าง ๆ */
+  .filters__q,
+  .filters__cat {
+    max-width: none;
+  }
+  /* ไม่ดันจนเกาะขอบขวาของบรรทัดที่สั้นมาก ดูมั่วกว่าเดิม */
+  .filters__count {
+    margin-left: 0;
+  }
+  /* ช่องค้นหาต้องกว้างพอให้อ่านคำค้นได้จริง */
+  .filters__q {
+    flex-basis: 100%;
+  }
+}
+
 .previews {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

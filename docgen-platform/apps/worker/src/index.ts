@@ -293,17 +293,19 @@ async function main() {
       }
       msg.ack()
 
-      await notifyUser(
-        db,
-        {
-          user: claimed.createdBy,
-          kind: 'document',
-          title: 'เอกสารเรนเดอร์เสร็จแล้ว',
-          body: `"${claimed.label ?? 'เอกสาร'}" เรนเดอร์เสร็จแล้ว (.${outputFormat})`,
-          link: `/studio/${templateId}`,
-        },
-        (m, meta) => logger.warn(m, meta ?? {}),
-      )
+      /**
+       * ไม่แจ้งเตือนเมื่อเรนเดอร์สำเร็จ — ผู้ใช้สั่งว่า:
+       * *"แจ้งเตือนเอกสารเรนเดอร์เสร็จแล้ว … อันนี้ไม่ต้องแจ้งเตือนก็ได้
+       *   เนื่องจากเรนเดอร์เร็วมาก ไม่ต้องรอ"*
+       *
+       * เรนเดอร์กินเวลาไม่กี่วินาที ผู้ใช้ยังอยู่หน้าจอเดิมอยู่แล้ว
+       * จดหมายแค่ขัดจังหวะการทำงานโดยไม่ได้ให้ข้อมูลใหม่เลย
+       *
+       * ⚠️ เรื่องนี้ติดปัญหาลิงก์ตายมาด้วย — ลิงก์เดิมชี้ `/studio/<templateId>`
+       *    แต่หน้า `/studio/[key]` ต้องการ**คีย์ของระบบ** ไม่ใช่ `templateId`
+       *    ของ Carbone ผู้ใช้กดแล้วเจอ "ไม่พบ key" (เห็นในกล่องจดหมาย)
+       *    การแจ้งเตือนที่เหลืออยู่จึงชี้แค่ `/studio`
+       */
 
       logger.info('เรนเดอร์สำเร็จ', {
         documentId,
@@ -340,7 +342,13 @@ async function main() {
             kind: 'document',
             title: 'เอกสารเรนเดอร์ไม่สำเร็จ',
             body: `"${claimed?.label ?? 'เอกสาร'}" สร้างไม่สำเร็จหลังลอง ${MAX_ATTEMPTS} ครั้ง — ${String(err).slice(0, 200)}`,
-            link: `/studio/${templateId}`,
+            /**
+             * ชี้แค่หน้า /studio — จุดเดิมชี้ `/studio/<templateId>` ซึ่งตายเสมอ
+             * เพราะหน้า /studio/[key] ต้องการ**คีย์ของระบบ** ไม่ใช่ templateId ของ Carbone
+             * (ใน RenderJob ไม่มี templateKey เลย — ดู schemas.ts)
+             * การแจ้งเตือนเรนเดอร์สำเร็จถูกตัดไปแล้ว เพราะเรนเดอร์เร็วมากไม่ต้องรอ
+             */
+            link: `/studio`,
           },
           (m, meta) => logger.warn(m, meta ?? {}),
         )

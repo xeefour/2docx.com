@@ -3401,3 +3401,132 @@ label {
     margin-right: 0;
   }
 }
+
+/* ══ สมุดที่อยู่ผู้ใช้ + เชิญด้วยอีเมล (ช่อง "อนุญาตให้ใครใช้ได้") ══
+ *
+ * ผู้ใช้สั่ง: *"พิมพ์ซัก 3 ตัวอักษร แล้วจะมีเมล์ที่ผู้ใช้ login เข้าใช้งาน
+ *   ในระบบนี้แสดงขึ้นมา เอาข้อมูลจากประวัติที่เคยแชร์"*
+ *
+ * ⚠️ รายการที่เลื่อนเลือกต้อง**อยู่ในสายตา**ตอนพิมพ์
+ *    ถ้าให้ส่วนท้ายของกล่องยาวเกินจอ รายการสุดท้ายจะโผล่นอกจอ
+ *    แล้วผู้ใช้กดเลือกคนที่ 5 ไม่ได้โดยไม่รู้ตัว
+ *    (มี max-height + overflow:auto ตรงนี้แล้ว)
+ */
+.ppick {
+  margin-bottom: 12px;
+}
+.ppick__row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.ppick__field {
+  /* ต้องเป็น anchor ของรายการที่ตกลงมา — ไม่งั้นต้องเปลี่ยนไป absolute ที่การ์ด */
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+}
+.ppick__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  /* กันล้นจอแคบ: การ์ดอยู่ใน sidebar ซึ่งบางจอกว้างแค่ ~300px */
+  max-width: calc(100vw - 24px);
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgb(26 21 35 / 18%);
+}
+.ppick__opt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.ppick__opt.is-on {
+  background: var(--brand-soft);
+}
+.ppick__name {
+  font-size: 13px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ppick__mail {
+  grid-column: 1;
+  font-size: 12px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ppick__tag {
+  grid-row: 1;
+  grid-column: 2;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--brand);
+  white-space: nowrap;
+}
+.ppick__empty {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  max-width: calc(100vw - 24px);
+  padding: 8px 10px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgb(26 21 35 / 14%);
+}
+.ppick__warn {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #8a5a00;
+  background: #fff8e6;
+  border: 1px solid #f2dda6;
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+.ppick__pending {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--brand-border);
+  border-radius: 9px;
+  background: var(--brand-soft);
+}
+.ppick__pending-h {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand-dark);
+  margin-bottom: 4px;
+}
+.ppick__pending-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 2px 0;
+}
+.ppick__pending-row .ppick__mail {
+  grid-column: auto;
+  color: var(--ink);
+  font-size: 12.5px;
+}

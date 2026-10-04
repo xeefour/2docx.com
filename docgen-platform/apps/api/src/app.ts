@@ -21,6 +21,7 @@ import { s3Plugin } from './plugins/s3.js'
 import { documentRoutes } from './modules/documents/route.js'
 import { templateRoutes } from './modules/templates/route.js'
 import { studioRoutes } from './modules/studio/route.js'
+import { peopleRoutes } from './modules/people/route.js'
 import { healthRoutes } from './modules/health/route.js'
 import { authRoutes } from './modules/auth/route.js'
 import { sessionPlugin } from './modules/auth/session.js'
@@ -149,6 +150,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(documentRoutes)
       await api.register(templateRoutes)
       await api.register(studioRoutes)
+      await api.register(peopleRoutes)
       await api.register(healthRoutes)
     },
     { prefix: '/api' },

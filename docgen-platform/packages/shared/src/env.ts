@@ -125,6 +125,32 @@ const schema = z.object({
   DOCSERVER_API_KEY: z.string().default('carbon-ce'),
   DOCSERVER_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
 
+
+  // ── อีเมล (SMTP) ───────────────────────────────────────────────
+  /**
+   * ใช้ส่งอีเมลเชิญคนที่ยังไม่เคยเข้าระบบ ให้เข้าถึงแม่แบบได้
+   *
+   * ⚠️ ทุกตัวเป็น optional โดยตั้งใจ
+   *   ถ้าบังคับให้มี ระบบที่ยังไม่ได้ตั้งค่าจะ crash ตอนบูตทันที
+   *   แต่การส่งอีเมลเป็น**ฟีเจอร์เสริม** — ขาดไปแค่ฟีเจอร์นี้
+   *   ไม่ควรทำให้ทั้งระบบล่ม (ดู `modules/people/mail.ts` ที่คืนค่า `mailReady: false`)
+   *
+   * ปล่อยว่างทั้งหมด = ระบบยังรับคำเชิญได้ แต่ไม่ส่งอีเมล
+   *   ผู้ใช้ที่ถูกเชิญยังได้สิทธิ์ปกติตอนเข้าระบบครั้งแรก
+   */
+  SMTP_HOST: z.string().optional(),
+  /** 587 = STARTTLS ของ SMTP ทั่วไป · 465 = SSL ตรง · 25 = ไม่เข้ารหัส */
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  /** true = ต่อแบบ SSL ตรง (พอร์ต 465) · false = STARTTLS (พอร์ต 587) */
+  SMTP_SECURE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /** ว่าง = ไม่ต้องยืนยันตัวตน (เช่น relay ภายใน) */
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  /** ช่อง From ที่ผู้รับเห็น — ต้องเป็นโดเมนที่ยิงได้จริง ไม่งั้นติด spam */
+  SMTP_FROM: z.string().min(1).default('2docx.com <no-reply@2docx.com>'),
   /**
    * ชื่อที่จะเขียนทับลง metadata ของไฟล์ที่เรนเดอร์ออกมา
    *

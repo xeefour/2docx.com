@@ -4,6 +4,8 @@ import { env } from '@docgen/shared'
 import type { App } from '../../types.js'
 import { authorizeUrl, discovery, pkceChallenge, randomToken } from './oidc.js'
 import { loginWithCode } from './verify.js'
+import { claimPendingShares } from '../people/invite.js'
+import { touchPerson } from '../people/directory.js'
 
 /** cookie ชั่วคราวระหว่าง redirect ไป Casdoor แล้วกลับมา */
 const STATE_COOKIE = 'oauth_state'
@@ -152,6 +154,23 @@ export async function authRoutes(app: App) {
         maxAge: env.SESSION_TTL,
       })
 
+      /**
+       * จดลงสมุดที่อยู่ผู้ใช้ + ผูกคำเชิญแม่แบบ
+       *
+       * ⚠️ เขียนใหม่ทุกครั้งที่ล็อกอิน ไม่ใช่ครั้งแรก
+       *   ผู้ใช้เปลี่ยนอีเมลที่ Casdoor ได้ ถ้าเก็บครั้งเดียวแล้วไม่แตะ
+       *   รายชื่อจะชี้ไปยังที่เก่า → พิมพ์หาแล้วเจอคนที่เปลี่ยนไปแล้ว
+       *   และถ้าเชิญด้วยอีเมล ไปเชิญคนผิด
+       *
+       * ⚠️ ห่อ try/catch เพราะล็อกอินสำเร็จแล้วต้องเข้าระบบได้เสมอ
+       *   (Mongo ล่ม = ยังไม่มีในสมุดที่อยู่ แต่อย่างน้อยยังเข้าระบบได้)
+       */
+      try {
+        await touchPerson(app, user)
+        await claimPendingShares(app, user)
+      } catch (err) {
+        app.log.warn({ err, sub: user.sub }, 'บันทึกสมุดที่อยู่/ผูกคำเชิญไม่สำเร็จ — ข้ามไปก่อน')
+      }
       app.log.info({ sub: user.sub, name: user.name }, 'ล็อกอินสำเร็จ')
 
       const dest = returnToRaw

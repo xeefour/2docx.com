@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api, ApiError, templateKeyOf, type AccessView, type Template } from './lib/api'
 import { copyText } from './lib/copy'
 import TemplatePreviews from './TemplatePreviews'
+import PeoplePicker from './PeoplePicker'
 
 /** ชนิดไฟล์ที่ Carbone รับได้ — ต้องตรงกับ ALLOWED_EXT ของ API */
 const ACCEPT = '.docx,.xlsx,.pptx,.odt,.ods,.odp,.doc,.odf'
@@ -48,8 +49,6 @@ export default function SharePanel({
   const [tagsText, setTagsText] = useState(template.tags.join(', '))
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [sub, setSub] = useState('')
-  const [role, setRole] = useState<'viewer' | 'editor'>('viewer')
   /** ไฟล์ที่เลือกไว้แต่ยังไม่ยืนยัน — ต้องกดยืนยันอีกครั้ง เพราะการเขียนทับกระทบทุกคน */
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -667,40 +666,20 @@ export default function SharePanel({
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <label>subject ของผู้ใช้ (จาก Casdoor)</label>
-                <input
-                  value={sub}
-                  disabled={busy}
-                  placeholder="เช่น 1a2b3c4d-…"
-                  onChange={(e) => setSub(e.target.value)}
-                />
-              </div>
-              <div>
-                <label>สิทธิ์</label>
-                <select
-                  value={role}
-                  disabled={busy}
-                  onChange={(e) => setRole(e.target.value as 'viewer' | 'editor')}
-                >
-                  <option value="viewer">ดูอย่างเดียว</option>
-                  <option value="editor">แก้ไขได้</option>
-                </select>
-              </div>
-              <button
-                disabled={busy || !sub.trim()}
-                onClick={() =>
-                  void run(async () => {
-                    onAccess(await api.share(templateKeyOfTemplate(template), sub.trim(), role))
-                    setSub('')
-                    notify('เพิ่มสิทธิ์แล้ว')
-                  })
-                }
-              >
-                เพิ่ม
-              </button>
-            </div>
+            <PeoplePicker
+              template={template}
+              onAccess={onAccess}
+              notify={notify}
+              busy={busy}
+            />
+
+            {/* ข้อความอธิบายสั้น ๆ ใต้ช่อง — เดิมบอกว่าต้องใช้ sub ซึ่งเลิกใช้แล้ว
+             *   คงประโยคแนะนำทีมไว้ เพราะการแชร์ทีมยังดีกว่าเมื่อให้สิทธิ์หลายคนพร้อมกัน */}
+            <p style={{ fontSize: 12, color: 'var(--ink-3)', margin: '8px 0 0' }}>
+              พิมพ์อีเมลของผู้ใช้ที่เคยเข้าระบบ · ถ้ายังไม่เคยเข้า ระบบจะส่งคำเชิญให้
+              และให้สิทธิ์อัตโนมัติตอนเขาเข้าสู่ระบบครั้งแรก · ถ้าจะให้สิทธิ์หลายคนพร้อมกัน
+              ให้ใช้ <Link href="/teams" style={{ color: 'var(--brand)' }}>ทีม</Link>
+            </p>
           </>
         ) : (
           <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>

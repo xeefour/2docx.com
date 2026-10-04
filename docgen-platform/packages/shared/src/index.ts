@@ -10,6 +10,7 @@ export {
 } from './errors.js'
 export * from './schemas.js'
 export * from './studio.js'
+export * from './people.js'
 export { normalizeThaiAlignment, type NormalizeResult } from './normalize.js'
 export { setDocxThaiLanguage, type SetLanguageResult } from './docx-lang.js'
 

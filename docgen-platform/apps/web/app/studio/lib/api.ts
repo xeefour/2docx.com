@@ -15,7 +15,12 @@
  *     (รวมทั้งไดรเวอร์ mongo) เข้า bundle ของเบราว์เซอร์
  *   `import type` ถูกตัดทิ้งตอน compile จึงไม่มีผลกับ bundle
  */
-import type { InboxList, NotificationKind } from '@docgen/shared'
+import type {
+  InboxList,
+  NotificationKind,
+  PendingShare,
+  PersonSuggestion,
+} from '@docgen/shared'
 
 const BASE = '/api'
 
@@ -728,6 +733,34 @@ export const api = {
   unshare: (templateKey: string, sub: string) =>
     call<AccessView>(
       `/access/${encodeURIComponent(templateKey)}/share/${encodeURIComponent(sub)}`,
+      { method: 'DELETE' },
+    ),
+
+  /**
+   * ── สมุดที่อยู่ผู้ใช้ + เชิญด้วยอีเมล ─────────────────────
+   *
+   * ช่อง "อนุญาตให้ใครใช้ได้" เดิมรับแต่ `sub` ของ Casdoor
+   * ซึ่งเป็น id ยาว ๆ ที่มองไม่ออกว่าเป็นใคร — เปลี่ยนมาให้พิมพ์**อีเมล**แทน
+   * แล้วเติมให้อัตโนมัติจากคนที่เคยเข้าระบบ
+   */
+  searchPeople: (q: string) =>
+    call<{ items: PersonSuggestion[]; mailReady: boolean }>(
+      `/people?q=${encodeURIComponent(q)}`,
+    ),
+
+  /** เชิญคนที่ยังไม่เคยเข้าระบบ — สิทธิ์ผูกให้ตอนเขา login ครั้งแรก */
+  inviteByEmail: (templateKey: string, email: string, role: 'viewer' | 'editor') =>
+    call<{ pending: true; emailed: boolean; reason: string | null }>(
+      `/access/${encodeURIComponent(templateKey)}/invite`,
+      { method: 'POST', body: JSON.stringify({ email, role }) },
+    ),
+
+  pendingShares: (templateKey: string) =>
+    call<{ items: PendingShare[] }>(`/access/${encodeURIComponent(templateKey)}/invites`),
+
+  cancelInvite: (templateKey: string, email: string) =>
+    call<{ cancelled: boolean }>(
+      `/access/${encodeURIComponent(templateKey)}/invite/${encodeURIComponent(email)}`,
       { method: 'DELETE' },
     ),
 

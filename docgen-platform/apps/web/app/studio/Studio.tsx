@@ -29,6 +29,9 @@ import {
 import Tabs from './Tabs'
 import ThumbLightbox from './ThumbLightbox'
 import TemplateEditor from './TemplateEditor'
+import InboxBell from './InboxBell'
+import InboxPanel from './InboxPanel'
+import StudioRail from './StudioRail'
 import { readParam, readTemplateKey, setUrl, studioPath, TAB_PARAM } from './lib/urlState'
 
 /**
@@ -55,7 +58,7 @@ const readStoredView = (): 'list' | 'grid' => {
 const ACCEPT = '.docx,.xlsx,.pptx,.odt,.ods,.odp'
 const MAX_MB = 20
 
-type ListTab = 'all' | 'mine' | 'shared' | 'bookmarks'
+type ListTab = 'all' | 'mine' | 'shared' | 'bookmarks' | 'inbox'
 
 /**
  * แท็บของหน้ารายการใช้ `?tabs=` ตัวเดียวกับฝั่งซ้ายของหน้าแก้ไข
@@ -63,8 +66,11 @@ type ListTab = 'all' | 'mine' | 'shared' | 'bookmarks'
  * ⚠️ ค่าใน URL อาจเป็นของ**หน้าแก้ไข** ได้ (เช่นคนกดย้อนกลับมาจาก
  *    `/studio/<key>?tabs=form` แล้ว URL ยังมี query ติดมา)
  *    → ต้องตรวจว่าอยู่ในชุดของหน้านี้ก่อน ไม่งั้นจะเปิดแท็บผิด
+ *
+ * ⚠️ `inbox` อยู่ในชุดนี้ด้วย แม้จะไม่ใช่รายการแม่แบบ
+ *   เพราะต้องเปิดจากลิงก์ตรง ๆ ได้ (`/studio?tabs=inbox`) และรีเฟรชแล้วต้องอยู่แท็บเดิม
  */
-const LIST_TABS: ListTab[] = ['all', 'mine', 'shared', 'bookmarks']
+const LIST_TABS: ListTab[] = ['all', 'mine', 'shared', 'bookmarks', 'inbox']
 
 /** อ่านแท็บหน้ารายการจาก URL ได้ — ค่าผิด/ไม่มี = `all` */
 function readListTab(search: string): ListTab {
@@ -82,12 +88,22 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
   const [access, setAccess] = useState<Record<string, AccessView>>({})
   /** มุมมีรายการ: รายการ | ชิด (จำค่าไว้ต่อคนใน localStorage) */
   const [listView, setListView] = useState<'list' | 'grid'>(readStoredView)
+  /** ลิ้นชักเปิดอยู่หรือไม่ — มีผลเฉพาะจอเล็ก (CSS ซ่อน sidebar บนจอใหญ่) */
+  const [railOpen, setRailOpen] = useState(false)
   /** key → รูปตัวอย่างแรก (null = ยังไม่มีรูป หรือดูไม่ได้) */
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
   /** แม่แบบที่กำลังเปิดดูรูปตัวอย่างเต็ม (null = ปิดอยู่) */
   const [peek, setPeek] = useState<{ key: string; name: string } | null>(null)
 
   const [bookmarks, setBookmarks] = useState<BookmarkRecord[]>([])
+  /**
+   * จำนวนจดหมายที่ยังไม่อ่าน — ใช้ทั้งป้ายบนกระดิ่งและบนแท็บ "จดหมาย"
+   *
+   * ⚠️ นับที่นี่จุดเดียว ไม่ใช่ให้กระดิ่งกับแท็บนับแยกกัน
+   *    ถ้าสองที่ยิง API เอง ตัวเลขจะคนละช่วงเวลากัน (อันนึงโหลดก่อนอีกอัน)
+   *    ผู้ใช้จะเห็นป้ายสองที่ไม่ตรงกันแล้วเชื่อว่าระบบพัง
+   */
+  const [inboxUnread, setInboxUnread] = useState(0)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
   const [tab, setTab] = useState<ListTab>('all')
@@ -124,6 +140,31 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
   useEffect(() => {
     void load()
   }, [load])
+
+  /**
+   * โหลดจำนวนจดหมายที่ยังไม่อ่าน
+   *
+   * ⚠️ `limit: 1` เพราะเราต้องการแค่ตัวเลข ไม่ต้องดึงรายการมาใช้
+   *   (รายการเต็มโหลดใน `InboxPanel` / `InboxBell` ตอนผู้ใช้เปิดดูจริง)
+   *
+   * ⚠️ ไม่ poll — ยิงตอน mount ครั้งเดียว แล้วรีเฟรชเมื่อผู้ใช้อ่าน/ลบ
+   *   การ poll ซ้ำ ๆ เป็นการยิงที่ไม่มีใครขอ และถ้าคนไม่มีจดหมายเลย
+   *   จะเป็นการยิงเปล่าที่ไม่มีทางได้ผลลัพธ์ตลอดชีวิตของหน้านี้
+   */
+  const loadInboxUnread = useCallback(async () => {
+    try {
+      const r = await api.listNotifications({ limit: 1 })
+      setInboxUnread(r.unread)
+    } catch {
+      // ⚠️ เงียบไว้ — ตัวเลขบนกระดิ่งเป็นของเสริม
+      //   ถ้ามาที่ error แล้วบอกผู้ใช้ ทั้งที่จดหมายจริงยังอยู่ในแท็บ
+      //   จะเหมือนกล่องหายทั้งกล่อง แต่จริง ๆ แค่ยิงตัวเลขไม่สำเร็จ
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadInboxUnread()
+  }, [loadInboxUnread])
 
   /**
    * อ่านแท็บหน้ารายการจาก URL ตอน mount
@@ -380,58 +421,73 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
     { id: 'mine', label: 'ที่ฉันเป็นเจ้าของ' },
     { id: 'shared', label: 'แชร์กับฉัน' },
     { id: 'bookmarks', label: 'บุ๊กมาร์ก', count: bookmarks.length },
+    // ⚠️ นับเฉพาะที่ยังไม่อ่าน ไม่ใช่จำนวนทั้งหมดในกล่อง
+    //   ป้ายแบบนี้ผู้ใช้ถึงรู้ว่ายังมีอะไรต้องไปเปิดดู
+    { id: 'inbox', label: 'จดหมาย', count: inboxUnread },
   ]
 
+  /** ชื่อแท็บที่เปิดอยู่ — ย้ายมาเป็นหัวเรื่องในแถบบน ตอนนี้ชื่อแอปอยู่ที่ sidebar แล้ว */
+  const activeTitle = tabs.find((t) => t.id === tab)?.label ?? 'แม่แบบ'
+
   return (
-    <div
-      style={{
-        maxWidth: 1180,
-        margin: '0 auto',
-        padding: '28px 24px 80px',
-        /**
-         * ⚠️ ต้องเป็น flex column + gap
-         *   เดิมกล่องทุกอันเป็น block ปกติเรียงต่อกัน
-         *   พอสลับแท็บบุ๊กมาร์กตอนที่ยังไม่มีบุ๊กมาร์ก
-         *   กล่อง "ยังไม่มีบุ๊กมาร์ก" จะชิดกับกล่องตารางเป๊ะ ๆ ไม่มีช่องว่าง
-         *   (ใช้ margin ทีละกล่องแก้ไม่ได้ เพราะจำนวนกล่องเปลี่ยนตามเงื่อนไข
-         *   เช่น ตอนมี Banner แทรก ช่องว่างจะหายไปอีก)
-         */
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 14,
-      }}
-    >
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          flexWrap: 'wrap',
-          marginBottom: 18,
+    <div className="shell">
+      <StudioRail
+        tabs={tabs}
+        active={tab}
+        onTab={(id) => {
+          pickListTab(id as ListTab)
+          // ⚠️ บนจอเล็กต้องปิดลิ้นชักทุกครั้งที่เลือก
+          //   ไม่งั้นผ้าคลุมมืดยังบังเนื้อหาที่เพิ่งเลือกไว้
+          setRailOpen(false)
         }}
-      >
-        <div>
-          <h1 style={{ margin: 0, fontSize: 25 }}>Studio</h1>
-          <p className="muted" style={{ margin: '2px 0 0', fontSize: 13 }}>
-            จัดการแม่แบบเอกสาร · {templates.length} แม่แบบ
-          </p>
+        total={templates.length}
+        action={
+          <UploadButton
+            onDone={async (name) => {
+              setToast(`อัปโหลด "${name}" แล้ว`)
+              await load()
+            }}
+            onError={setError}
+          />
+        }
+        footer={
+          <>
+            {/*
+             * ⚠️ กระดิ่งจดหมาย — ตัวเลขมาจาก `loadInboxUnread()` ของหน้านี้ ไม่ใช่จากในกระดิ่งเอง
+             *   เพราะแท็บ "จดหมาย" ใช้ตัวเลขเดียวกัน — สองที่นับเองเมื่อไรก็ drift กัน
+             */}
+            <InboxBell unread={inboxUnread} onOpenInbox={() => pickListTab('inbox')} />
+            {/* ⚠️ auth route ไม่ได้อยู่ใต้ /api — ใช้ /auth/logout */}
+            <a href="/auth/logout" className="muted" style={{ fontSize: 13 }}>
+              ออกจากระบบ
+            </a>
+          </>
+        }
+        open={railOpen}
+        onClose={() => setRailOpen(false)}
+      />
+
+      <div className="shell__main">
+        <div className="pagebar">
+          <button
+            className="pagebar__menu"
+            onClick={() => setRailOpen(true)}
+            data-testid="rail-open"
+          >
+            เมนู
+          </button>
+          <h1 className="pagebar__title">{activeTitle}</h1>
         </div>
-        <div style={{ flex: 1 }} />
-        {/* ⚠️ auth route ไม่ได้อยู่ใต้ /api — ใช้ /auth/logout */}
-        <a href="/auth/logout" className="muted" style={{ fontSize: 13 }}>
-          ออกจากระบบ
-        </a>
-        <UploadButton
-          onDone={async (name) => {
-            setToast(`อัปโหลด "${name}" แล้ว`)
-            await load()
-          }}
-          onError={setError}
-        />
-      </header>
 
-      <Tabs tabs={tabs} active={tab} onChange={(id) => pickListTab(id as ListTab)} />
 
+      {/*
+       * ⚠️ เงื่อนไข `tab !== 'inbox'` ครอบ**เฉพาะ**ส่วนที่เป็นรายการแม่แบบ
+       *   ไม่งั้นผู้ใช้ที่เปิดแท็บจดหมายจะเห็นช่องค้นหา/หมวดที่กรองแม่แบบ
+       *   ซึ่งไม่มีทางมีผลกับอะไรเลย แล้วเข้าใจว่าหน้าเสีย
+       *   ส่วน Banner ด้านล่างยังอยู่ที่เดิม เพื่อไม่ให้ลำดับภาพของแท็บเดิมเปลี่ยน
+       */}
+      {tab !== 'inbox' && (
+        <>
       {/* ตัวกรอง — ไม่ใส่ margin แล้ว ใช้ gap ของพ่อแทน ไม่งั้นจะเป็น 14 + 16 = 30px */}
       <div className="filters">
         <input
@@ -506,7 +562,17 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
           ยังไม่มีบุ๊กมาร์ก — กดดาว ★ ที่แม่แบบที่ใช้บ่อยเพื่อเก็บไว้ตรงนี้
         </div>
       )}
+        </>
+      )}
 
+      {/*
+       * แท็บจดหมาย — โหลด/นับที่ยังไม่อ่านเอง แต่ให้พ่อเป็นคนถือตัวเลขป้ายบนกระดิ่ง
+       * ⚠️ `onChanged` คือจุดเดียวที่ตัวเลขบนกระดิ่งจะถูกรีเฟรช
+       *   ถ้าลืมเรียก ป้ายจะค้างเป็นตัวเลขเก่าจนกว่าจะรีเฟรชหน้า
+       */}
+      {tab === 'inbox' && <InboxPanel onChanged={() => void loadInboxUnread()} />}
+
+      {tab !== 'inbox' && (
       <div className="card" style={{ overflow: 'hidden' }}>
         {loading ? (
           <div className="muted" style={{ padding: 40, textAlign: 'center' }}>
@@ -559,6 +625,7 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
           </table>
         )}
       </div>
+      )}
 
       {peek && (
         <ThumbLightbox
@@ -569,6 +636,7 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
       )}
 
       <TrashPanel notify={setToast} onRestored={load} />
+      </div>
     </div>
   )
 }

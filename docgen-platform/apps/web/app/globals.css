@@ -2346,3 +2346,700 @@ label {
     margin: 0;
   }
 }
+
+/* ── กล่องจดหมาย (Inbox) ───────────────────────────────────────────
+   ผู้ใช้สั่ง: *"เพิ่มกล่องจดหมาย inbox แบ่งประเภทของจดหมายด้วย"*
+
+   ⚠️ ทุกปุ่มในชุดนี้**ต้องกำหนด `color` เอง**
+      เพราะทั้งระบบมี `button { color: #fff }` — ปุ่มโปร่งใสที่ลืมกำหนด
+      จะเป็นตัวอักษรขาวบนพื้นขาว (มองไม่เห็นเลย)
+   ⚠️ ปุ่มทุกตัวใช้ `width: fit-content`
+      ผู้ใช้เคยสั่ง *"ทำไมใหญ่จัง"* เพราะปุ่ม block จะยืดเต็มคอลัมน์ทันที */
+.inbox {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.inbox__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.inbox__filters {
+  display: flex;
+  gap: 6px;
+  /* ยืดกินที่ว่างที่เหลือ แต่ยอมหดได้ ไม่งั้นปุ่มล้างกล่องจะถูกบีบจนจอแคบแล้วแตก */
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.inbox__filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 5px 12px;
+  font-size: 13px;
+  background: var(--surface);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.inbox__filter:hover:not(:disabled) {
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  border-color: var(--brand-border);
+}
+.inbox__filter[aria-pressed='true'] {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+/** ตัวเลขที่ยังไม่อ่านของแต่ละประเภท — ซ่อนตัวเลข 0 (ไม่มีอะไรต้องทำ) */
+.inbox__n {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  font-size: 11px;
+  line-height: 17px;
+  text-align: center;
+}
+/** ป้ายตัวเลขบนปุ่มที่เลือกอยู่ต้องกลับสี ไม่งั้นตัวเลขจะกลืนกับพื้นม่วง */
+.inbox__filter[aria-pressed='true'] .inbox__n {
+  background: #fff;
+  color: var(--brand-dark);
+}
+.inbox__acts {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+.inbox__acts button {
+  width: fit-content;
+  font-size: 13px;
+  padding: 6px 12px;
+}
+.inbox__msg {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  font-size: 13px;
+}
+.inbox__msg > span {
+  flex: 1;
+}
+.inbox__msg button {
+  flex: none;
+  width: fit-content;
+  padding: 2px 9px;
+  font-size: 12px;
+}
+.inbox__card {
+  overflow: hidden;
+}
+/** กล่องว่าง / กำลังโหลด — จัดกึ่งกลางเพื่อให้กล่องว่างดูตั้งใจ ไม่ใช่หน้าที่โหลดค้าง */
+.inbox__state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 44px 20px;
+  text-align: center;
+  font-size: 13px;
+}
+.inbox__state-t {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.inbox__state-s {
+  margin: 0 0 4px;
+  max-width: 460px;
+}
+.inbox__state button {
+  width: fit-content;
+}
+.inbox__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.inbox__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.inbox__item:last-child {
+  border-bottom: none;
+}
+/**
+ * ⚠️ "ยังไม่อ่าน" ใช้**สองสัญญาณ**พร้อมกัน
+ *   พื้นอ่อน + เส้นซ้าย + จุดข้อความ — เพราะผู้ใช้จำนวนมากแยกเฉดสีออก
+ *   ถ้าใช้สีอย่างเดียว จะมีคนที่เปิดกล่องแล้วคิดว่าอ่านทั้งหมดแล้ว
+ */
+.inbox__item--unread {
+  background: var(--brand-soft);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+.ntf__icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 15px;
+}
+/** ปุ่มเปิดฉบับ — กดที่ไหนในเนื้อหาก็ได้ ไม่ต้องกดเป๊ะที่ชื่อเรื่อง */
+.ntf__main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+}
+.ntf__main:hover:not(:disabled) {
+  background: none;
+  color: var(--brand-dark);
+}
+.ntf__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ntf__title {
+  font-size: 14px;
+  font-weight: 600;
+  /* ชื่อเรื่องยาวต้องตัดบรรทัด ไม่งั้นจะดันปุ่มลบหลุดจนกดไม่ได้ */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ntf__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--brand);
+}
+/** ข้อความตัดที่ 2 บรรทัด — กล่องต้องยังเห็นจดหมายถัดไปบ้าง */
+.ntf__body {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.ntf__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  font-size: 12px;
+}
+.ntf__tpl {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ntf__time {
+  font-size: 12px;
+}
+.ntf__del {
+  flex: none;
+  width: fit-content;
+  padding: 4px 10px;
+  font-size: 12.5px;
+}
+.inbox__foot {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+/* ── กระดิ่งจดหมายในหัวหน้า ─────────────────────────────────────── */
+.inbox-bell {
+  position: relative;
+  display: inline-flex;
+}
+.inbox-bell__btn {
+  position: relative;
+  /* 36px = พื้นที่นิ้วขั้นต่ำเดียวกับ `.viewtoggle__btn` และปุ่มจัดการในแถว */
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  background: var(--surface);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.inbox-bell__btn:hover:not(:disabled),
+.inbox-bell__btn[aria-expanded='true'] {
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  border-color: var(--brand-border);
+}
+.inbox-bell__count {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border: 2px solid var(--bg);
+  border-radius: 999px;
+  background: var(--err);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 19px;
+  text-align: center;
+}
+/**
+ * ⚠️ z-index 2147482800 — ต้อง**อยู่ระหว่าง**สองชั้นที่มีอยู่แล้ว
+ *   · สูงกว่า lightbox (2147482601) — ผู้ใช้เปิดดูรูปแล้วยังกดกระดิ่งได้
+ *   · ต่ำกว่า bootveil (2147483000) และผ้าคลุมตอนเปลี่ยนหน้า (2147484000)
+ *     — ถ้าสูงกว่า กล่องนี้จะลอยทับหน้าจอคอมมูนิตี้ตอนหน้ากำลังบูต
+ */
+.inbox-bell__pop {
+  position: fixed;
+  z-index: 2147482800;
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 30px rgb(26 21 35 / 18%);
+}
+.inbox-bell__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.inbox-bell__head strong {
+  flex: 1;
+  font-size: 13.5px;
+}
+.inbox-bell__state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 12px;
+  text-align: center;
+  font-size: 13px;
+}
+.inbox-bell__state button {
+  width: fit-content;
+}
+/** ข้อความ error ต้องตัดบรรทัดได้ — ข้อความจาก API ยาวและมีขึ้นบรรทัด */
+.ntf-err {
+  font-size: 12.5px;
+  color: var(--err);
+  white-space: normal;
+}
+.inbox-bell__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.inbox-bell__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.inbox-bell__row.is-unread {
+  background: var(--brand-soft);
+}
+.inbox-bell__txt {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.inbox-bell__t {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inbox-bell__m {
+  font-size: 11.5px;
+}
+.inbox-bell__foot {
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+.inbox-bell__foot button {
+  width: fit-content;
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+/**
+ * ── จอเล็ก ───────────────────────────────────────────────────────
+ * ⚠️ กฎในนี้ต้องมา**ทีหลัง**กฎข้างบนเสมอ (specificity เท่ากัน ใช้ตัวหลังชนะ)
+ *    และห้ามเขียนเป็น `style={{}}` ใน JSX เพราะ inline style ไม่ถูก media query มองเห็น
+ */
+@media (max-width: 720px) {
+  /**
+   * ตัวกรอง 5 ปุ่มล้นแนวนอนบนมือถือ
+   *   → ให้**เลื่อนแนวนอน**แทนการซ้อนเป็นหลายแถว
+   *   เพราะถ้าซ้อน 3 แถว รายการจดหมายฉบับแรกจะถูกดันลงไปนอกจอพอดี
+   */
+  .inbox__filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .inbox__filter {
+    flex: none;
+  }
+  .inbox__item {
+    gap: 8px;
+    padding: 11px 12px;
+  }
+  .ntf__tpl {
+    max-width: 130px;
+  }
+  .ntf__del {
+    padding: 4px 8px;
+  }
+  .inbox-bell__pop {
+    width: calc(100vw - 24px);
+  }
+}
+/* ══ โครงหน้า: sidebar + คอลัมน์เนื้อหา ══════════════════════════════
+ *
+ * ⚠️ ต้องอยู่ท้ายไฟล์นี้ ไม่ใช่แค่ท้ายกลุ่มของตัวเอง
+ *   เพราะกฎเดิมของ `.tabs` มีทั้งแบบปกติและใน media query ≤720px ที่เปลี่ยนเป็น
+ *   กริด 2 คอลัมน์ — specificity เท่ากันหมด (0,1,0) ผู้ชนะคือ**ตัวที่มาทีหลัง**
+ *   ถ้าไปวางก่อน media query เดิม แท็บใน sidebar จะกลายเป็นกริด 2 คอลัมน์ทันที
+ */
+.shell {
+  display: flex;
+  align-items: flex-start;
+  min-height: 100vh;
+}
+/*
+ * ⚠️ `min-width: 0` จำเป็นมาก
+ *   flex item โดยปกติมี `min-width: auto` = กว้างอย่างน้อยเท่าเนื้อหา
+ *   ตารางรายการแม่แบบกว้างมาก ถ้าไม่ล็อกไว้ คอลัมน์นี้จะดัน sidebar ออกนอกจอ
+ *   แล้วผู้ใช้จะไม่เห็นเมนูเลยโดยไม่รู้ว่ามันหายไป
+ */
+.shell__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px 24px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── sidebar ────────────────────────────────────────────────────── */
+.rail {
+  position: sticky;
+  top: 0;
+  flex: 0 0 244px;
+  width: 244px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /*
+   * ⚠️ ท้ายจอต้องเหลือ ~64px
+   *   `body` มี padding-bottom 72px อยู่แล้วเพราะแถบ URL ลอยมุมล่างซ้าย
+   *   แต่ sidebar เป็น position:sticky + height:100vh จึงไม่ได้รับ padding นั้น
+   *   ผลคือแถวกระดิ่ง/ออกจากระบบจะถูกแถบลอยทับพอดี (เจอตอนรัน Next dev)
+   */
+  padding: 20px 14px 64px;
+  background: #fff;
+  border-right: 1px solid var(--line);
+}
+.rail__top {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.rail__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px;
+}
+.rail__mark {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: linear-gradient(140deg, var(--brand), var(--brand-dark));
+  color: #fff;
+  font-weight: 700;
+  font-size: 18px;
+  box-shadow: 0 2px 8px rgb(109 59 191 / 28%);
+}
+.rail__names {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+  min-width: 0;
+}
+.rail__names b {
+  font-size: 16px;
+  letter-spacing: 0.2px;
+}
+/* ⚠️ ต้องกำหนด `color` เอง — กฎ button{color:#fff} ไม่เกี่ยว แต่สีมักถูกกลืน
+ *   เว้นวรรคเป็นตัวแปรของธีม ถ้าไม่ตั้งจะได้สีขาวบนพื้นขาว */
+.rail__names small {
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+.rail__label {
+  margin: 4px 0 0;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.rail__nav {
+  /* ต้อง override `.tabs { display:contents }`? ไม่ — ตัวนั้นอยู่ที่ `.tabs__list`
+     ดังนั้นที่ต้องแก้คือทำให้รายการกลับมาเป็นกล่องจริง */
+  min-width: 0;
+}
+.rail__gap {
+  flex: 1 1 auto;
+  min-height: 12px;
+}
+.rail__foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.rail__scrim,
+.rail__close {
+  display: none;
+}
+
+/* ── แท็บแนวตั้งใน sidebar ─────────────────────────────────────────── */
+.tabs--rail {
+  display: block;
+  border-bottom: 0;
+  overflow-x: visible;
+}
+/*
+ * ⚠️ ต้องตั้ง `display: flex` กลับมา
+ *   กฎเดิมใช้ `display: contents` เพื่อให้ปุ่มแท็บเป็น flex item ของ `.tabs` โดยตรง
+ *   ถ้าไม่ override ปุ่มทั้ง 5 จะกลายเป็นข้อความติดกันเป็นบรรทัดเดียว
+ */
+.tabs--rail .tabs__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tabs--rail .tabs__tab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border-bottom: 0;
+  font-size: 14px;
+  color: var(--ink-2);
+  position: relative;
+}
+.tabs--rail .tabs__tab:hover:not(:disabled) {
+  background: var(--bg);
+  color: var(--ink);
+}
+/* ยกเลิกสี/เส้นของแท็บแนวนอนให้เป็นแบบแถบเมนูแทน */
+.tabs--rail .tabs__tab--on,
+.tabs--rail .tabs__tab--on:hover:not(:disabled) {
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  border-bottom-color: transparent;
+}
+/* แถบบอกตำแหน่งซ้าย — สื่อว่า "อยู่ในกลุ่มนี้" โดยไม่ต้องพึ่งสีพื้นอย่างเดียว */
+.tabs--rail .tabs__tab--on::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  border-radius: 0 3px 3px 0;
+  background: var(--brand);
+}
+/* ⚠️ ต้อง override กฎของ media query ≤720px ด้วย
+ *   เพราะกฎนั้นตั้ง justify-content:center / min-width / ellipsis / min-height
+ *   ซึ่งจะทำให้แท็บใน sidebar ชิดกลางและถูกตัดเป็น … */
+.tabs--rail .tabs__tab {
+  justify-content: space-between;
+  min-width: 0;
+  min-height: 0;
+  padding: 9px 12px;
+  font-size: 14px;
+  overflow: visible;
+  text-overflow: clip;
+}
+.tabs--rail .tabs__tab > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tabs--rail .tabs__count {
+  flex: none;
+}
+
+/* ── แถบหัวเรื่องเหนือเนื้อหา ──────────────────────────────────────── */
+.pagebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+}
+.pagebar__title {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.3;
+}
+/* ปุ่มเปิดเมนู — มีเฉพาะจอเล็ก (ดู media query ท้ายบล็อกนี้) */
+.pagebar__menu {
+  display: none;
+}
+
+/* ── จอเล็ก: sidebar กลายเป็นลิ้นชัก ──────────────────────────────────
+ *
+ * ⚠️ จุดพลิก 900px ไม่ใช่ 720px เหมือนกฎอื่นในไฟล์
+ *   เพราะต้องกันพื้นที่เนื้อหาไม่ให้แคบจนตารางล้น
+ *   ที่ 900px เนื้อหาเหลือราว 900-244-48 = 608px ซึ่งยังพอดีกับกริด 3 คอลัมน์
+ */
+@media (max-width: 900px) {
+  .rail {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    /* ต่ำกว่า popup กระดิ่งจดหมาย (…800) เพราะกระดิ่งอยู่ใน sidebar
+       และต่ำกว่าผ้าคลุมตอนเปลี่ยนหน้า (…3000/…4000) */
+    z-index: 2147482700;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: 0 0 40px rgb(0 0 0 / 18%);
+  }
+  .rail.is-open {
+    transform: none;
+  }
+  .rail__scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 2147482699;
+    background: rgb(26 21 35 / 42%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .rail__scrim.is-on {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .rail__close {
+    display: block;
+    align-self: flex-start;
+    margin-top: 4px;
+  }
+  .pagebar__menu {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    /* ⚠️ กฎ `button { color:#fff }` ชนะถ้าไม่กำหนดสีเอง */
+    color: var(--ink-2);
+    background: #fff;
+    border-color: var(--line);
+    min-height: 36px;
+  }
+  .pagebar__menu:hover:not(:disabled) {
+    background: var(--bg);
+    color: var(--ink);
+  }
+  .pagebar__title {
+    font-size: 18px;
+  }
+  .shell__main {
+    padding: 14px 14px 72px;
+  }
+}
+
+/* ── จอแคบมาก: ชื่อหัวเรื่องตัดได้ แต่ต้องเห็นตัวแรกเสมอ ─────────────── */
+@media (max-width: 480px) {
+  .pagebar__title {
+    font-size: 17px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* ── เก็บงานปุ่มอัปโหลดใน sidebar ─────────────────────────────────────
+ *
+ * ⚠️ ปุ่มอัปโหลดเป็น <label> สำหรับวางไฟล์ (รับ drag & drop ได้ด้วย)
+ *   และตั้ง padding/border/color ไว้แบบ **inline** ใน `UploadButton`
+ *   → กฎในไฟล์นี้จึงแก้ได้เฉพาะค่าที่ไม่ได้ตั้ง inline
+ *   ถ้าใส่ background แล้วจะไม่มีผล (inline ชนะ) และจะเข้าใจผิดว่า CSS พัง
+ */
+.rail__top > label {
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  min-height: 42px;
+  /* ต้องใช้ flex ไม่ใช่ block เพราะ <label> เป็น inline
+     ต้องกึ่งกลางทั้งแนวตั้งและแนวนอน ถ้าใช้ block ข้อความจะชิดซ้าย */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

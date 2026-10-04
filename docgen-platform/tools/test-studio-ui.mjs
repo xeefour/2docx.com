@@ -199,9 +199,16 @@ await waitFor("document.querySelectorAll('table tbody tr').length > 0", 30000)
 console.log('\n[1] แท็บหน้ารายการแม่แบบ')
 {
   const labels = await listTabLabels()
-  check('มี 4 แท็บ', labels.length === 4, labels.join(' | '))
+  /**
+   * ⚠️ 5 แท็บ ไม่ใช่ 4
+   *   เพิ่ม "จดหมาย" (กล่องจดหมาย) เข้ามาแล้ว — ผู้ใช้สั่ง
+   *   *"เพิ่มกล่องจดหมาย inbox แบ่งประเภทของจดหมายด้วย"*
+   *   เทสต์เดิมนับ 4 แล้วตกทันทีที่มีแท็บใหม่ (จริง ๆ ไม่ใช่ bug ของหน้าเว็บ)
+   */
+  check('มี 5 แท็บ', labels.length === 5, labels.join(' | '))
   check('มี "บุ๊กมาร์ก"', labels.some((l) => l.includes('บุ๊กมาร์ก')))
   check('มี "ที่ฉันเป็นเจ้าของ"', labels.some((l) => l.includes('เจ้าของ')))
+  check('มี "จดหมาย"', labels.some((l) => l.includes('จดหมาย')))
   await shot('1-list.png')
 }
 

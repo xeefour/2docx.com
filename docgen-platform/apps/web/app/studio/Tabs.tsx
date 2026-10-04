@@ -10,21 +10,30 @@ export default function Tabs({
   active,
   onChange,
   trailing,
+  rail,
 }: {
   tabs: TabDef[]
   active: string
   onChange: (id: string) => void
   /**
-   * ปุ่มที่ปลายขวาสุดของแถบ (เช่น ปุ่มดาวบุ๊กมาร์ก)
+   * ⚠️ ปุ่มที่ปลายขวาสุดของแถบ (เช่น ปุ่มดาวบุ๊กมาร์ก)
    *
-   * ⚠️ อยู่นอก `role="tablist"` เพราะมันไม่ใช่แท็บ (กดแล้วไม่ได้เปลี่ยนแท็บ)
+   * อยู่นอก `role="tablist"` เพราะมันไม่ใช่แท็บ (กดแล้วไม่ได้เปลี่ยนแท็บ)
    *   แต่ต้องอยู่ในโครง flex เดียวกับแท็บ ไม่งั้นขอบล่างของแถบจะสั้นลง
    *   และปุ่มจะตกไปบรรทัดใหม่
    */
   trailing?: ReactNode
+  /**
+   * โหมดแนวตั้ง สำหรับแถบนำทางใน sidebar
+   *
+   * ⚠️ เปลี่ยนแค่คลาส ไม่เปลี่ยนชื่อ `tabs__tab` เพราะเทสต์หลายชุดเลือกแท็บด้วย
+   *   ชื่อนี้ (test-list-tabs-url, test-list-mobile, test-editor-panes)
+   *   ถ้าเปลี่ยนชื่อ เทสต์จะตกทั้งที่หน้าเว็บถูก
+   */
+  rail?: boolean
 }) {
   return (
-    <div className="tabs">
+    <div className={`tabs${rail ? ' tabs--rail' : ''}`}>
       <div className="tabs__list" role="tablist">
         {tabs.map((t) => (
           <button

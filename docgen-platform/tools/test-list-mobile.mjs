@@ -513,51 +513,87 @@ for (const w of [579, 1440]) {
  *    481 คือจอที่ผู้ใช้ถ่าย แต่ของจริงที่ใช้บนมือถือเล็กกว่านั้นอีก
  *    ถ้าแก้แล้วผ่านที่ 481 แต่พังที่ 390 = แก้ไม่จริง
  */
-console.log('\n[9] แถบแท็บบนมือถือ (390px) — ต้องเห็นครบ ไม่ต้องเลื่อนแนวนอน')
+console.log('\n[9] เมนูนำทางบนมือถือ (390px) — เก็บในลิ้นชัก ไม่กินความกว้างเนื้อหา')
 await setWidth(390)
-const bar = await evaluate(`(() => {
-  const el = document.querySelector('.tabs')
-  if (!el) return null
-  const r = el.getBoundingClientRect()
-  const tabs = [...el.querySelectorAll('.tabs__tab')]
+
+/*
+ * จังหวะที่ 1 — ลิ้นชัก**ปิดอยู่**
+ * ⚠️ ตอนนี้แท็บอยู่นอกจอโดยเจตนา ไม่ใช่หลุดจอ
+ *   เกณฑ์ที่สำคัญจึงเปลี่ยนไปเป็น "ไม่กินความกว้างเนื้อหา + ปุ่มเมนูกดได้"
+ */
+const closed = await evaluate(`(() => {
+  const rail = document.querySelector('[data-testid="studio-rail"]')
+  const btn = document.querySelector('[data-testid="rail-open"]')
+  if (!rail || !btn) return null
+  const rb = rail.getBoundingClientRect()
+  const bb = btn.getBoundingClientRect()
+  const x = bb.x + bb.width / 2, y = bb.y + bb.height / 2
+  const hit = document.elementFromPoint(x, y)
   return {
-    vw: innerWidth,
-    barLeft: Math.round(r.left),
-    barRight: Math.round(r.right),
-    // เกินจอ = มี scrollbar แนวนอน
-    overflow: el.scrollWidth - el.clientWidth,
-    rows: new Set(tabs.map((t) => Math.round(t.getBoundingClientRect().top))).size,
-    tabs: tabs.map((t) => {
-      const b = t.getBoundingClientRect()
-      return {
-        text: t.textContent.trim().replace(/\\s+/g, ' ').slice(0, 14),
-        w: Math.round(b.width),
-        h: Math.round(b.height),
-        outRight: Math.round(Math.max(0, b.right - innerWidth)),
-        outLeft: Math.round(Math.max(0, -b.left)),
-        on: t.classList.contains('tabs__tab--on'),
-      }
-    }),
+    tabs: rail.querySelectorAll('.tabs__tab').length,
+    /** ขอบขวาของ sidebar ยังอยู่ซ้ายของขอบจออยู่ไหม = พับเก็บแล้ว */
+    railRight: Math.round(rb.right),
+    btnW: Math.round(bb.width),
+    btnH: Math.round(bb.height),
+    btnOut: Math.round(Math.max(0, bb.right - document.documentElement.clientWidth)),
+    btnHit: !!hit && (hit === btn || btn.contains(hit)),
   }
 })()`)
-check('เจอแถบแท็บ', !!bar, bar ? '' : 'ไม่เจอ .tabs')
-if (!bar) {
-  skipCheck('แท็บบนมือถือ', 'ไม่เจอแถบแท็บ')
+check('เจอ sidebar', !!closed, closed ? '' : 'ไม่เจอ [data-testid=studio-rail]')
+if (!closed) {
+  skipCheck('เมนูบนมือถือ', 'ไม่เจอ sidebar')
 } else {
-  check('มีแท็บครบ 4 อัน', bar.tabs.length === 4, `${bar.tabs.length} แท็บ`)
-  check('ไม่ล้นแนวนอน (ไม่มี scrollbar)', bar.overflow <= 0, `ล้น ${bar.overflow}px`)
-  check('ไม่มีแท็บหลุดออกนอกจอ', bar.tabs.every((t) => t.outRight === 0 && t.outLeft === 0), JSON.stringify(bar.tabs.map((t) => t.outRight)))
-  check('ทุกแท็บกดได้ (สูงพอแตะนิ้ว ≥36px)', bar.tabs.every((t) => t.h >= 36), JSON.stringify(bar.tabs.map((t) => t.h)))
-  check('ทุกแท็บกว้างพอให้เห็น (≥60px)', bar.tabs.every((t) => t.w >= 60), JSON.stringify(bar.tabs.map((t) => t.w)))
-  check('แท็บถูกจัดเป็น 2 แถว (ไม่ล้นจอ)', bar.rows === 2, `${bar.rows} แถว`)
-  check('มีแท็บที่เลือกอยู่ถูกไฮไลต์', bar.tabs.some((t) => t.on), bar.tabs.find((t) => t.on)?.text ?? 'ไม่มี')
-  await shot('w390-tabs')
+  check('มีแท็บครบ 5 อันในเมนู', closed.tabs === 5, `${closed.tabs} แท็บ`)
+  check('ลิ้นชักพับเก็บนอกจอ (ไม่กินความกว้างเนื้อหา)', closed.railRight <= 1, `ขอบขวาอยู่หลังขอบจอ ${closed.railRight}px`)
+  check('ปุ่มเมนูสูงพอแตะนิ้ว ≥36px', closed.btnH >= 36, `${closed.btnW}×${closed.btnH}px`)
+  check('ปุ่มเมนูไม่ล้นออกจอ', closed.btnOut === 0, `ล้น ${closed.btnOut}px`)
+  check('จุดกดปุ่มเมนูไม่ถูกอะไรบัง', closed.btnHit, '')
 
-  /**
-   * ⚠️ ต้องกดได้จริง ไม่ใช่แค่วางไว้สวย
-   *   กริดใหม่เปลี่ยนพิกัดปุ่มทุกปุ่ม → ถ้ามีอะไรบังจุดกด
-   *   หรือ `elementFromPoint` ไม่โดนปุ่ม ข้อนี้จะตก
-   */
+  // ── เปิดลิ้นชักด้วยเมาส์จริง ไม่ใช่ element.click() ─────────────────
+  const mb = await evaluate(`(() => {
+    const b = document.querySelector('[data-testid="rail-open"]')
+    if (!b) return null
+    const r = b.getBoundingClientRect()
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+  })()`)
+  for (const type of ['mousePressed', 'mouseReleased'])
+    await send('Input.dispatchMouseEvent', { type, x: mb.x, y: mb.y, button: 'left', clickCount: 1 })
+  await sleep(500)
+
+  const open = await evaluate(`(() => {
+    const el = document.querySelector('[data-testid="studio-rail"]')
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    const tabs = [...el.querySelectorAll('.tabs__tab')]
+    return {
+      railW: Math.round(r.width),
+      railRight: Math.round(r.right),
+      railTop: Math.round(r.top),
+      /** ต้องเป็นแนวตั้ง = แต่ละแท็บคนละบรรทัด ไม่ใช่เรียงกันในแถวเดียว */
+      rows: new Set(tabs.map((t) => Math.round(t.getBoundingClientRect().top))).size,
+      tabs: tabs.map((t) => {
+        const b = t.getBoundingClientRect()
+        return {
+          text: t.textContent.trim().replace(/\\s+/g, ' ').slice(0, 14),
+          w: Math.round(b.width),
+          h: Math.round(b.height),
+          outRight: Math.round(Math.max(0, b.right - innerWidth)),
+          outLeft: Math.round(Math.max(0, -b.left)),
+          on: t.classList.contains('tabs__tab--on'),
+        }
+      }),
+    }
+  })()`)
+  check('เปิดลิ้นชักแล้วแถบเข้าจอ', (open?.railRight ?? 0) > 0 && (open?.railTop ?? -1) >= -1, `ขวาสุด ${open?.railRight}px`)
+  check('เมนูกว้างพอสำหรับชื่อแท็บ (200-320px)', (open?.railW ?? 0) >= 200 && (open?.railW ?? 0) <= 320, `${open?.railW}px`)
+  check('แท็บเรียงแนวตั้ง (คนละแถว)', open?.rows === open?.tabs.length, `${open?.rows} แถว / ${open?.tabs.length} แท็บ`)
+  check('ไม่มีแท็บหลุดออกนอกจอ', open?.tabs.every((t) => t.outRight === 0 && t.outLeft === 0) === true, JSON.stringify(open?.tabs.map((t) => t.outRight)))
+  check('ทุกแท็บกดได้ (สูงพอแตะนิ้ว ≥36px)', open?.tabs.every((t) => t.h >= 36) === true, JSON.stringify(open?.tabs.map((t) => t.h)))
+  check('ทุกแท็บกว้างพอให้เห็น (≥60px)', open?.tabs.every((t) => t.w >= 60) === true, JSON.stringify(open?.tabs.map((t) => t.w)))
+  check('มีแท็บที่เลือกอยู่ถูกไฮไลต์', open?.tabs.some((t) => t.on) === true, open?.tabs.find((t) => t.on)?.text ?? 'ไม่มี')
+  await shot('w390-drawer')
+
+  const wasOn = open?.tabs.find((t) => t.on)?.text
   const box = await evaluate(`(() => {
     const t = [...document.querySelectorAll('.tabs__tab')].find((x) => !x.classList.contains('tabs__tab--on'))
     if (!t) return null
@@ -567,19 +603,33 @@ if (!bar) {
     const hit = document.elementFromPoint(x, y)
     return { ok: !!hit && (hit === t || t.contains(hit)), label: t.textContent.trim().replace(/\\s+/g, ' ').slice(0, 14), x, y }
   })()`)
-  check('จุดกดแท็บไม่ถูกอะไรบัง', !!box?.ok, box?.ok ? box.label : 'มีอย่างอื่นบังจุดกด')
+  check('จุดกดแท็บในลิ้นชักไม่ถูกอะไรบัง', !!box?.ok, box?.ok ? box.label : 'มีอย่างอื่นบังจุดกด')
   if (box?.ok) {
     for (const type of ['mousePressed', 'mouseReleased'])
       await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 })
-    await sleep(400)
+    await sleep(500)
     const after = await evaluate(`(() => {
       const t = [...document.querySelectorAll('.tabs__tab')].find((x) => x.classList.contains('tabs__tab--on'))
       return t ? t.textContent.trim().replace(/\\s+/g, ' ').slice(0, 14) : null
     })()`)
-    check('กดแท็บบนมือถือแล้วเปลี่ยนจริง', !!after && after !== bar.tabs.find((t) => t.on)?.text, `${bar.tabs.find((t) => t.on)?.text} → ${after}`)
+    check('กดแท็บในลิ้นชักแล้วเปลี่ยนจริง', !!after && after !== wasOn, `${wasOn} → ${after}`)
+    /**
+     * ⚠️ ต้องปิดลิ้นชักเอง ไม่ใช่แค่เปลี่ยนแท็บ
+     *   ไม่งั้นผู้ใช้เลือกเมนูเสร็จแล้วยังเห็นเมนูบังเนื้อหาที่เพิ่งเลือก
+     *   และจะเข้าใจว่าหน้าเว็บค้าง
+     */
+    check('เลือกแล้วลิ้นชักปิดเอง', await evaluate(`(() => {
+      const r = document.querySelector('[data-testid="studio-rail"]')
+      if (!r) return false
+      return r.getBoundingClientRect().right <= 1
+    })()`), '')
     // กลับแท็บแรกไว้ที่เดิม ไม่ให้ผู้ใช้เจอหน้าที่เปลี่ยนไปแล้วคิดว่าระบบพัง
+    await evaluate(`(() => {
+      document.querySelector('[data-testid="rail-open"]')?.click()
+    })()`)
+    await sleep(350)
     await evaluate(`document.querySelector('.tabs__tab')?.click()`)
-    await sleep(250)
+    await sleep(300)
   }
 }
 

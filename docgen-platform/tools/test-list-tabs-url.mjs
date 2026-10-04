@@ -48,7 +48,18 @@ const TAB_EXPECT = [
   { value: 'mine', label: 'เจ้าของ' },
   { value: 'shared', label: 'แชร์' },
   { value: 'bookmarks', label: 'บุ๊กมาร์ก' },
+  { value: 'inbox', label: 'จดหมาย' },
 ]
+
+/**
+ * จำนวนแท็บที่ต้องเห็นในแถบ — **อย่า hardcode 4 ในโค้ด**
+ *
+ * ⚠️ เพิ่มจาก 4 เป็น 5 เพราะมีแท็บ "จดหมาย" (กล่องจดหมาย) เพิ่มเข้ามา
+ *   ผู้ใช้สั่ง *"เพิ่มกล่องจดหมาย inbox แบ่งประเภทของจดหมายด้วย"*
+ *   เดิมมีเลข 4 ซ่อนอยู่ 3 จุด (waitFor 2 + assert 1) เลยตกทั้งชุดเมื่อเพิ่มแท็บ
+ *   → รวบเป็นค่าเดียวตรงนี้ จะได้แก้ทีเดียวทั้งไฟล์
+ */
+const TAB_COUNT = TAB_EXPECT.length
 
 const redis = new Redis(process.env.VALKEY_URL)
 const sid = `listtab-${Date.now()}`
@@ -196,7 +207,14 @@ const openList = async (query = '') => {
   for (let attempt = 1; attempt <= 3; attempt++) {
     await send('Page.navigate', { url: `${WEB}/studio${query}` })
     // แถบแท็บโผล่ = React mount เสร็จแล้ว (ข้อมูลยังอาจไม่มา)
-    if (!(await waitFor("document.querySelectorAll('.tabs__tab').length === 4", 60000))) {
+    /*
+     * ⚠️ ต้องเป็น **template literal** ไม่ใช่สตริงธรรมดา
+     *   ถ้าเขียน waitFor("... === TAB_COUNT") ตัว TAB_COUNT จะถูกส่งไป**ฝั่งเบราว์เซอร์**
+     *   ซึ่งไม่รู้จักตัวแปรนี้ → ReferenceError → `waitFor` กลืน error ใน try/catch
+     *   แล้ววนจนครบเวลา คืน false ทุกครั้ง (เคยตกไป 4 ข้อ เพราะเชื่อว่าเป็น regression)
+     *   ข้อสังเกต: ข้อถัดไปที่ใช้ selector จริงกลับผ่าน → แปลว่าหน้าเว็บไม่มีปัญหา
+     */
+    if (!(await waitFor(`document.querySelectorAll('.tabs__tab').length === ${TAB_COUNT}`, 60000))) {
       console.log(`  · รอบที่ ${attempt}: ยังไม่เห็นแถบแท็บ — โหลดใหม่`)
       continue
     }
@@ -219,7 +237,7 @@ const openList = async (query = '') => {
 console.log('\n[1] เปิดหน้ารายการ — แท็บแรกต้อง active และ URL สะอาด')
 check('เปิดหน้ารายการได้', await openList())
 const labels = await tabLabels()
-check('มีแท็บครบ 4 แท็บ', Array.isArray(labels) && labels.length === 4, JSON.stringify(labels))
+check('มีแท็บครบ 5 แท็บ', Array.isArray(labels) && labels.length === TAB_COUNT, JSON.stringify(labels))
 check(
   'ชื่อแท็บตรงตาม `Studio.tsx`',
   Array.isArray(labels) &&
@@ -335,7 +353,7 @@ if (backBtn) {
   for (const type of ['mousePressed', 'mouseReleased'])
     await send('Input.dispatchMouseEvent', { type, x: backBtn.x, y: backBtn.y, button: 'left', clickCount: 1 })
 }
-check('กดกลับแล้วกลับมาหน้ารายการ', await waitFor("document.querySelectorAll('.tabs__tab').length === 4", 30000))
+check('กดกลับแล้วกลับมาหน้ารายการ', await waitFor(`document.querySelectorAll('.tabs__tab').length === ${TAB_COUNT}`, 30000))
 check(
   `กลับมาแล้ว URL ยังเป็น ?tabs=${TAB_EXPECT[3].value} (ไม่หลุดไปแท็บแรก)`,
   (await param('tabs')) === TAB_EXPECT[3].value,

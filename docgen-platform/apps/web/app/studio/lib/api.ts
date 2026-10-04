@@ -6,6 +6,17 @@
  * cookie session ของ Casdoor จึงถูกส่งมาด้วยทุกครั้ง
  */
 
+/**
+ * ⚠️ `import type` **เท่านั้น** — ห้าม import ค่า (เช่น `NOTIFICATION_KIND_LABEL`) จากที่นี่
+ *
+ *   barrel ของ `@docgen/shared` มี `mongo.js` ที่ import ไดรเวอร์ `mongodb`
+ *   ซึ่งเป็นโค้ดฝั่งเซิร์ฟเวอร์ และแพ็กเกจไม่ได้ประกาศ `sideEffects: false`
+ *   → พอถูก import **ค่า** จากไฟล์ `'use client'` webpack จะยัดมันทั้งก้อน
+ *     (รวมทั้งไดรเวอร์ mongo) เข้า bundle ของเบราว์เซอร์
+ *   `import type` ถูกตัดทิ้งตอน compile จึงไม่มีผลกับ bundle
+ */
+import type { InboxList, NotificationKind } from '@docgen/shared'
+
 const BASE = '/api'
 
 export class ApiError extends Error {
@@ -786,6 +797,56 @@ export const api = {
 
   removeBookmark: (templateKey: string) =>
     call<void>(`/bookmarks/${encodeURIComponent(templateKey)}`, { method: 'DELETE' }),
+
+  /**
+   * ── กล่องจดหมาย (inbox) ───────────────────────────────────────────
+   *
+   * ผู้ใช้สั่ง: *"เพิ่มกล่องจดหมาย inbox แบ่งประเภทของจดหมายด้วย
+   *   จากระบบที่เตือนต่าง ๆ …จากเพื่อนที่ส่งมาให้ เช่น แชร์แม่แบบให้"*
+   *
+   * ⚠️ ไม่มี body ทุกคำขอของชุดนี้
+   *   `call()` จะตั้ง `content-type: application/json` ให้เฉพาะตอนมี body
+   *   ถ้าตั้งเอง Fastify จะตอบ 500 ว่า body ว่าง (ดูคอมเมนต์ใน `call()`)
+   */
+  listNotifications: (q: { kind?: NotificationKind; onlyUnread?: boolean; limit?: number } = {}) => {
+    const params = new URLSearchParams()
+    if (q.kind) params.set('kind', q.kind)
+    // ⚠️ `onlyUnread` เป็น **string** `'true' | 'false'` ไม่ใช่ boolean
+    //    ส่ง boolean จะโดน schema ของ API ปฏิเสธ (z.enum ไม่รับค่าอื่น)
+    if (q.onlyUnread !== undefined) params.set('onlyUnread', q.onlyUnread ? 'true' : 'false')
+    if (q.limit !== undefined) params.set('limit', String(q.limit))
+    const qs = params.toString()
+    return call<InboxList>(`/notifications${qs ? `?${qs}` : ''}`)
+  },
+
+  markNotificationRead: (id: string) =>
+    call<void>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' }),
+
+  /**
+   * ทำเครื่องหมายว่าอ่านแล้วทั้งหมด (หรือเฉพาะประเภท) → คืนจำนวนที่ถูกทำเครื่องหมาย
+   *
+   * แตกเป็นเมธอดคืน `number` ให้ผู้เรียกใช้ตรง ๆ ได้ เพราะหน้าเว็บเอาไปบอกผู้ใช้ว่า
+   * "อ่านแล้วกี่ฉบับ" โดยไม่ต้องแกะ envelope `{ updated }` เองทุกที่
+   */
+  markAllNotificationsRead: async (kind?: NotificationKind) => {
+    const r = await call<{ updated: number }>(
+      `/notifications/read-all${kind ? `?kind=${encodeURIComponent(kind)}` : ''}`,
+      { method: 'POST' },
+    )
+    return r.updated
+  },
+
+  deleteNotification: (id: string) =>
+    call<void>(`/notifications/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** ล้างกล่อง (ทั้งหมด หรือเฉพาะประเภท) → คืนจำนวนที่ลบ เพื่อเอาไปบอกผู้ใช้ */
+  clearNotifications: async (kind?: NotificationKind) => {
+    const r = await call<{ deleted: number }>(
+      `/notifications${kind ? `?kind=${encodeURIComponent(kind)}` : ''}`,
+      { method: 'DELETE' },
+    )
+    return r.deleted
+  },
 }
 
 /** รอจนเอกสารเรนเดอร์เสร็จ — คืน record สุดท้าย */

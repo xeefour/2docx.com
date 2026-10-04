@@ -825,7 +825,17 @@ function TrashPanel({
         กู้คืนได้ตลอดช่วงนั้น
       </p>
 
-      <div style={{ display: 'grid', gap: 8 }}>
+      {/**
+       * ⚠️ `minmax(0, 1fr)` คือหัวใจของการแก้เรื่องนี้ — อย่าถอดออก
+       *   คอลัมน์กริดแบบ `auto` จะถูกบังคับให้ ≥ min-content ของแถว
+       *   และ min-content ของชื่อที่เป็น hash คือ**ความกว้างทั้งข้อความ** (468px)
+       *   เพราะมันไม่มีช่องว่างให้พักบรรทัด
+       *   (`overflow: hidden` ช่วยไม่ได้ — มันแค่ตัดสายตา ไม่ได้ลดขนาดเชิงสายฟลี)
+       *
+       * วัดแล้วก่อนแก้: คอลัมน์กว้าง 489.7px ในขณะที่กล่องถังขยะกว้างแค่ 283px
+       *   → แถวล้นออกนอกการ์ดไปชนขอบหน้า ปุ่ม "กู้คืน" โดนดันจนกดไม่ทัน
+       */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 8 }}>
         {items.map((t) => (
           <div
             key={t.templateKey}
@@ -840,7 +850,34 @@ function TrashPanel({
             }}
           >
             <div style={{ flex: 1, minWidth: 160 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 600 }}>{t.name}</div>
+              {/**
+               * ⚠️ ชื่อแม่แบบไม่ได้เป็นคำธรรมดาเสมอไป
+               *   คีย์จาก Carbone คือเลขฐานสิบหก 64 หลัก ซึ่ง**ไม่มีช่องว่างให้พักบรรทัด**
+               *   CSS ปกติจึงพักมันไม่ได้ → ข้อความรั่นออกมาเกินกล่อง
+               *
+               * วัดแล้ว (test-trash-longname): ที่ 360–560px ตัวอักษรทับปุ่ม "กู้คืน"
+               *   ถึง 1,032px² และล้นออกนอกการ์ดถังขยะ 195px
+               *
+               * `overflow: hidden` คือกุญแจจริง ๆ ไม่ใช่แค่ `textOverflow`
+               *   เพราะแถวนี้เป็น grid item → ขนาด track ถูกบังคับให้ ≥ min-content
+               *   ของข้อความ (468px) แถวจึงกว้างเกินการ์ด ต้องตัดที่ min-content
+               *   ให้เป็น 0 ก่อน ไม่งั้น `…` จะไม่มีวันโผล่
+               *
+               * `title` เก็บชื่อเต็มไว้ เพราะถังขยะเป็นที่เดียวที่ผู้ใช้จำแนก
+               *   แม่แบบพวกนี้ได้ — ตัดทิ้งโดยไม่มีทางอ่านชื่อครบถือว่าผิด
+               */}
+              <div
+                style={{
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={t.name}
+              >
+                {t.name}
+              </div>
               <div className="muted" style={{ fontSize: 12 }}>
                 {t.category || 'ไม่มีหมวด'} · เหลืออีก{' '}
                 <b style={{ color: t.daysLeft <= 3 ? 'var(--err)' : undefined }}>{t.daysLeft} วัน</b>
@@ -975,8 +1012,37 @@ function TemplateRow({
         <button
           className="ghost"
           onClick={onOpen}
-          style={{ padding: 0, border: 'none', background: 'none', color: 'var(--brand)', textAlign: 'left' }}
-          title={view && !view.canEdit ? 'ดูอย่างเดียว (ไม่มีสิทธิ์แก้ไข)' : 'เปิดแม่แบบ'}
+          style={{
+            padding: 0,
+            border: 'none',
+            background: 'none',
+            color: 'var(--brand)',
+            textAlign: 'left',
+            /**
+             * ⚠️ ชื่อแม่แบบไม่ได้เป็นคำธรรมดาเสมอไป
+             *   คีย์จาก Carbone คือเลขฐานสิบหก 64 หลัก ไม่มีช่องว่างให้พักบรรทัด
+             *   ถ้าไม่จำกัด `table-layout: auto` จะขยายคอลัมน์ชื่อให้พอข้อความ
+             *   แล้วดันคอลัมน์ปุ่มทางขวาออกนอกจอ (วัดแล้ว: ที่ 390px ตารางกว้าง 518px
+             *   ในกล่อง 345px → ปุ่ม "ดาวน์โหลด" และช่องอื่นหายไปนอกจอ)
+             *
+             * `maxWidth` คือตัวกันการขยาย · `textOverflow` คือตัวบอกผู้ใช้ว่ามีของต่อ
+             *   แก้ที่ปุ่มชื่อจุดเดียว ได้ทั้งโหมดรายการ (ตาราง) และโหมดชิด (การ์ด)
+             *   เพราะทั้งสองโหมดใช้ปุ่มชื่อตัวเดียวกัน
+             */
+            display: 'block',
+            maxWidth: 280,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          /**
+           * รวมชื่อเต็มไว้ใน tooltip ด้วย — ตัดทิ้งโดยไม่มีทางอ่านชื่อครบถือว่าผิด
+           * (คำแนะนำเดิมยังอยู่ เพียงต่อท้ายด้วยชื่อ)
+           */
+          title={
+            (view && !view.canEdit ? 'ดูอย่างเดียว (ไม่มีสิทธิ์แก้ไข) — ' : 'เปิดแม่แบบ — ') +
+            (tpl.name || '(ไม่มีชื่อ)')
+          }
         >
           {tpl.name || '(ไม่มีชื่อ)'}
         </button>

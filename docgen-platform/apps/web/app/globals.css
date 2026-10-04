@@ -966,6 +966,14 @@ tbody tr:hover {
   display: block;
   border-radius: var(--radius);
   white-space: normal;
+  /*
+   * ⚠️ ต้องตัดข้อความได้ทุกตำแหน่ง ไม่ใช่รอช่องว่างอย่างเดียว
+   *   ข้อความแบบไม่มีช่องว่าง (เช่น key ยาว ๆ ที่ผู้ใช้พิมพ์ผิดใน URL)
+   *   จะยืดกล่องยาวเกินจอ ดันทั้งหน้าให้เลื่อนแนวนอน
+   *   เจอตอนเปิด /studio/<key ผิด> แล้วข้อความแจ้ง "ไม่พบแม่แบบ key ..."
+   *   ยาวจนปุ่มทางขวาของหน้าถูกดันจนกดไม่ได้
+   */
+  overflow-wrap: anywhere;
 }
 
 .card {
@@ -1475,6 +1483,14 @@ tbody tr:hover {
     margin-left: 0;
     justify-content: center;
     min-height: 42px;
+    /*
+     * ⚠️ ต้อง `justify-self: end`
+     *   ในกริด 2 คอลัมน์ ช่องกว้างเต็มคอลัมน์โดยปกติ (stretch)
+     *   ดาวจึงกลายเป็นแถบกว้าง 164px อยู่คนละแถวกับตัวเอง
+     *   ดูเหมือนเบราว์เซอร์เพิ่งโหลดไม่ครบ — ทั้งที่เป็นแค่ปุ่มกดบุ๊กมาร์ก
+     *   ย้ายไปชิดขวาของช่องแล้วกลายเป็นปุ่มเล็ก ๆ ที่ดูตั้งใจ
+     */
+    justify-self: end;
   }
 }
 
@@ -2734,10 +2750,18 @@ label {
    *   เพราะถ้าซ้อน 3 แถว รายการจดหมายฉบับแรกจะถูกดันลงไปนอกจอพอดี
    */
   .inbox__filters {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    scrollbar-width: thin;
+    /*
+     * ⚠️ เดิมเป็น `flex-wrap: nowrap` + `overflow-x: auto` (เลื่อนแนวนอน)
+     *   เป็นรูปแบบเดียวกับที่ `.tabs` เคยใช้แล้วพัง จึงถูกแก้ไปแล้ว
+     *   ผลที่เกิดจริงตอนนี้: scrollbar โผล่กินความสูงจอ และปุ่ม "ระบบ"
+     *   ซึ่งเป็นตัวกรองที่ 5 ถูกซ่อนไปนอกจอ — ผู้ใช้ไม่รู้ว่ามีอยู่
+     *
+     *   เดิมกลัวว่าซ้อน 3 แถวแล้วรายการฉบับแรกจะหลุดจอ แต่การวัดจริงที่ 390px
+     *   พบว่าปุ่ม 5 อันซ้อนได้ **2 แถว** ดันรายการลงราว 34px ซึ่งไม่ทำให้ใช้งานยาก
+     *   เทียบกับการ**ซ่อนตัวกรองทั้งปุ่ม** แบบเดิม — แลกแล้วชัดเจนว่าอันไหนดีกว่า
+     */
+    flex-wrap: wrap;
+    overflow-x: visible;
   }
   .inbox__filter {
     flex: none;
@@ -3057,4 +3081,107 @@ label {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* ══ UX: หัวเรื่องหน้าแก้ไข + สถานะรอโหลด ═════════════════════════════
+ *
+ * ⚠️ ต้องอยู่ท้ายไฟล์ เพื่อชนะกฎ media query ของ `.tabs` เดิมด้วยลำดับแหล่งที่มา
+ */
+.editor-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+/*
+ * ⚠️ `min-width: 170px` คือหัวใจของการแก้นี้
+ *   เดิมใช้ `flex: 1; min-width: 0` ซึ่งทำให้ชื่อแม่แบบ**ย่อได้ไม่จำกัด**
+ *   เมื่อปุ่ม "เรนเดอร์ตัวอย่าง" กว้าง ชื่อจะเหลือราว 100px แล้วถูก ellipsis ตัด
+ *   ผู้ใช้จึงเห็นแค่ "กล่องจด..." แล้วไม่รู้ว่ากำลังแก้แม่แบบไหน
+ *   การกำหนดพื้น 170px ทำให้ flex wrap ดันปุ่มหลักลงบรรทัดใหม่แทน
+ *   ซึ่งดีกว่ามาก — ปุ่มหลักยังเห็นชัด และชื่อได้เต็มบรรทัด
+ */
+.editor-head__id {
+  flex: 1 1 auto;
+  min-width: 170px;
+}
+.editor-head__title {
+  margin: 0;
+  font-size: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-head__meta {
+  font-size: 12px;
+}
+.editor-head__go {
+  flex: none;
+}
+
+@media (max-width: 720px) {
+  .editor-head {
+    gap: 8px 10px;
+  }
+  /*
+   * `order` สูงกว่าปุ่มหลัก → ชื่อแม่แบบไปอยู่ท้ายสุดและตัดบรรทัด
+   * `100%` ใน flex-basis = บังคับให้ขึ้นบรรทัดใหม่เต็มความกว้าง
+   */
+  .editor-head__id {
+    flex: 1 1 100%;
+    order: 9;
+    min-width: 0;
+  }
+  /* ดันปุ่มหลักไปชิดขวา ไม่ให้เกาะกลางจอหรืองอกองจากปุ่ม "กลับ" */
+  .editor-head__go {
+    order: 8;
+    margin-left: auto;
+  }
+  .editor-head__title {
+    font-size: 17px;
+  }
+  .editor-head__meta {
+    font-size: 11.5px;
+    /* key ยาว ๆ ต้องตัดได้ ไม่งั้นดันหน้าให้เลื่อนแนวนอน */
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ── สถานะรอโหลดทั้งหน้า ────────────────────────────────────────────
+ * เดิมเป็นข้อความกลางหน้าขาวเปล่า ดูเหมือนหน้าเสีย
+ */
+.page-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 60vh;
+  padding: 40px 20px;
+}
+.page-loading p {
+  margin: 0;
+}
+.page-loading__spin {
+  width: 30px;
+  height: 30px;
+  border: 3px solid var(--line);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: docgen-spin 0.8s linear infinite;
+}
+@keyframes docgen-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* ⚠️ ผู้ใช้ที่ตั้ง "ลดการเคลื่อนไหว" ต้องไม่เห็นวงกลมหมุน
+ *   และการหมุนไม่ใช่ข้อมูล จึงต้องมีสัญญาณให้เห็นว่ายังทำงานอยู่ */
+@media (prefers-reduced-motion: reduce) {
+  .page-loading__spin {
+    animation: none;
+    border-top-color: var(--brand);
+    border-right-color: var(--brand);
+  }
 }

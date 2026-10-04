@@ -403,6 +403,29 @@ if (target.miss) {
     await send('Input.dispatchMouseEvent', { type, x: target.x, y: target.y, button: 'left', clickCount: 1 })
   const opened = await waitFor("location.pathname !== '/studio' && document.querySelectorAll('.tabs__tab').length > 0", 30000)
   check('กดแล้วเปิดหน้าแก้ไขได้จริง', opened, await evaluate('location.pathname'))
+  /*
+   * ⚠️ ชื่อแม่แบบต้องอ่านออกบนมือถือ
+   *   เดิมหัวเรื่องเป็น `flex: 1; min-width: 0` → ย่อได้ไม่จำกัด
+   *   พอปุ่ม "เรนเดอร์ตัวอย่าง" กว้าง ชื่อเหลือ 99px แล้วถูก ellipsis ตัด
+   *   ผู้ใช้เห็นแค่ "กล่องจด..." แล้วไม่รู้ว่ากำลังแก้อะไร
+   *   เกณฑ์: ต้องเหลือพื้นที่อ่านชื่อได้จริง ไม่ใช่แค่ "ไม่ล้นจอ"
+   */
+  await waitFor("!!document.querySelector('.editor-head__title')", 30000)
+  const head = await evaluate(`(() => {
+    const h = document.querySelector('.editor-head__title')
+    if (!h) return null
+    const r = h.getBoundingClientRect()
+    return {
+      w: Math.round(r.width),
+      vw: innerWidth,
+      clipped: h.scrollWidth > h.clientWidth + 1,
+      pageOverflow: Math.round(document.documentElement.scrollWidth - document.documentElement.clientWidth),
+    }
+  })()`)
+  check('ชื่อแม่แบบอ่านออก (ไม่ถูกตัดเหลือ "กล่องจด...")', !!head && !head.clipped,
+    head ? `กว้าง ${head.w}px / จอ ${head.vw}px` : 'ไม่เจอหัวเรื่อง')
+  check('ชื่อแม่แบบได้พื้นที่พอสำหรับการอ่าน (≥150px)', (head?.w ?? 0) >= 150, `${head?.w}px`)
+  check('หน้าแก้ไขไม่ล้นแนวนอน', (head?.pageOverflow ?? 1) <= 0, `ล้น ${head?.pageOverflow}px`)
 }
 
 

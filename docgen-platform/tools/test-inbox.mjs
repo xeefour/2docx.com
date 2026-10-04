@@ -474,6 +474,7 @@ try {
       const doc = document.documentElement
       const items = [...document.querySelectorAll('[data-testid="inbox-item"]')]
       const filters = [...document.querySelectorAll('[data-testid^="inbox-filter-"]')]
+      const row = document.querySelector('.inbox__filters')
       const btns = filters.map((b) => {
         const r = b.getBoundingClientRect()
         return { w: r.right <= innerWidth + 0.5, l: r.left >= -0.5, h: r.height }
@@ -485,6 +486,14 @@ try {
         filters: filters.length,
         badFilter: btns.filter((b) => !b.w || !b.l).length,
         minFilterH: btns.length ? Math.min(...btns.map((b) => b.h)) : 0,
+        /*
+         * ⚠️ เกณฑ์เดิมวัดแค่ว่าปุ่มอยู่ในจอ ซึ่ง**ผ่านทั้งที่ตัวกรองถูกซ่อน**
+         *   เพราะแถวเลื่อนแนวนอนได้ ปุ่มที่ 5 ล้นออกไปแค่ 1px
+         *   ซึ่งยังผ่านเงื่อนไขที่ยอมให้ 0.5px
+         *   → ต้องวัดที่ตัวแถวว่า**เลื่อนได้ไหม** ถึงจะจับได้จริง
+         */
+        rowScroll: row ? row.scrollWidth - row.clientWidth : 0,
+        rowOverflowX: row ? getComputedStyle(row).overflowX : '(ไม่เจอแถว)',
       }
     })()
   `)
@@ -494,6 +503,9 @@ try {
   check('จอเล็ก: มีตัวกรองครบ 5 ปุ่ม', (narrow?.filters ?? 0) === 5, `${narrow?.filters} ปุ่ม`)
   check('จอเล็ก: ปุ่มกรองไม่ล้นและแตะได้', narrow?.badFilter === 0 && (narrow?.minFilterH ?? 0) >= 24,
     `ล้น ${narrow?.badFilter} · สูงสุดยาว ${Math.round(narrow?.minFilterH ?? 0)}px`)
+  check('จอเล็ก: ตัวกรองไม่ใช่แถบเลื่อนแนวนอน (ปุ่มที่ 5 ต้องมองเห็น)',
+    (narrow?.rowScroll ?? 1) === 0 && narrow?.rowOverflowX !== 'auto',
+    `ซ่อนไว้ ${narrow?.rowScroll}px · overflow-x=${narrow?.rowOverflowX}`)
   await shot('04-narrow.png')
 } catch (err) {
   check('เทสต์รันจบโดยไม่พัง', false, String(err?.message ?? err))

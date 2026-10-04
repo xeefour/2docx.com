@@ -382,9 +382,16 @@ export default function TemplateEditor({
   }, [templateKey, tags, notify])
 
   if (loading) {
+    /*
+     * ⚠️ เคยเป็นแค่ข้อความกลางหน้าขาวเปล่า ไม่มีสัญญาณว่ากำลังทำงาน
+     *   คนที่เปิดหน้านี้ต้องรอ API ตอบ ถ้าไม่บอกว่ากำลังโหลด
+     *   เขาจะเข้าใจว่าหน้าเสีย แล้วกดรีเฟรชวนซ้ำ
+     *   `role="status"` + `aria-busy` ให้โปรแกรมอ่านหน้าจอรู้ด้วย
+     */
     return (
-      <div className="muted" style={{ padding: 64, textAlign: 'center' }}>
-        กำลังเปิดแม่แบบ…
+      <div className="page-loading" role="status" aria-busy="true">
+        <span className="page-loading__spin" aria-hidden="true" />
+        <p className="muted">กำลังเปิดแม่แบบ…</p>
       </div>
     )
   }
@@ -418,15 +425,20 @@ export default function TemplateEditor({
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: '22px 24px 60px' }}>
       {/* ── หัวเรื่อง ── */}
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+      {/*
+       * ⚠️ หัวเรื่องนี้เคยเป็น inline style ทั้งหมด
+       *   inline style **media query มองไม่เห็น** จึงแก้เฉพาะจอเล็กไม่ได้
+       *   ผลคือที่ 390px ปุ่ม "เรนเดอร์ตัวอย่าง" เบียดจนชื่อแม่แบบ
+       *   เหลือกว้าง 99px แล้วถูกตัดเหลือ "กล่องจด..." — ผู้ใช้แทบไม่รู้ว่ากำลังแก้อะไร
+       *   ย้ายมาเป็น class เพื่อให้จอเล็กจัดวางใหม่ได้ (ดู `.editor-head*` ใน globals.css)
+       */}
+      <div className="editor-head">
         <button className="ghost" onClick={onClose}>
           ← กลับ
         </button>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h1 style={{ margin: 0, fontSize: 20, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {template.name || '(ไม่มีชื่อ)'}
-          </h1>
-          <div className="muted mono" style={{ fontSize: 12 }}>
+        <div className="editor-head__id">
+          <h1 className="editor-head__title">{template.name || '(ไม่มีชื่อ)'}</h1>
+          <div className="muted mono editor-head__meta">
             {template.versionId.slice(0, 20)}… · key {templateKey}
           </div>
         </div>
@@ -451,6 +463,7 @@ export default function TemplateEditor({
           </span>
         )}
         <button
+          className="editor-head__go"
           onClick={() => void render_()}
           disabled={busy || !canEdit}
           data-testid="render-preview"

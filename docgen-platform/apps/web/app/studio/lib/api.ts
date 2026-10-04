@@ -525,8 +525,17 @@ export const api = {
   restoreTemplate: (templateKey: string) =>
     call<void>(`/templates/${encodeURIComponent(templateKey)}/restore`, { method: 'POST' }),
 
-  /** แม่แบบที่ผู้เรียกเป็นคนลบ — ใช้ทำหน้า "ถังขยะ" */
-  trashList: () => call<{ items: Tombstone[] }>('/templates/trash'),
+  /**
+   * แม่แบบที่ผู้เรียกเป็นคนลบ — ใช้ทำหน้า "ถังขยะ"
+   *
+   * ⚠️ แบ่งหน้าที่ API ไม่ใช่ตัดที่เว็บ (ดูเหตุผลใน `TrashQuery` ฝั่ง API)
+   *   `total` ต้องมีเสมอ จะนับเฉพาะ `items.length` ไม่ได้
+   *   เพราะผู้ใช้กดกู้คืน/ลบระหว่างที่อยู่หน้า 3 จำนวนก็เปลี่ยนทันที
+   */
+  trashList: (limit: number, skip: number) =>
+    call<{ items: Tombstone[]; total: number }>(
+      `/templates/trash?limit=${limit}&skip=${skip}`,
+    ),
 
   /**
    * สถานะถังขยะของแม่แบบหนึ่งตัว (ใช้โชว์ป้ายเตือนผู้ที่เปิดแม่แบบ)

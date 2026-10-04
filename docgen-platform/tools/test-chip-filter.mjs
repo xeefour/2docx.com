@@ -104,6 +104,51 @@ const shot = async (n) => {
  *   (เจอแล้วกับปุ่มซ่อนบนมือถือ) ต้องยิง `Input.dispatchMouseEvent`
  *   และเช็ค `elementFromPoint` ว่าชี้โดนตัวชิปจริง
  */
+/**
+ * ไปหน้าที่มีชิปคำนี้อยู่จริง (หน้ารายการแบ่งหน้า 12 แถว)
+ *
+ * ⚠️ เคยเป็นบั๊กในเทสต์นี้เอง ไม่ใช่บั๊กของระบบ
+ *   แถว 12 แถวแรกไม่มีชิปหมวดเลย → `clickChip` หาไม่เจอ → ทั้งชุดตก
+ *   แม้ระบบทำงานถูก แก้ได้ทางเดียวคือให้เทสต์รู้จักเดินทุกหน้า
+ */
+const gotoChip = async (testid, text) => {
+  for (let i = 0; i < 20; i++) {
+    const has = await evaluate(`[...document.querySelectorAll('[data-testid=' + ${JSON.stringify(testid)} + ']')]
+      .some((b) => (b.textContent || '').trim() === ${JSON.stringify(text)})`)
+    if (has) return true
+    const canNext = await evaluate(`(() => {
+      const b = document.querySelector('[data-testid="list-pager-next"]')
+      return !!b && !b.disabled
+    })()`)
+    if (!canNext) return false
+    await evaluate(`document.querySelector('[data-testid="list-pager-next"]').click()`)
+    await sleep(700)
+  }
+  return false
+}
+
+/**
+ * ไปหน้าที่มีชิปตาม testid อย่างน้อยหนึ่งอัน (ไม่ต้องระบุข้อความ)
+ *
+ * ⚠️ ข้อ [1] เดิมหาแถวที่มีชิปจากหน้าแรก
+ *   แต่แถว 12 แถวแรกอาจไม่มีชิปหมวดเลย → `first` ตกไปที่แถวที่ไม่มีชิป
+ *   → querySelector ได้ null → ทั้งชุดตก ทั้งที่ระบบปกติ
+ */
+const gotoAnyChip = async (testid) => {
+  for (let i = 0; i < 20; i++) {
+    const has = await evaluate(`!!document.querySelector('[data-testid=' + ${JSON.stringify(testid)} + ']')`)
+    if (has) return true
+    const canNext = await evaluate(`(() => {
+      const b = document.querySelector('[data-testid="list-pager-next"]')
+      return !!b && !b.disabled
+    })()`)
+    if (!canNext) return false
+    await evaluate(`document.querySelector('[data-testid="list-pager-next"]').click()`)
+    await sleep(700)
+  }
+  return false
+}
+
 const clickChip = async (testid, text, nth = 0) => {
   const box = await evaluate(`(() => {
     const els = [...document.querySelectorAll('[data-testid=${JSON.stringify(testid)}]')]
@@ -145,6 +190,13 @@ const SNAP = `(() => {
     badge: document.querySelector('[data-testid="clear-tag"]')?.textContent.trim() || '',
     select: document.querySelector('.filters__cat')?.value || '',
     count: document.querySelector('.filters__count')?.textContent.trim() || '',
+    range: document.querySelector('[data-testid="list-pager-range"]')?.innerText.trim() || '',
+    // จำนวนทั้งหมดหลังกรอง (ไม่ใช่จำนวนแถวที่เห็น) — ดูรายละเอียดใน tools/lib/list-pages.mjs
+    total: (() => {
+      const s = document.querySelector('[data-testid="list-pager-range"]')?.innerText || ''
+      const m = s.match(/[\d,]+/g)
+      return m ? Number(m[m.length - 1].replace(/,/g, '')) : document.querySelectorAll('.tpllist tbody tr').length
+    })(),
     hasClear: !![...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'ล้างตัวกรอง'),
   }
 })()`
@@ -158,6 +210,7 @@ await send('Page.navigate', { url: `${WEB}/studio?_=${STAMP}` })
 check('หน้ารายการโหลดได้', !!(await waitFor(`!!document.querySelector('.tpllist tbody tr')`, 45000)))
 
 console.log('\n[1] ชิปต้องเป็นปุ่มจริง ไม่ใช่ป้ายตา')
+await gotoAnyChip('row-cat')
 const shape = await evaluate(`(() => {
   // ⚠️ ห้ามเอาแถวแรกตรง ๆ — แถวแรกอาจไม่มีหมวด/แท็กเลย
   //   แล้ว querySelector ได้ null เทสต์จะตกทั้งชุดทั้งที่ชิปปกติดี
@@ -186,16 +239,47 @@ check(
 
 console.log('\n[2] กดชิปแท็กแล้วกรองจริง')
 const before = await evaluate(SNAP)
+
+/**
+ * เก็บชิปข้อมูลจาก**ทุกหน้า** แล้วกลับมาหน้าแรก
+ *
+ * ⚠️ ต้องนับทั้งรายการ ไม่ใช่แค่หน้าปัจจุบัน
+ *   เดิมนับแค่ 12 แถวแรก → เลือกแท็ก/หมวดที่เจอในหน้านั้น
+ *   แต่ตอนกดแล้วอาจเป็นหน้าที่ 2 ที่มีชิปนั้น → กดไม่โดน
+ *   และแท็กที่เลือกอาจมีแค่ 1 แถว → พิสูจน์ว่าตัวกรองทำงานไม่ได้
+ */
+const allRows = []
+for (let i = 0; i < 20; i++) {
+  const s = await evaluate(SNAP)
+  allRows.push(...s.rows)
+  const canNext = await evaluate(`(() => {
+    const b = document.querySelector('[data-testid="list-pager-next"]')
+    return !!b && !b.disabled
+  })()`)
+  if (!canNext) break
+  await evaluate(`document.querySelector('[data-testid="list-pager-next"]').click()`)
+  await sleep(700)
+}
+check('เดินครบทุกหน้าแล้ว', allRows.length >= before.n, `${allRows.length} แถวทั้งหมด`)
+// กลับหน้าแรก เพื่อให้ผลลัพธ์ถัดไปอ้างอิงกับหน้าแรกเหมือนเดิม
+while (await evaluate(`(() => {
+  const b = document.querySelector('[data-testid="list-pager-prev"]')
+  return !!b && !b.disabled
+})()`)) {
+  await evaluate(`document.querySelector('[data-testid="list-pager-prev"]').click()`)
+  await sleep(500)
+}
 /** เลือกแท็กที่อยู่มากกว่า 1 แถว เพราะถ้าอยู่แถวเดียว จะพิสูจน์ไม่ได้ว่าตัวกรองทำงาน */
 const tally = {}
-for (const r of before.rows) for (const t of r.tags) tally[t] = (tally[t] || 0) + 1
+for (const r of allRows) for (const t of r.tags) tally[t] = (tally[t] || 0) + 1
 const sharedTag = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0] ?? ''
 check('มีแท็กให้ทดสอบอยู่บ้าง', sharedTag.length > 0, Object.keys(tally).slice(0, 5).join(' · '))
+await gotoChip('row-tag', sharedTag)
 const clickTag1 = await clickChip('row-tag', sharedTag)
 check(`กดชิปแท็ก "${sharedTag}" ได้`, !!clickTag1?.ok, clickTag1?.miss ?? clickTag1?.blockedBy ?? '')
 check('ป้ายบอกค่าที่กรอง (แท็กไม่มีช่องเลือกให้เห็นค่า)', !!(await waitFor(`!!document.querySelector('[data-testid="clear-tag"]')`, 8000)))
 const afterTag = await evaluate(SNAP)
-check('จำนวนแถวลดลงจริง', afterTag.n < before.n, `${before.n} → ${afterTag.n} (${afterTag.count})`)
+check('จำนวนแถวลดลงจริง', afterTag.total < before.total, `${before.n} → ${afterTag.n} (${afterTag.count})`)
 /**
  * ⚠️ ยกเว้นแถวที่มี "+N" — ชิปที่เห็นมีแค่ 3 อันแรก
  *   แถวนั้นอาจมีแท็กที่กรองอยู่แต่ไม่ได้แสดง ไม่ใช่บั๊ก
@@ -208,13 +292,15 @@ check('ปุ่ม "ล้างตัวกรอง" โผล่มา', aft
 await shot('01-tag-filter.png')
 
 console.log('\n[3] กดชิปซ้ำ = ยกเลิกตัวกรอง')
+await gotoChip('row-tag', sharedTag)
 const clickTag2 = await clickChip('row-tag', sharedTag)
 check('กดชิปเดิมซ้ำได้', !!clickTag2?.ok, clickTag2?.miss ?? clickTag2?.blockedBy ?? '')
 check('กลับมาเป็นตัวกรองเดิม (กดซ้ำต้อง "ตัด" ไม่ใช่ "ซ้ำ")', !!(await waitFor(`!document.querySelector('[data-testid="clear-tag"]')`, 8000)))
 const afterToggle = await evaluate(SNAP)
-check('จำนวนแถวกลับมาเท่าเดิม', afterToggle.n === before.n, `${before.n} → ${afterToggle.n}`)
+check('จำนวนแถวกลับมาเท่าเดิม', afterToggle.total === before.total, `${before.n} → ${afterToggle.n}`)
 
 console.log('\n[4] กด ✕ บนป้าย = ล้างตัวกรองแท็ก')
+await gotoChip('row-tag', sharedTag)
 await clickChip('row-tag', sharedTag)
 await waitFor(`!!document.querySelector('[data-testid="clear-tag"]')`, 8000)
 const clickX = await clickChip('clear-tag', `แท็ก: ${sharedTag} ✕`)
@@ -226,9 +312,10 @@ check('ป้ายหายและรายการกลับครบ', !
 
 console.log('\n[5] กดชิปหมวด → ช่องเลือกหมวดต้องเปลี่ยนตาม')
 const catTally = {}
-for (const r of before.rows) for (const c of r.cats) catTally[c] = (catTally[c] || 0) + 1
+for (const r of allRows) for (const c of r.cats) catTally[c] = (catTally[c] || 0) + 1
 const sharedCat = Object.keys(catTally).sort((a, b) => catTally[b] - catTally[a])[0] ?? ''
 check('มีหมวดให้ทดสอบอยู่บ้าง', sharedCat.length > 0, Object.keys(catTally).slice(0, 5).join(' · '))
+await gotoChip('row-cat', sharedCat)
 const clickCat = await clickChip('row-cat', sharedCat)
 check(`กดชิปหมวด "${sharedCat}" ได้`, !!clickCat?.ok, clickCat?.miss ?? clickCat?.blockedBy ?? '')
 check('ช่องเลือกหมวดในแถบตัวกรองเปลี่ยนตาม (เป็นตัวกรองเดียวกัน)', !!(await waitFor(
@@ -236,7 +323,7 @@ check('ช่องเลือกหมวดในแถบตัวกรอ�
   8000,
 )))
 const afterCat = await evaluate(SNAP)
-check('จำนวนแถวลดลงจริง', afterCat.n < before.n, `${before.n} → ${afterCat.n} (${afterCat.count})`)
+check('จำนวนแถวลดลงจริง', afterCat.total < before.total, `${before.n} → ${afterCat.n} (${afterCat.count})`)
 const wrongCat = afterCat.rows.filter((r) => !r.cats.includes(sharedCat))
 check('ทุกแถวที่เหลืออยู่ในหมวดนั้นจริง', wrongCat.length === 0, `${wrongCat.length} แถวไม่ตรง`)
 await shot('02-cat-filter.png')
@@ -247,11 +334,12 @@ console.log('\n[6] หมวด + แท็ก = ต้องมีทั้ง�
 const both = afterCat.rows.find((r) => r.tags.length > 0)
 const pairTag = both ? both.tags[0] : ''
 if (pairTag) {
+  await gotoChip('row-tag', pairTag)
   await clickChip('row-tag', pairTag)
   await waitFor(`document.querySelectorAll('.pill--btn.is-on').length >= 2`, 8000)
   const afterBoth = await evaluate(SNAP)
   const nOk = afterBoth.rows.filter((r) => r.cats.includes(sharedCat) && (r.tags.includes(pairTag) || r.overflow))
-  check('กรองสองชั้นพร้อมกันได้', afterBoth.n <= afterCat.n, `${afterCat.n} → ${afterBoth.n}`)
+  check('กรองสองชั้นพร้อมกันได้', afterBoth.total <= afterCat.total, `${afterCat.n} → ${afterBoth.n}`)
   check('ทุกแถวที่เหลือมีทั้งหมวดและแท็ก', nOk.length === afterBoth.rows.length, `${nOk.length}/${afterBoth.rows.length}`)
   check('ชิปที่ใช้งานอยู่ไฮไลต์ครบ 2 อัน', afterBoth.onChips.length >= 2, afterBoth.onChips.join(' | '))
 } else {
@@ -284,6 +372,7 @@ check('ชิปไฮไลต์หายหมด', afterClear.onChips.length
 console.log('\n[8] มือถือ 390px — ชิปต้องยังกดได้จริง')
 await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true })
 await sleep(700)
+await gotoChip('row-tag', sharedTag)
 const mobSize = await evaluate(`(() => {
   const el = document.querySelector('[data-testid="row-tag"]')
   if (!el) return null
@@ -292,6 +381,7 @@ const mobSize = await evaluate(`(() => {
 })()`)
 check('ชิปยังมีขนาดจับได้บนมือถือ', (mobSize?.h ?? 0) >= 20, JSON.stringify(mobSize))
 check('ขนาดชิปไม่ใช่ปุ่มใหญ่เต็มบรรทัด', (mobSize?.w ?? 999) <= 260, `${mobSize?.w}px`)
+await gotoChip('row-tag', sharedTag)
 const mobClick = await clickChip('row-tag', sharedTag)
 check('กดชิปแท็กบนมือถือได้จริง (ไม่โดนอย่างอื่นบัง)', !!mobClick?.ok, mobClick?.miss ?? `ถูกบังด้วย ${mobClick?.blockedBy}`)
 check('ตัวกรองทำงานบนมือถือด้วย', !!(await waitFor(`!!document.querySelector('[data-testid="clear-tag"]')`, 8000)))
@@ -314,6 +404,7 @@ if (listBtn?.ok) {
     await send('Input.dispatchMouseEvent', { type, x: listBtn.x, y: listBtn.y, button: 'left', clickCount: 1 })
 }
 check('สลับเป็นมุมมีรายการได้', !!(await waitFor(`!document.querySelector('.tpllist').classList.contains('tpllist--grid')`, 8000)))
+await gotoChip('row-tag', sharedTag)
 const listClick = await clickChip('row-tag', sharedTag)
 check('กดชิปแท็กในโหมดรายการได้', !!listClick?.ok, listClick?.miss ?? listClick?.blockedBy ?? '')
 check('ตัวกรองทำงานในโหมดรายการ', !!(await waitFor(`!!document.querySelector('[data-testid="clear-tag"]')`, 8000)))

@@ -185,15 +185,34 @@ export async function restoreTemplate(app: App, templateKey: string, req: Req): 
   app.log.info({ templateKey }, 'กู้คืนแม่แบบจากถังขยะแล้ว')
 }
 
-/** รายการในถังขยะ — คืนเฉพาะของที่ผู้เรียกเป็นคนลบ */
-export async function listTombstones(app: App, req: Req): Promise<TombstoneView[]> {
+/**
+ * รายการในถังขยะ — คืนเฉพาะของที่ผู้เรียกเป็นคนลบ แบ่งหน้าแล้ว
+ *
+ * ⚠️ ต้องนับ `total` แยก ห้ามใช้ `items.length` เด็ดขาด
+ *   เพราะผู้ใช้กดกู้คืน/ลบระหว่างที่อยู่หน้า 3 จำนวนก็เปลี่ยนทันที
+ *   ถ้าใช้จำนวนที่คืนมาต่อหน้า หน้าสุดท้ายจะโชว์ซ้ำถาวรจนกว่าจะกดหน้าก่อนหน้า
+ *
+ * ⚠️ เรียงด้วย `deletedAt: -1` ไม่ใช่ `_id` เพราะ tombstone คนละชุดกับแม่แบบ
+ *   (คีย์คือ versionId ยาว ๆ ไม่เรียงตามเวลา)
+ */
+export async function listTombstones(
+  app: App,
+  req: Req,
+  query: { limit: number; skip: number },
+): Promise<{ items: TombstoneView[]; total: number }> {
   const user = who(req)
-  const all = await app.mongo
-    .collection<Tombstone>(TOMBSTONES)
-    .find({ deletedBy: user.sub } as never)
-    .sort({ deletedAt: -1 } as never)
-    .toArray()
-  return all.map((t) => toTombstoneView(t, user.sub))
+  const col = app.mongo.collection<Tombstone>(TOMBSTONES)
+  const filter = { deletedBy: user.sub } as never
+  const [rows, total] = await Promise.all([
+    col
+      .find(filter)
+      .sort({ deletedAt: -1 } as never)
+      .skip(query.skip)
+      .limit(query.limit)
+      .toArray(),
+    col.countDocuments(filter),
+  ])
+  return { items: rows.map((t) => toTombstoneView(t, user.sub)), total }
 }
 
 /** ข้อมูล tombstone ของแม่แบบหนึ่งตัว (ไม่ต้องเช็คสิทธิ์ — ใช้แสดงป้ายเตือน) */

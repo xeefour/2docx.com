@@ -39,6 +39,18 @@ const TombstoneSchema = z.object({
   canRestore: z.boolean(),
 })
 
+/**
+ * พารามิเตอร์แบ่งหน้าของถังขยะ — ทำเป็น `skip`/`limit` เหมือน `/history/:key/mine`
+ * เพื่อให้ฝั่งเว็บใช้ `Pager` ตัวเดียวกันได้
+ *
+ * ⚠️ เพดาน `skip` ไว้เหมือนประวัติ เพราะ `skip` ต้องไล่ทีละเอกสาร
+ *   ถ้าไม่เพดาน ผู้ใช้พิมพ์ `?skip=99999999` แล้ว API ค้าง
+ */
+const TrashQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  skip: z.coerce.number().int().min(0).max(50_000).default(0),
+})
+
 /** ขนาดไฟล์แม่แบบสูงสุด — Carbone/LibreOffice จะพังถ้าใหญ่เกินนี้ */
 const MAX_SIZE = 20 * 1024 * 1024
 
@@ -107,13 +119,20 @@ export async function templateRoutes(app: App) {
       schema: {
         tags,
         summary: 'แม่แบบที่อยู่ในถังขยะ (คนเดียวกับที่กดลบ)',
+        /**
+         * ⚠️ แบ่งหน้าตั้งแต่ฝั่ง API ไม่ใช่ตัดที่หน้าเว็บ
+         *   ถังขยะไม่ได้มีแค่ 3 รายการเสมอไป — ถ้าผู้ใช้ลบทีละเอกสาร
+         *   แล้วไม่กดกู้คืน ภายใน 14 วันอาจสะสมได้หลายร้อยรายการ
+         *   การโหลดทั้งหมดมาแล้วค่อยตัดที่เว็บ = ยิงใหญ่ขึ้นเรื่อย ๆ ทั้งที่ใช้แค่ 10 รายการ
+         */
+        querystring: TrashQuery,
         response: {
-          200: z.object({ items: z.array(TombstoneSchema) }),
+          200: z.object({ items: z.array(TombstoneSchema), total: z.number() }),
           500: ErrorResponse,
         },
       },
     },
-    async (req) => ({ items: await listTombstones(app, req) }),
+    async (req) => listTombstones(app, req, req.query),
   )
 
   // GET /api/templates/:id/tags — แท็ก {d.*} ที่ใช้จริงในไฟล์แม่แบบ

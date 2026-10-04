@@ -130,23 +130,47 @@ const realClick = async (selector) => {
  *   โปรเจกต์มี `lib/pick-template.mjs` กันเรื่องนี้ไว้แล้วฝั่งที่เลือกแม่แบบ
  *   แต่ฝั่ง "เปิดแม่แบบในหน้าเว็บ" ยังกดแถวแรกอยู่ จึงต้องแก้ให้ตรงกัน
  */
+/**
+ * เปิดแม่แบบ**ตามชื่อ** และเดินหน้ารายการจนกว่าจะเจอ
+ *
+ * ⚠️ เดิมกดแค่หน้าแรก แต่หน้ารายการแบ่งหน้า 12 แถว
+ *   แม่แบบที่เทสต์เตรียมไว้ (1521017977904182340) อยู่หน้าที่ 3
+ *   → กดไม่เจอ → ทุกข้อหลังจากนั้นตกหมด (ผ่าน 12 · ไม่ผ่าน 19)
+ *
+ * ⚠️ เจอปุ่มแต่ถูกอย่างอื่นบัง = ปุ่มกดไม่ได้จริง ไม่ใช่ปัญหาหน้า
+ *   ต้องหยุดทันที ไม่ใช่เดินไปหน้าถัดไป (ถ้าเดินต่อจะหาไม่เจอตลอดจนหมด maxPages)
+ */
+const rowBoxExpr = (name) => `(() => {
+  const want = ${JSON.stringify(name)}
+  const el = [...document.querySelectorAll('table tbody tr td button.ghost')]
+    .find((b) => (b.textContent || '').trim() === want)
+  if (!el) return null
+  el.scrollIntoView({ block: 'center' })
+  const r = el.getBoundingClientRect()
+  const x = r.x + r.width / 2
+  const y = r.y + r.height / 2
+  const hit = document.elementFromPoint(x, y)
+  return { x, y, ok: !!hit && (hit === el || el.contains(hit)) }
+})()`
+
 const clickRowByName = async (name) => {
-  const box = await evaluate(`(() => {
-    const want = ${JSON.stringify(name)}
-    const el = [...document.querySelectorAll('table tbody tr td button.ghost')]
-      .find((b) => (b.textContent || '').trim() === want)
-    if (!el) return null
-    el.scrollIntoView({ block: 'center' })
-    const r = el.getBoundingClientRect()
-    const x = r.x + r.width / 2
-    const y = r.y + r.height / 2
-    const hit = document.elementFromPoint(x, y)
-    return { x, y, ok: !!hit && (hit === el || el.contains(hit)) }
-  })()`)
-  if (!box?.ok) return false
-  for (const type of ['mousePressed', 'mouseReleased'])
-    await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 })
-  return true
+  for (let i = 0; i < 20; i++) {
+    const box = await evaluate(rowBoxExpr(name))
+    if (box) {
+      if (!box.ok) return false
+      for (const type of ['mousePressed', 'mouseReleased'])
+        await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 })
+      return true
+    }
+    const canNext = await evaluate(`(() => {
+      const b = document.querySelector('[data-testid="list-pager-next"]')
+      return !!b && !b.disabled
+    })()`)
+    if (!canNext) return false
+    await evaluate(`document.querySelector('[data-testid="list-pager-next"]').click()`)
+    await sleep(700)
+  }
+  return false
 }
 const clickText = async (text, selector = 'button') => {
   const box = await evaluate(`(() => {

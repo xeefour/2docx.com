@@ -27,6 +27,7 @@ import {
   type Tombstone,
 } from './lib/api'
 import Tabs from './Tabs'
+import Pager from './Pager'
 import ThumbLightbox from './ThumbLightbox'
 import UploadGuide from './UploadGuide'
 import TemplateEditor from './TemplateEditor'
@@ -98,6 +99,7 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
   const [categories, setCategories] = useState<string[]>([])
   const [access, setAccess] = useState<Record<string, AccessView>>({})
   /** มุมมีรายการ: รายการ | ชิด (จำค่าไว้ต่อคนใน localStorage) */
+  const [page, setPage] = useState(1)
   const [listView, setListView] = useState<'list' | 'grid'>(readStoredView)
   /** ลิ้นชักเปิดอยู่หรือไม่ — มีผลเฉพาะจอเล็ก (CSS ซ่อน sidebar บนจอใหญ่) */
   const [railOpen, setRailOpen] = useState(false)
@@ -353,6 +355,40 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
         t.tags.some((x) => x.toLowerCase().includes(q))
       )
     })
+  /**
+   * ── แบ่งหน้า (ผู้ใช้ชี้ว่าเดิมไม่มี) ──────────────────────────────
+   * วัดแล้ว: แท็บ "แม่แบบทั้งหมด" มี 43 รายการ หน้าสูง 5,982px = เลื่อน 6 จอ
+   * และ API คืน `hasMore` มาให้ตั้งแต่แรก แต่หน้าเว็บไม่เคยใช้
+   *
+   * ⚠️ ต้องแบ่งหน้า**ฝั่งเบราว์เซอร์** ไม่ใช่ที่ API
+   *   เพราะตัวกรองทั้งหมด (แท็บ · หมวด · แท็ก · ค้นหา · บุ๊กมาร์ก) คำนวณที่ `filtered`
+   *   ถ้าให้ API แบ่งหน้า ผู้ใช้ที่อยู่แท็บ "ที่ฉันเป็นเจ้าของ" จะเห็นหน้าว่าง
+   *   เพราะ API ไม่รู้ว่าผู้ใช้อยู่แท็บไหน
+   */
+  const LIST_PAGE_SIZE = 12
+  const pageCount = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE))
+  /**
+   * ⚠️ ผู้ใช้ลบ/ย้ายแม่แบบจนหน้าสุดท้ายหายไป ต้องถูกดึงกลับ
+   *   ไม่ใช่ค้างหน้าว่างจนกด ‹ ไม่ได้ (เคยเจอกับถังขยะตอนทำครั้งนี้)
+   */
+  const safePage = Math.min(page, pageCount)
+  const shown = filtered.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE)
+
+  /**
+   * เปลี่ยนตัวกรองแล้วต้องกลับหน้าแรก — ไม่งั้นค้างหน้า 5 ทั้งที่กรองเหลือ 2 รายการ
+   *
+   * ⚠️ ห้ามใส่ `listView` ในรายการนี้
+   *   การสลับชิด/กว้างไม่ได้เปลี่ยนผลลัพธ์อะไร เปลี่ยนแค่ความหนาแน่นของหน้าเดิม
+   *   ถ้าดันกลับหน้า 1 ผู้ใช้ที่เพิ่งเลื่อนไปหน้า 4 เพื่อหาแม่แบบที่มีรูปย่อ
+   *   จะถูกโยนกลับไปหน้าแรกทุกครั้งที่กดสลับโหมด (เจอจาก test-row-peek ตก 8 ข้อ)
+   */
+  useEffect(() => {
+    setPage(1)
+  }, [search, category, tag, tab])
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage)
+  }, [page, safePage])
+
   }, [templates, search, category, tag, tab, access, bookmarkKeys])
 
   /**
@@ -626,6 +662,22 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
           <table className={`tpllist${listView === 'grid' ? ' tpllist--grid' : ''}`}>
             <thead>
               <tr>
+
+      {pageCount > 1 && (
+        <Pager
+          page={safePage}
+          pageCount={pageCount}
+          onChange={setPage}
+          testId="list-pager"
+          summary={`ทั้งหมด ${filtered.length} แม่แบบ`}
+        >
+          {`แสดง ${(safePage - 1) * LIST_PAGE_SIZE + 1}–${Math.min(
+            safePage * LIST_PAGE_SIZE,
+            filtered.length,
+          )}`}
+        </Pager>
+      )}
+
                 <th>ชื่อ</th>
                 <th>หมวด</th>
                 <th>แท็ก</th>
@@ -634,11 +686,21 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((t) => {
+              {shown.map((t) => {
                 const key = templateKeyOf(t)
                 const view = access[key]
                 return (
+ * ⚠️ โหลดซ้ำหลังกู้คืน เพราะแม่แบบกลับมาอยู่ในรายการหลักด้วย
+const TRASH_PAGE_SIZE = 10
+
+ *
+ * ── แบ่งหน้า (ผู้ใช้ชี้ว่าเดิมไม่มี) ──────────────────────────────────
+ * ถังขยะไม่ได้มีแค่ 3 รายการเสมอไป ถ้าผู้ใช้ลบทีละเอกสารแล้วไม่กดกู้คืน
+ * ภายใน 14 วันอาจสะสมได้หลายร้อยรายการ และเดิมโหลดมาทั้งหมดมาเรนเดอร์รวดเดียว
+ * ตอนนี้แบ่งหน้าที่ API แล้วใช้ `Pager` ตัวเดียวกับหน้าประวัติ
                   <TemplateRow
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
                     key={t.versionId}
                     tpl={t}
                     view={view}
@@ -649,6 +711,16 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
                     //   ถ้าไม่จับ promise จะกลายเป็น unhandledrejection (หน้าจอแดง)
                     onStar={() => void toggleBookmark(t).catch(() => {})}
                     activeCategory={category}
+  const pageCount = Math.max(1, Math.ceil(total / TRASH_PAGE_SIZE))
+  /**
+   * ⚠️ ผู้ใช้กดกู้คืน/ลบจนหน้าที่อยู่ไม่มีของแล้ว
+   *   ต้องดึงกลับไปหน้าสุดท้าย ไม่ใช่ค้างหน้าว่างไว้
+   *   (เคยเจอกับหน้าประวัติ: กู้คืนหมดหน้าสุดท้ายแล้วเห็นรายการว่างจนกดกลับไม่ได้)
+   */
+  if (page > pageCount) {
+    setPage(pageCount)
+    return null
+  }
                     activeTag={tag}
                     onPickCategory={(c) => setCategory(category === c ? '' : c)}
                     onPickTag={(g) => setTag(tag === g ? '' : g)}
@@ -698,16 +770,42 @@ function TrashPanel({
   notify: (msg: string) => void
   onRestored: () => void
 }) {
+
+      {/**
+       * แถบแบ่งหน้า — ซ่อนตอนมีหน้าเดียว
+       * ถ้าโชว์ตอนมีแค่หน้าเดียว ผู้ใช้จะเห็นปุ่ม ‹ 1 › ที่กดอะไรไม่ได้เลย
+       * แล้วคิดว่าระบบพัง
+       */}
+      {pageCount > 1 && (
+        <Pager
+          page={page}
+          pageCount={pageCount}
+          onChange={setPage}
+          testId="trash-pager"
+          summary={`ทั้งหมด ${total} รายการ`}
+        >
+          {`แสดง ${(page - 1) * TRASH_PAGE_SIZE + 1}–${Math.min(
+            page * TRASH_PAGE_SIZE,
+            total,
+          )}`}
+        </Pager>
+      )}
   const [items, setItems] = useState<Tombstone[]>([])
   const [busy, setBusy] = useState('')
 
   const load = useCallback(() => {
     void api
-      .trashList()
-      .then((r) => setItems(r.items))
+      .trashList(TRASH_PAGE_SIZE, (page - 1) * TRASH_PAGE_SIZE)
+      .then((r) => {
+        setItems(r.items ?? [])
+        setTotal(r.total ?? 0)
+      })
       // โหลดไม่ได้ = ไม่มีถังขยะ ไม่ต้องรบกวนผู้ใช้ด้วยข้อความ error
-      .catch(() => setItems([]))
-  }, [])
+      .catch(() => {
+        setItems([])
+        setTotal(0)
+      })
+  }, [page])
 
   useEffect(load, [load])
 
@@ -720,7 +818,7 @@ function TrashPanel({
       style={{ padding: 16, marginTop: 16, borderStyle: 'dashed' }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-        <h2 style={{ margin: 0, fontSize: 15, flex: 1 }}>🗑️ ถังขยะ ({items.length})</h2>
+        <h2 style={{ margin: 0, fontSize: 15, flex: 1 }}>🗑️ ถังขยะ ({total})</h2>
       </div>
       <p className="muted" style={{ fontSize: 12.5, marginTop: 0, marginBottom: 10 }}>
         แม่แบบเหล่านี้หายจากรายการแล้ว แต่ไฟล์ยังอยู่ จะถูกลบถาวรใน 14 วัน

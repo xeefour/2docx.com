@@ -177,6 +177,24 @@ try {
   await sleep(700)
 
   console.log('\n[1] โหมดรายการ: ปุ่ม "ดูตัวอย่าง" โผล่ในแถวที่มีรูป')
+  /**
+   * ไปหน้าที่มีแม่แบบ**รูปย่อ**จริง แล้วอยู่หน้านั้นต่อไป
+   *
+   * ⚠️ เดิมนับรูปย่อจากหน้าแรก แต่หน้ารายการแบ่งหน้า 12 แถว
+   *   แม่แบบที่มีรูปย่อ (สร้างใหม่) มักอยู่ท้ายรายการ = หน้าหลัง
+   *   → นับได้ 0 แถว แล้วเทสต์ตก ทั้งที่ระบบไม่ได้พัง
+   */
+  for (let i = 0; i < 20; i++) {
+    if ((await evaluate(survey)).withThumb > 0) break
+    const canNext = await evaluate(`(() => {
+      const b = document.querySelector('[data-testid="list-pager-next"]')
+      return !!b && !b.disabled
+    })()`)
+    if (!canNext) break
+    await evaluate(`document.querySelector('[data-testid="list-pager-next"]').click()`)
+    await sleep(700)
+  }
+  check('เจอหน้าที่มีแม่แบบรูปย่อ', (await evaluate(survey)).withThumb > 0)
   const list1 = await evaluate(survey)
   check('หน้าเป็นโหมดรายการ', !list1.grid)
   check('มีแถวให้ทดสอบ', list1.rows > 0, `${list1.rows} แถว`)

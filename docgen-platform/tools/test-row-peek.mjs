@@ -221,13 +221,28 @@ try {
   const lb = await evaluate(`(() => {
     const box = document.querySelector('[data-testid="thumb-lightbox"]')
     const img = document.querySelector('[data-testid="lightbox-img"]')
+    const stage = document.querySelector('.lightbox__stage')
     return {
       z: Number(getComputedStyle(box).zIndex),
       role: box.getAttribute('role'),
       src: (img?.getAttribute('src') ?? '').slice(0, 12),
       count: document.querySelector('[data-testid="lightbox-count"]')?.textContent?.trim() ?? null,
+      imgH: Math.round(img.getBoundingClientRect().height),
+      stageH: Math.round(stage.getBoundingClientRect().height),
+      overflowY: Math.round(box.scrollHeight - box.clientHeight),
     }
   })()`)
+  check('popup แสดงรูปจริง (src เป็น data/blob)', lb.src.length > 4, lb.src)
+  /*
+   * ⚠️ เกณฑ์สองข้อนี้มาจากภาพที่ผู้ใช้ส่งมา — รูปโดนตัดทั้งบนและล่าง
+   *   ต้นเหตุคือ `.lightbox__img` ล็อกแค่ max-width ไม่มี max-height
+   *   เอกสารเป็น A4 แนวตั้ง = สูงกว่ากว้างมาก พอกว้างพอดีความสูงก็ยาวเกินจอ
+   *
+   *   ต้องใช้เอกสารจริงของผู้ใช้จึงจะจับได้ — test-thumb-peek ใช้รูป 1×1 px
+   *   ซึ่งเล็กเกินจะล้นอยู่ดี ตรวจไม่ได้แม้แต้เรื่องเดียว
+   */
+  check('รูปสูงพอดีพื้นที่วางรูป (ไม่ล้นจนหัวท้ายถูกตัด)', lb.imgH <= lb.stageH, `รูป ${lb.imgH}px / พื้นที่ ${lb.stageH}px`)
+  check('ไม่มีแถบเลื่อนแนวตั้งใน popup', lb.overflowY === 0, `เกิน ${lb.overflowY}px`)
   check('เป็น dialog แบบ modal เหมือนกดที่รูปย่อ', lb.role === 'dialog' && lb.z > 2147482500, `${lb.role} z=${lb.z}`)
   /**
    * ⚠️ ป้ายตัวนับโผล่**เฉพาะตอนมีมากกว่า 1 รูป** และแม่แบบจริงของผู้ใช้มีรูปเดียว
@@ -292,6 +307,20 @@ try {
   `)
   check('กดเปิด popup บนจอมือถือได้', !!cN?.ok, cN?.miss ?? '')
   check('popup โผล่บนจอมือถือ', await waitFor("!!document.querySelector('[data-testid=\"thumb-lightbox\"]')", 8000))
+  // ต้องรอรูปโหลดเสร็จก่อนวัด ไม่งั้นได้ค่า 0 แล้วผ่านไปเฉย ๆ
+  await waitFor("(() => { const x = document.querySelector('[data-testid=\"lightbox-img\"]'); return !!x && x.naturalWidth > 0 })()", 15000)
+  const fitN = await evaluate(`(() => {
+    const box = document.querySelector('[data-testid="thumb-lightbox"]')
+    const img = document.querySelector('[data-testid="lightbox-img"]')
+    const stage = document.querySelector('.lightbox__stage')
+    return {
+      imgH: Math.round(img.getBoundingClientRect().height),
+      stageH: Math.round(stage.getBoundingClientRect().height),
+      overflowY: Math.round(box.scrollHeight - box.clientHeight),
+    }
+  })()`)
+  check('จอเล็ก: รูปก็สูงพอดีพื้นที่วางรูป', fitN.imgH <= fitN.stageH, `รูป ${fitN.imgH}px / พื้นที่ ${fitN.stageH}px`)
+  check('จอเล็ก: ไม่มีแถบเลื่อนแนวตั้งใน popup', fitN.overflowY === 0, `เกิน ${fitN.overflowY}px`)
   await shot('03-narrow-peek-open.png')
 } catch (e) {
   check('รันชุดทดสอบไม่สะดุด error', false, String(e?.message ?? e))

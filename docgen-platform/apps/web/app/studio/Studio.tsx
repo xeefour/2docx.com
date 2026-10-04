@@ -811,6 +811,33 @@ function TemplateRow({
         >
           เปิด
         </button>{' '}
+        {/*
+         * ปุ่ม "ดูตัวอย่าง" — ผู้ใช้สั่ง:
+         *   *"แบบ list มีปุ่ม preview กดแล้ว มีรูปตัวอย่างแสดงเป็น popup"*
+         *
+         * ⚠️ ต้องอยู่หลัง "เปิด" เพราะลำดับนี้คือ
+         *   "ดูว่าหน้าตาเป็นยังไง → เปิดไปแก้" ถ้าย้ายไปหน้าสุดท้าย
+         *   ผู้ใช้จะเจอปุ่มลบ/ดาวน์โหลดก่อน แล้วคิดว่าทำอะไรไม่ได้
+         *
+         * ⚠️ ใส่เฉพาะตอน**มีรูปย่อจริง**
+         *   ถ้ากดแล้วเปิด lightbox ว่าง นั่นแย่กว่าไม่มีปุ่ม
+         *   (`thumbs` โหลดทุกโหมดอยู่แล้ว เพราะผูกกับ `filtered` ไม่ใช่ `listView`)
+         *
+         * ⚠️ ไอคอนเป็น `::before` ใน CSS ไม่ใช่ <span> ใน JSX
+         *   เพราะหลายชุดเทสต์เลือกปุ่มในแถวด้วย `textContent.trim()`
+         *   (ดูหัวข้อใน globals.css) ถ้าใส่ emoji ในข้อความจะไปชน selector เดิม
+         */}
+        {thumb && (
+          <button
+            className="ghost tplrow__i-peek"
+            data-testid="row-peek"
+            onClick={onPeek}
+            disabled={busy}
+            title="ดูรูปตัวอย่างของแม่แบบนี้"
+          >
+            ดูตัวอย่าง
+          </button>
+        )}{' '}
         <a href={`/api/templates/${encodeURIComponent(tpl.versionId)}`} download>
           <button className="ghost tplrow__i-dl" disabled={busy} title="ดาวน์โหลดไฟล์แม่แบบ">
             ดาวน์โหลด

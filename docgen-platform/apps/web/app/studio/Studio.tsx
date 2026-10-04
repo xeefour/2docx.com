@@ -28,6 +28,7 @@ import {
 } from './lib/api'
 import Tabs from './Tabs'
 import ThumbLightbox from './ThumbLightbox'
+import UploadGuide from './UploadGuide'
 import TemplateEditor from './TemplateEditor'
 import InboxBell from './InboxBell'
 import InboxPanel from './InboxPanel'
@@ -55,7 +56,17 @@ const readStoredView = (): 'list' | 'grid' => {
   }
 }
 
-const ACCEPT = '.docx,.xlsx,.pptx,.odt,.ods,.odp'
+/**
+ * ⚠️ รับเฉพาะ .docx — ไม่ใช่เพราะอยากจำกัด แต่เพราะทำไม่ได้จริง
+ *   ดู `apps/worker/src/docserver.ts` ขั้นที่ 1 ของการส่งออก PDF:
+ *     `renderToBuffer(templateId, { data, convertTo: 'docx' })`
+ *   คือขอให้ Carbone แปลงแม่แบบเป็น .docx **เสมอ** ไม่ว่าต้นฉบับจะเป็นนามสกุลอะไร
+ *   แม่แบบ .xlsx/.pptx จึงตายที่ขั้นนี้ (เคยเจอจริง: เรนเดอร์ .xlsx เป็น PDF ไม่ผ่าน)
+ *
+ *   ถ้าวันหนึ่งรองรับครบทุกชนิดจริง ค่อยขยายที่นี่ทั้งอันนี้และฝั่ง API
+ *   (`ALLOWED_EXT` ใน apps/api/.../templates/route.ts)
+ */
+const ACCEPT = '.docx'
 const MAX_MB = 20
 
 type ListTab = 'all' | 'mine' | 'shared' | 'bookmarks' | 'inbox'
@@ -1052,9 +1063,26 @@ function UploadButton({
 }) {
   const [busy, setBusy] = useState(false)
   const [over, setOver] = useState(false)
+  /**
+   * ผู้ใช้สั่ง: *"ถ้าคลิกที่นี้จะมี popup ขึ้นมา"*
+   *   คลิกแล้วต้องเห็นคำอธิบายก่อน ไม่ใช่กระโดดไปเปิด file picker ทันที
+   *   เพราะคนส่วนใหญ่ยังไม่รู้ว่าแม่แบบทำยังไง ถ้ากระโดดไปเลือกไฟล์
+   *   เขาจะเลือกผิดแล้วค้างอยู่ที่หน้าที่เลือกไฟล์
+   */
+  const [guide, setGuide] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
   async function send(file: File) {
+    /**
+     * ⚠️ ต้องเช็คฝั่ง client ด้วย ไม่ใช่พึ่ง `accept` อย่างเดียว
+     *   `accept` เป็นแค่คำแนะนำของ file picker — ลากไฟล์ .xlsx มาวางก็เข้ามาได้เสมอ
+     *   ถ้าปล่อยให้หลุด ผู้ใช้จะเห็น "อัปโหลดสำเร็จ" แล้วพังตอนกดส่งออกเอกสาร
+     *   ซึ่งแก้ยากกว่าบอกตรง ๆ ตอนเลือกไฟล์
+     */
+    if (!/\.docx$/i.test(file.name)) {
+      onError('รองรับเฉพาะไฟล์ .docx เท่านั้น — ถ้ายังไม่รู้จะเริ่มอย่างไร กดปุ่มนี้อีกครั้งเพื่อดูวิธีทำและดาวน์โหลดไฟล์ตัวอย่างได้')
+      return
+    }
     if (file.size > MAX_MB * 1024 * 1024) {
       onError(`ไฟล์ใหญ่เกิน ${MAX_MB} MB`)
       return
@@ -1084,7 +1112,7 @@ function UploadButton({
         }}
       />
       <label
-        onClick={() => fileInput.current?.click()}
+        onClick={() => setGuide(true)}
         onDragOver={(e) => {
           e.preventDefault()
           setOver(true)
@@ -1110,6 +1138,18 @@ function UploadButton({
       >
         {busy ? 'กำลังอัปโหลด…' : 'อัปโหลดแม่แบบ'}
       </label>
+
+      {guide && (
+        <UploadGuide
+          onClose={() => setGuide(false)}
+          onPick={() => {
+            // ปิดป็อปอัปก่อนเปิด file picker
+            // ไม่งั้น picker จะโผล่ทับป็อปอัป แล้วผู้ใช้กดปิดไม่ได้
+            setGuide(false)
+            fileInput.current?.click()
+          }}
+        />
+      )}
     </>
   )
 }

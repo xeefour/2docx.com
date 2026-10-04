@@ -3241,3 +3241,163 @@ label {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
+/* ══ UX: ป็อปอัปอธิบายการทำแม่แบบ ══════════════════════════════════
+ *
+ * ผู้ใช้สั่ง: *"ถ้าคลิกที่นี้จะมี popup ขึ้นมา แจ้งว่าระบบอัพโหลดได้เฉพาะ .docx
+ *   เขียนตัวอย่างตัวแปรแม่แบบ มีตัวอย่างให้ download ไปแก้"*
+ *
+ * ⚠️ z-index ต้องสูงกว่า**ลิ้นชัก sidebar บนมือถือ** (2147482700) และพื้นหลัง
+ *    ทับของลิ้นชัก (2147482699) ไม่ใช่แค่แถบ URL
+ *    ปุ่ม "อัปโหลดแม่แบบ" อยู่ในลิ้นชัก → ผู้ใช้บนมือถือต้องเปิดลิ้นชักก่อน
+ *    แล้วค่อยกด ถ้าป็อปอัปอยู่ใต้พื้นหลังทับ มันจะ**เห็นได้แต่กดไม่ได้**
+ *    (เจอจากเทสต์ test-upload-guide.mjs ข้อ "จุดกดปุ่มไม่ถูกอย่างอื่นบัง")
+ *    ต่ำกว่าผ้าคลุมตอนเปลี่ยนหน้า (…3000/…4000) เพราะตอนนั้นผู้ใช้กำลังรอหน้าใหม่
+ *
+ * ⚠️ ต้องต่อท้ายไฟล์ เพื่อชนะกฎของ lightbox เวลาเจอสเปซิฟิกตี้เท่ากัน
+ */
+.uguide {
+  position: fixed;
+  inset: 0;
+  z-index: 2147482801;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(12 9 18 / 60%);
+  backdrop-filter: blur(2px);
+  overflow: auto;
+}
+.uguide__box {
+  /* จำกัดความสูงไว้กับจอ + ให้เลื่อนได้
+   * ไม่งั้นบนมือถือที่เนื้อหายาว ปุ่มล่างจะหลุดจอจนกดไม่ได้ */
+  max-height: calc(100vh - 40px);
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 48px rgb(12 9 18 / 28%);
+  overflow: hidden;
+}
+.uguide__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.uguide__body {
+  padding: 16px;
+  overflow: auto;
+  min-height: 0;
+}
+.uguide__body h3 {
+  margin: 18px 0 8px;
+  font-size: 15px;
+}
+/*
+ * ⚠️ กล่องเตือนเรื่องนามสกุล = ข้อมูลที่ผู้ใช้จะพลาดถ้าไม่เห็น
+ *   ต้องเด่นกว่าเนื้อหาอื่น แต่ห้ามใช้สีแดงเต็มก้อน
+ *   (ฟังดูเหมือนเตือนว่าระบบพัง ทั้งที่เป็นแค่ข้อจำกัดปกติ)
+ */
+.uguide__note {
+  border: 1px solid var(--brand-border);
+  background: var(--brand-soft);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+.uguide__note p {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+.uguide__steps {
+  margin: 0;
+  padding-inline-start: 22px;
+  font-size: 14px;
+  display: grid;
+  gap: 6px;
+}
+.uguide__steps code,
+.uguide__tip code,
+.uguide__table code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 5px;
+  color: var(--brand-dark);
+}
+/* จอแคบตารางจะล้นแนวนอน — ครอบด้วยกล่องเลื่อนแทนที่จะดันหน้า */
+.uguide__tablewrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.uguide__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.uguide__table th,
+.uguide__table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.uguide__table tr:last-child td {
+  border-bottom: none;
+}
+.uguide__table th {
+  background: var(--bg-2);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.uguide__table code {
+  white-space: nowrap;
+}
+.uguide__field {
+  font-weight: 600;
+  color: var(--brand-dark);
+  white-space: nowrap;
+}
+.uguide__tip {
+  font-size: 13px;
+  margin: 10px 0 0;
+}
+.uguide__foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-2);
+  flex: none;
+}
+.uguide__hint {
+  font-size: 12.5px;
+  margin-right: auto;
+}
+@media (max-width: 720px) {
+  .uguide {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .uguide__box {
+    max-height: 92vh;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+  .uguide__hint {
+    order: 3;
+    width: 100%;
+    margin-right: 0;
+  }
+}

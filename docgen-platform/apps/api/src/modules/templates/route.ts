@@ -42,17 +42,22 @@ const TombstoneSchema = z.object({
 /** ขนาดไฟล์แม่แบบสูงสุด — Carbone/LibreOffice จะพังถ้าใหญ่เกินนี้ */
 const MAX_SIZE = 20 * 1024 * 1024
 
-const ALLOWED_EXT = ['.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp', '.doc', '.odf']
+/**
+ * ⚠️ รับเฉพาะ .docx — เพราะ**ขั้นตอนถัดไปทำไม่ได้** ไม่ใช่เพราะอยากจำกัด
+ *   การส่งออก PDF เริ่มจากขอให้ Carbone แปลงแม่แบบเป็น .docx เสมอ
+ *   ดู `apps/worker/src/docserver.ts` ขั้นที่ 1:
+ *     `renderToBuffer(templateId, { data, convertTo: 'docx' })`
+ *   แม่แบบนามสกุลอื่นจึงตายที่ขั้นนั้น (เคยเจอจริง: เรนเดอร์ .xlsx เป็น PDF ไม่ผ่าน)
+ *
+ *   ถ้าปล่อยให้อัปโหลด .xlsx ได้ ผู้ใช้จะเห็น "อัปโหลดสำเร็จ"
+ *   แล้วพังตอนกดส่งออกเอกสาร ซึ่งแก้ยากกว่าบอกตรง ๆ ตอนอัปโหลด
+ *
+ *   ตอนทำให้รองรับครบจริง ค่อยขยายรายการนี้พร้อมกับ `ACCEPT` ใน Studio.tsx
+ */
+const ALLOWED_EXT = ['.docx']
 
 const EXT_TO_CT: Record<string, string> = {
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  '.odt': 'application/vnd.oasis.opendocument.text',
-  '.ods': 'application/vnd.oasis.opendocument.spreadsheet',
-  '.odp': 'application/vnd.oasis.opendocument.presentation',
-  '.doc': 'application/msword',
-  '.odf': 'application/vnd.oasis.opendocument.formula',
 }
 
 export async function templateRoutes(app: App) {

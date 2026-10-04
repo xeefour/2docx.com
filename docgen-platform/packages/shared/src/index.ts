@@ -13,6 +13,7 @@ export * from './studio.js'
 export * from './people.js'
 export { normalizeThaiAlignment, type NormalizeResult } from './normalize.js'
 export { setDocxThaiLanguage, type SetLanguageResult } from './docx-lang.js'
+export { normalizeCarboneData, type CarboneDataResult } from './carbone-data.js'
 
 /** ตัวช่วยเล็ก ๆ ที่ใช้ทั้ง API และ worker */
 export const now = (): Date => new Date()

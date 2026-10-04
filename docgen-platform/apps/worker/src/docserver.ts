@@ -1,4 +1,4 @@
-import { env, UpstreamError, normalizeThaiAlignment, setDocxThaiLanguage } from '@docgen/shared'
+import { env, UpstreamError, normalizeThaiAlignment, setDocxThaiLanguage, normalizeCarboneData } from '@docgen/shared'
 
 /** log ของ worker — รูปแบบเดียวกับ index.ts */
 const logger = {
@@ -152,7 +152,21 @@ export async function renderDocument(input: {
   data: Record<string, unknown>
   outputFormat: string
 }): Promise<Buffer> {
-  const { templateId, data, outputFormat } = input
+  const { templateId, data: rawData, outputFormat } = input
+
+  /**
+   * ช่อง checkbox ที่ไม่ได้ติ๊กมีค่า `false` แต่ Carbone 5 จะพิมพ์คำว่า "false"
+   * ลงไปในเอกสาร แก้ตรงนี้ที่เดียวเพราะทั้งพรีวิวและดาวน์โหลดวิ่งผ่านฟังก์ชันนี้เสมอ
+   * (ค่าใน Mongo คงเป็น `false` ไว้ เพื่อให้ฟอร์มกลับมาแสดง "ไม่ได้ติ๊ก" ถูกต้อง)
+   */
+  const { data, result: carbData } = normalizeCarboneData(rawData)
+  if (carbData.changed) {
+    logger.info('แปลง checkbox ที่ไม่ได้ติ๊กก่อนส่งให้ Carbone', {
+      templateId,
+      converted: carbData.converted,
+      paths: carbData.paths,
+    })
+  }
 
   if (outputFormat !== 'pdf') {
     const out = await renderToBuffer(templateId, { data, convertTo: outputFormat })

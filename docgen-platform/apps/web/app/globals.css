@@ -3185,3 +3185,44 @@ label {
     border-right-color: var(--brand);
   }
 }
+
+/* ══ UX: ชิปหมวด/แท็กที่กดได้ ═══════════════════════════════════
+ *
+ * ผู้ใช้สั่ง *"พวก หมวดหมู่ แท็ก ทำให้คลิกได้"*
+ *
+ * ⚠️ กฎ `button { color: #fff }` ของโปรเจกต์ทั้งระบบ
+ *   ชิปต้องกำหนด `color` เองทุกสถานะ ไม่งั้นจะเป็นตัวอักษรขาวบนพื้นม่วงอ่อน
+ *   มองไม่เห็น (เหมือนที่เคยพักับ lightbox และ Banner)
+ *
+ * ⚠️ ต้องต่อท้ายไฟล์ เพื่อชนะ `.pill` เวลา specificity เท่ากัน
+ *   และไม่ให้ไปตามหลังกับกฎที่เพิ่งเพิ่มทีหลัง
+ */
+.pill--btn {
+  /* กดเป็นปุ่ม = padding/border ของ button ทั่วระบบ ต้องทับคืนให้เหมือน pill */
+  padding: 2px 9px;
+  font-size: 12px;
+  color: var(--brand-dark);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-border);
+  line-height: 1.6;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.pill--btn:hover:not(:disabled) {
+  background: #ece1fb;
+  border-color: var(--brand);
+}
+/* ตัวที่กดอยู่ = สลับเป็นพื้นเข้ม ให้เห็นชัดว่ากรองอยู่กับอะไร */
+.pill--btn.is-on {
+  background: var(--brand);
+  border-color: var(--brand-dark);
+  color: #fff;
+}
+.pill--btn.is-on:hover:not(:disabled) {
+  background: var(--brand-dark);
+  color: #fff;
+}
+/* คีย์บอร์ดต้องเห็นว่าโฟกัสที่ชิปตัวไหน ไม่ใช่มองเห็นแค่ขอบจาง ๆ */
+.pill--btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}

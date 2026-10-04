@@ -120,6 +120,34 @@ const realClick = async (selector) => {
   return true
 }
 /** คลิกปุ่มที่มีข้อความตรงกัน */
+/**
+ * เปิดแม่แบบ**ตามชื่อ** ไม่ใช่แถวแรกของรายการ
+ *
+ * ⚠️ เคยกด `table tbody tr td button.ghost` ซึ่งแปลว่า "แถวแรกเสมอ"
+ *   แต่รายการเรียงตามเวลาที่สร้าง แม่แบบชั่วคราวที่เทสต์อื่นทิ้งไว้
+ *   จึงขึ้นมาเป็นแถวแรก แล้วเปิดแม่แบบที่ไม่มีฟอร์มมาแทน
+ *   อาการที่เห็น: `ฟอร์มมีช่องให้กรอก — 0 ช่อง` ทั้งที่ขั้นตอน seed บอกว่าสำเร็จ
+ *   โปรเจกต์มี `lib/pick-template.mjs` กันเรื่องนี้ไว้แล้วฝั่งที่เลือกแม่แบบ
+ *   แต่ฝั่ง "เปิดแม่แบบในหน้าเว็บ" ยังกดแถวแรกอยู่ จึงต้องแก้ให้ตรงกัน
+ */
+const clickRowByName = async (name) => {
+  const box = await evaluate(`(() => {
+    const want = ${JSON.stringify(name)}
+    const el = [...document.querySelectorAll('table tbody tr td button.ghost')]
+      .find((b) => (b.textContent || '').trim() === want)
+    if (!el) return null
+    el.scrollIntoView({ block: 'center' })
+    const r = el.getBoundingClientRect()
+    const x = r.x + r.width / 2
+    const y = r.y + r.height / 2
+    const hit = document.elementFromPoint(x, y)
+    return { x, y, ok: !!hit && (hit === el || el.contains(hit)) }
+  })()`)
+  if (!box?.ok) return false
+  for (const type of ['mousePressed', 'mouseReleased'])
+    await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 })
+  return true
+}
 const clickText = async (text, selector = 'button') => {
   const box = await evaluate(`(() => {
     const el = [...document.querySelectorAll(${JSON.stringify(selector)})]
@@ -221,7 +249,8 @@ console.log('\n[1] แท็บหน้ารายการแม่แบบ'
 // ⚠️ เลือกแม่แบบ**ตามชื่อ** ไม่ใช่ `items[0]` — ลำดับรายการเปลี่ยนได้
 //    (เคยหยิบได้แม่แบบชั่วคราวของเทสต์อื่น)
 const H = { cookie: `docgen_session=${sid}` }
-const seedKey = keyOf(await pickTemplate(H, [TEST_TEMPLATES.multipage]))
+const seedTpl = await pickTemplate(H, [TEST_TEMPLATES.multipage])
+const seedKey = keyOf(seedTpl)
 const seeded = seedKey
   ? await (
       await fetch(`http://127.0.0.1:4001/api/form/${seedKey}`, {
@@ -246,7 +275,7 @@ if (seeded) {
 // ── 2. เปิดแม่แบบ ───────────────────────────────────────────
 console.log('\n[2] เปิดแม่แบบ — ต้องมีแท็บสองชุด (ซ้าย 2 · ขวา 4)')
 {
-  await realClick('table tbody tr td button.ghost')
+  await clickRowByName(seedTpl.name)
   const ok = await waitFor("document.querySelectorAll('.editor-split > .editor-col').length === 2", 25000)
   const left = await leftTabLabels()
   const right = await rightTabLabels()
@@ -359,7 +388,7 @@ console.log('\n[5] แท็บช่องฟอร์ม — ออกแบ�
 /**
  * ⚠️ ต้องล้าง `template_access` ของแม่แบบที่**เปิดจริง** ก่อน
  *
- *   เทสต์เปิดแม่แบบจากแถวแรกของรายการ (`realClick('table tbody tr td button.ghost')`)
+ *   เทสต์เปิดแม่แบบจากแถวแรกของรายการ (`clickRowByName(...)` — เปิดตามชื่อ ไม่ใช่แถวแรก)
  *   ซึ่งอาจเป็นแม่แบบที่**ผู้ใช้จริงเป็นเจ้าของ** (เคยเจอ: เจ้าของ Teerasak Payuhagrit)
  *   ถ้ามีเจ้าของอยู่แล้ว ปุ่มจัดการการแชร์จะถูกซ่อนจาก session ของเทสต์
  *   (กติกาใหม่: จัดการการแชร์ = เจ้าของเท่านั้น) → ข้อ 6–7 ตก

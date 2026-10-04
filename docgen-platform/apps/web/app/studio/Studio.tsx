@@ -106,6 +106,7 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
   const [inboxUnread, setInboxUnread] = useState(0)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
+  const [tag, setTag] = useState('')
   const [tab, setTab] = useState<ListTab>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -333,6 +334,7 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
       if (tab === 'bookmarks' && !bookmarkKeys.has(key)) return false
 
       if (category && t.category !== category) return false
+      if (tag && !t.tags.includes(tag)) return false
       if (!q) return true
       return (
         t.name.toLowerCase().includes(q) ||
@@ -340,7 +342,7 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
         t.tags.some((x) => x.toLowerCase().includes(q))
       )
     })
-  }, [templates, search, category, tab, access, bookmarkKeys])
+  }, [templates, search, category, tag, tab, access, bookmarkKeys])
 
   /**
    * ดึงภาพย่อของทุกแม่แบบที่เห็นในรายการ ใน**คำขอเดียว**
@@ -539,9 +541,31 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
             </option>
           ))}
         </select>
-        {category && (
-          <button className="ghost" onClick={() => setCategory('')}>
+        {(category || tag) && (
+          <button
+            className="ghost"
+            onClick={() => {
+              setCategory('')
+              setTag('')
+            }}
+          >
             ล้างตัวกรอง
+          </button>
+        )}
+        {/*
+         * แท็กไม่มีช่องเลือกในแถบตัวกรอง (หมวดมี `<select>` ให้เห็นค่าอยู่แล้ว)
+         *   ถ้าไม่มีป้ายนี้ ผู้ใช้จะกดชิปแล้วรายการหาย แต่ไม่รู้ว่าถูกกรองอะไร
+         *   และกด "ล้างตัวกรอง" ต้องเดาเอง ว่าต้องกดหรือเปล่า
+         *   ยกตัวนี้ทำหน้าที่ทั้งบอกค่าและยกเลิกในจุดเดียว
+         */}
+        {tag && (
+          <button
+            className="pill pill--btn is-on"
+            data-testid="clear-tag"
+            onClick={() => setTag('')}
+            title="เอาตัวกรองแท็กออก"
+          >
+            แท็ก: {tag} ✕
           </button>
         )}
         <div className="muted filters__count">
@@ -613,6 +637,10 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
                     //   แต่ตรงนี้ข้อความแสดงผ่าน `setError` ของหน้านี้อยู่แล้ว
                     //   ถ้าไม่จับ promise จะกลายเป็น unhandledrejection (หน้าจอแดง)
                     onStar={() => void toggleBookmark(t).catch(() => {})}
+                    activeCategory={category}
+                    activeTag={tag}
+                    onPickCategory={(c) => setCategory(category === c ? '' : c)}
+                    onPickTag={(g) => setTag(tag === g ? '' : g)}
                     onPeek={() => setPeek({ key, name: t.name })}
                     onOpen={() => openTemplate(t)}
                     onChanged={load}
@@ -742,6 +770,10 @@ function TemplateRow({
   starred,
   thumb,
   onStar,
+  activeCategory,
+  activeTag,
+  onPickCategory,
+  onPickTag,
   onPeek,
   onOpen,
   onChanged,
@@ -754,6 +786,12 @@ function TemplateRow({
   /** URL ภาพย่อ (null = ยังไม่มีรูปตัวอย่าง) */
   thumb?: string | null
   onStar: () => void
+  /** หมวด/แท็กที่กำลังกรองอยู่ — ใช้ไฮไลต์ชิปที่ถูกเลือก */
+  activeCategory: string
+  activeTag: string
+  /** กดชิป = สลับเป็นตัวกรองนั้น (กดซ้ำ = ยกเลิก) */
+  onPickCategory: (c: string) => void
+  onPickTag: (g: string) => void
   /** เปิดดูรูปตัวอย่างเต็ม (ผู้ใช้สั่ง *"คลิกที่รูปก็ได้"*) */
   onPeek: () => void
   onOpen: () => void
@@ -845,14 +883,31 @@ function TemplateRow({
         </div>
       </td>
       <td data-label="หมวด" className={tpl.category ? undefined : 'is-empty'}>
-        {tpl.category ? <span className="pill">{tpl.category}</span> : <span className="muted">—</span>}
+        {tpl.category ? <button
+          type="button"
+          className={'pill pill--btn' + (activeCategory === tpl.category ? ' is-on' : '')}
+          data-testid="row-cat"
+          aria-pressed={activeCategory === tpl.category}
+          onClick={() => onPickCategory(tpl.category)}
+          title={'กดเพื่อดูเฉพาะหมวด "' + tpl.category + '"'}
+        >
+          {tpl.category}
+        </button> : <span className="muted">—</span>}
       </td>
       <td data-label="แท็ก" className={tpl.tags.length ? undefined : 'is-empty'}>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 240 }}>
           {tpl.tags.slice(0, 3).map((g) => (
-            <span key={g} className="pill">
+            <button
+              key={g}
+              type="button"
+              className={'pill pill--btn' + (activeTag === g ? ' is-on' : '')}
+              data-testid="row-tag"
+              aria-pressed={activeTag === g}
+              onClick={() => onPickTag(g)}
+              title={'กดเพื่อดูเฉพาะแท็ก "' + g + '"'}
+            >
               {g}
-            </span>
+            </button>
           ))}
           {tpl.tags.length > 3 && <span className="muted" style={{ fontSize: 12 }}>+{tpl.tags.length - 3}</span>}
         </div>

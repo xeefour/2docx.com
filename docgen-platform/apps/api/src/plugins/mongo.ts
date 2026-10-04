@@ -77,6 +77,19 @@ export const mongoPlugin = fp(async (app) => {
     { key: { deletedBy: 1, deletedAt: -1 }, name: 'deleted_by' },
   ])
 
+  /**
+   * กล่องจดหมาย (inbox) — ทุก query กรองด้วย `user` ของผู้เรียกเสมอ
+   *
+   * ⚠️ index ต้องขึ้นต้นด้วย `user` เสมอ ไม่ใช่แค่ index แยกทีละฟิลด์
+   *   ถ้าไม่มี ทุกครั้งที่เปิดกล่องจดหมายจะสแกนจดหมายของ**ทุกคน**ทั้ง collection
+   *   (แย่กว่าที่คิด เพราะ collection เดียวกันเก็บข้อความของผู้ใช้ทุกคน)
+   */
+  await db.collection('notifications').createIndexes([
+    { key: { user: 1, at: -1 }, name: 'user_at' },
+    // นับเฉพาะที่ยังไม่อ่าน (ทำป้ายบนกระดิ่ง 🔔) → ต้องมี `read` ต่อด้วย
+    { key: { user: 1, read: 1, at: -1 }, name: 'user_unread_at' },
+  ])
+
   app.decorate('mongo', db)
 
   app.addHook('onClose', async () => {

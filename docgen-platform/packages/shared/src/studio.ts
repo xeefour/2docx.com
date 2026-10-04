@@ -347,6 +347,75 @@ export const MyHistoryQuery = z.object({
 })
 export type MyHistoryQuery = z.infer<typeof MyHistoryQuery>
 
+// ── กล่องจดหมาย (Inbox) ───────────────────────────────────────
+
+/**
+ * ประเภทของจดหมาย
+ *
+ * ผู้ใช้สั่ง: *"เพิ่มกล่องจดหมาย inbox **แบ่งประเภท**ของจดหมายด้วย"*
+ *   → ต้องแบ่งให้ผู้ใช้กรองดูได้ ไม่ใช่ปนทั้งหมดในกองเดียว
+ *
+ *  · share    จากเพื่อน/คนอื่นที่ส่งอะไรให้เรา  (เช่น แชร์แม่แบบให้)
+ *  · access   สิทธิ์ของเราเกี่ยวกับแม่แบบนั้นถูกเปลี่ยน
+ *  · document งานเอกสารที่เราสั่ง เสร็จหรือล้มเหลว
+ *  · system   เรื่องของแม่แบบที่ระบบแจ้ง (ใกล้ถูกลบถาวร / เปิด-ปิดสาธารณ)
+ */
+export const NotificationKind = z.enum(['share', 'access', 'document', 'system'])
+export type NotificationKind = z.infer<typeof NotificationKind>
+
+/** ป้ายกำกับบนตัวกรองในหน้าเว็บ — เก็บที่นี่เพื่อให้ API กับหน้าเว็บใช้คำเดียวกัน */
+export const NOTIFICATION_KIND_LABEL: Record<NotificationKind, string> = {
+  share: 'การแชร์',
+  access: 'สิทธิ์',
+  document: 'งานเอกสาร',
+  system: 'ระบบ',
+}
+
+/** จดหมายหนึ่งฉบับ (เก็บใน MongoDB collection `notifications`) */
+export const Notification = z.object({
+  _id: z.string(),
+  /** sub ของ**ผู้รับ** — ไม่ใช่คนที่ทำให้เกิด */
+  user: z.string(),
+  kind: NotificationKind,
+  title: z.string(),
+  body: z.string(),
+  /**
+   * ลิงก์ไปหน้าที่เกี่ยวข้อง เก็บเป็นพาธในเว็บ (เช่น `/studio/1521…`)
+   * ไม่ใช่ URL เต็ม เพื่อไม่ให้ผูกกับโดเมนที่ deploy ไว้
+   */
+  link: z.string().nullable(),
+  /** ชื่อแม่แบบที่เกี่ยวข้อง — ให้หน้าเว็บโชว์เป็นป้ายข้างจดหมาย */
+  templateName: z.string().nullable(),
+  read: z.boolean(),
+  at: z.date(),
+})
+export type Notification = z.infer<typeof Notification>
+
+export const InboxQuery = z.object({
+  /** เว้นว่าง = ทุกประเภท */
+  kind: NotificationKind.optional(),
+  /** เจาะจงเฉพาะที่ยังไม่อ่าน */
+  onlyUnread: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+})
+export type InboxQuery = z.infer<typeof InboxQuery>
+
+export const InboxList = z.object({
+  items: z.array(Notification),
+  total: z.number(),
+  /** จำนวนที่ยังไม่อ่านทั้งหมด — ใช้ทำป้ายบนกระดิ่ง */
+  unread: z.number(),
+  /**
+   * จำนวนที่ยังไม่อ่าน แยกตามประเภท
+   * ให้หน้าเว็บทำป้ายบนตัวกรองได้เลย ไม่ต้องยิง API เพิ่ม
+   */
+  unreadByKind: z.record(z.string(), z.number()),
+})
+export type InboxList = z.infer<typeof InboxList>
+
 // ── ตัวช่วยจัดการฟอร์ม ────────────────────────────────────────
 
 /** อ่านค่าแบบ dot path — `ผู้รับ.ชื่อ` */

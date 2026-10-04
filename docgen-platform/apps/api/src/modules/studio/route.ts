@@ -13,6 +13,9 @@ import {
   TemplateHistory,
   MyTemplateHistory,
   MyHistoryQuery,
+  NotificationKind,
+  InboxQuery,
+  InboxList,
 } from '@docgen/shared'
 import type { App } from '../../types.js'
 import { readTemplateTags } from '../templates/tags.js'
@@ -38,6 +41,13 @@ import {
   templateHistory,
   myTemplateHistory,
 } from './service.js'
+import {
+  listInbox,
+  markRead,
+  markAllRead,
+  deleteNotification,
+  clearInbox,
+} from './notifications.js'
 
 /**
  * route ของฟีเจอร์ Studio ทั้งชุด — ตั้งใจรวมไว้ที่ไฟล์เดียว
@@ -441,4 +451,84 @@ export async function studioRoutes(app: App) {
       return reply.code(204).send(null)
     },
   )
+
+  // ── กล่องจดหมาย (inbox) ─────────────────────────────────────────
+  // ผู้ใช้สั่ง: *"เพิ่มกล่องจดหมาย inbox แบ่งประเภทของจดหมายด้วย"*
+  //
+  // ⚠️ ไม่ต้องใส่ preHandler เอง — app.ts บังคับล็อกอินทั้ง /api อยู่แล้ว
+  //
+  // ⚠️ path ที่เป็นตัวอักษร (`/read-all`) ต้องประกาศ**ก่อน** path ที่มีพารามิเตอร์
+  //    ตามกติกาที่ตั้งไว้ที่หัวไฟล์นี้
+  app.get(
+    '/notifications',
+    {
+      schema: {
+        tags,
+        summary: 'เปิดกล่องจดหมาย',
+        description: 'คืนรายการตามตัวกรอง + จำนวนที่ยังไม่อ่าน (รวมแยกตามประเภท) ในคำขอเดียว',
+        querystring: InboxQuery,
+        response: { 200: InboxList, 500: ErrorResponse },
+      },
+    },
+    async (req) => listInbox(app, req, req.query),
+  )
+
+  app.post(
+    '/notifications/read-all',
+    {
+      schema: {
+        tags,
+        summary: 'ทำเครื่องหมายว่าอ่านแล้วทั้งหมด',
+        querystring: z.object({ kind: NotificationKind.optional() }),
+        response: { 200: z.object({ updated: z.number() }), 500: ErrorResponse },
+      },
+    },
+    async (req) => ({ updated: await markAllRead(app, req, req.query.kind) }),
+  )
+
+  app.post(
+    '/notifications/:id/read',
+    {
+      schema: {
+        tags,
+        summary: 'ทำเครื่องหมายว่าอ่านแล้ว 1 ฉบับ',
+        params: z.object({ id: z.string().min(1).max(100) }),
+        response: { 204: z.null(), 404: ErrorResponse, 500: ErrorResponse },
+      },
+    },
+    async (req, reply) => {
+      await markRead(app, req, req.params.id)
+      return reply.code(204).send(null)
+    },
+  )
+
+  app.delete(
+    '/notifications',
+    {
+      schema: {
+        tags,
+        summary: 'ล้างกล่องจดหมาย (ทั้งหมด หรือเฉพาะประเภท)',
+        querystring: z.object({ kind: NotificationKind.optional() }),
+        response: { 200: z.object({ deleted: z.number() }), 500: ErrorResponse },
+      },
+    },
+    async (req) => ({ deleted: await clearInbox(app, req, req.query.kind) }),
+  )
+
+  app.delete(
+    '/notifications/:id',
+    {
+      schema: {
+        tags,
+        summary: 'ลบจดหมาย 1 ฉบับ',
+        params: z.object({ id: z.string().min(1).max(100) }),
+        response: { 204: z.null(), 404: ErrorResponse, 500: ErrorResponse },
+      },
+    },
+    async (req, reply) => {
+      await deleteNotification(app, req, req.params.id)
+      return reply.code(204).send(null)
+    },
+  )
 }
+

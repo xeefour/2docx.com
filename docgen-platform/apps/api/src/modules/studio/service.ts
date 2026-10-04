@@ -22,6 +22,8 @@ import type { App } from '../../types.js'
 import * as carbone from '../templates/carbone.js'
 import { readTemplateTags } from '../templates/tags.js'
 import { askLlm, type ChatTurn } from './llm.js'
+import { notify, notifyMany } from './notifications.js'
+
 
 /**
  * service ของฟีเจอร์ Studio: ฟอร์มที่ผู้ใช้ออกแบบเอง · การแชร์ · แชทกับ AI
@@ -363,6 +365,32 @@ export async function setVisibility(
     { templateKey: input.templateKey, visibility: input.visibility, owner: doc.owner },
     'อัปเดตการแชร์แม่แบบ',
   )
+
+  /**
+   * แจ้งคนที่ถูกแชร์ เมื่อเจ้าของพลิกแม่แบบเป็นสาธารณ/ส่วนตัว
+   *
+   * ⚠️ แจ้งเฉพาะตอน**เปลี่ยนจริง**
+   *   ถ้าไม่เช็คค่าเดิม การกด "เปิดสาธารณ" ซ้ำ ๆ จะทำให้กล่องจดหมาย
+   *   ของทุกคนรกขึ้นทุกครั้งที่กด ซึ่งแย่กว่าไม่แจ้งเลย
+   *   และการตั้งค่าครั้งแรก (ยังไม่มี existing) ไม่ใช่ "การเปลี่ยน"
+   */
+  const visBefore = existing?.visibility
+  if (visBefore && visBefore !== input.visibility) {
+    const opened = input.visibility === 'published'
+    await notifyMany(
+      app,
+      doc.sharedWith.map((s) => s.sub),
+      {
+        kind: 'system',
+        title: opened ? 'เปิดแม่แบบเป็นสาธารณแล้ว' : 'แม่แบบนี้กลับไปเป็นแบบส่วนตัวแล้ว',
+        body: opened
+          ? `${user.name ?? 'เจ้าของ'} เปิดแม่แบบนี้ให้ทุกคนเข้ามาแก้ได้`
+          : `${user.name ?? 'เจ้าของ'} ปิดแม่แบบนี้เป็นแบบส่วนตัว — สิทธิ์ที่เคยได้จากการแชร์ยังอยู่`,
+        link: `/studio/${input.templateKey}`,
+      },
+    )
+  }
+
   return toView(doc, input.templateKey, user.sub)
 }
 
@@ -404,6 +432,40 @@ export async function addShare(
     { templateKey: input.templateKey, share: input.sub, role: input.role },
     'แชร์แม่แบบให้ผู้ใช้อีกคน',
   )
+
+  /**
+   * แจ้งผู้ถูกแชร์ — ผู้ใช้สั่ง *"จากเพื่อนที่ส่งมาให้ เช่น แชร์แม่แบบให้"*
+   *
+   * ⚠️ แยกเป็นสองกรณี เพราะความหมายต่างกันมาก
+   *   · ไม่เคยอยู่ในรายชื่อ → เป็นการ**แชร์ใหม่** → ประเภท `share`
+   *   · อยู่ในรายชื่ออยู่แล้วแต่สิทธิ์ต่างจากเดิม → เป็นการ**เปลี่ยนสิทธิ์**
+   *     → ประเภท `access` (ถ้าใส่ `share` ผู้ใช้จะเห็นมันปนกับของใหม่จริง)
+   *
+   * ⚠️ ไม่ดึงชื่อแม่แบบมาใส่
+   *   Carbone ไม่มี GET metadata รายตัว — ต้อง list ทั้งหมดมาแย่แม่แบบทุกครั้งที่แชร์
+   *   แลกกับข้อความที่สั้นลง ไม่คุ้ม (ผู้ใช้แค่คลิกไปดูหน้าแม่แบบก็รู้อยู่แล้ว)
+   *   ถ้าวันหนึ่งเก็บชื่อไว้ใน `template_access` ค่อยเติมตรงนี้
+   */
+  const prior = existing?.sharedWith.find((s) => s.sub === input.sub)
+  const roleText = input.role === 'editor' ? 'แก้ไขได้' : 'ดูอย่างเดียว'
+  if (prior && prior.role !== input.role) {
+    await notify(app, {
+      user: input.sub,
+      kind: 'access',
+      title: 'สิทธิ์ของคุณเปลี่ยนแล้ว',
+      body: `${user.name ?? 'เจ้าของ'} เปลี่ยนสิทธิ์ของคุณเป็น "${roleText}"`,
+      link: `/studio/${input.templateKey}`,
+    })
+  } else {
+    await notify(app, {
+      user: input.sub,
+      kind: 'share',
+      title: 'มีคนแชร์แม่แบบให้คุณ',
+      body: `${user.name ?? 'เจ้าของ'} แชร์แม่แบบให้คุณ (${roleText})`,
+      link: `/studio/${input.templateKey}`,
+    })
+  }
+
   return toView(doc, input.templateKey, user.sub)
 }
 
@@ -427,6 +489,21 @@ export async function removeShare(
   await app.mongo
     .collection<AccessDoc>(ACCESS)
     .replaceOne({ _id: input.templateKey } as never, doc as never, { upsert: true })
+
+  /**
+   * แจ้งคนที่ถูกถอนสิทธิ์
+   *
+   * ⚠️ ต้องแจ้ง ไม่งั้นเขาจะเปิดแม่แบบแล้วเจอ 403 โดยไม่มีคำอธิบาย
+   *   (หน้าเว็บเขียนไว้ว่าสิทธิ์ถูกถอน แต่ผู้ถูกถอนไม่เคยเห็นข้อความนั้น)
+   */
+  await notify(app, {
+    user: input.sub,
+    kind: 'access',
+    title: 'ถูกถอนสิทธิ์แม่แบบ',
+    body: `${user.name ?? 'เจ้าของ'} ถอนสิทธิ์ของคุณออกจากแม่แบบนี้แล้ว`,
+    link: `/studio/${input.templateKey}`,
+  })
+
   return toView(doc, input.templateKey, user.sub)
 }
 

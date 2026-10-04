@@ -2,6 +2,7 @@ import type { App } from '../../types.js'
 import { AppError } from '@docgen/shared'
 import { getAccessView, who } from '../studio/service.js'
 import * as carbone from './carbone.js'
+import { notifyMany } from '../studio/notifications.js'
 import { deleteAllPreviews } from './previews.js'
 
 /** โครง request ที่ service layer ใช้ — ทำซ้ำที่นี่เพราะ `studio/service.ts` ไม่ export ออกมา */
@@ -142,6 +143,30 @@ export async function trashTemplate(app: App, templateKey: string, req: Req): Pr
     { templateKey, name, purgeAt: doc.purgeAt.toISOString() },
     'ย้ายแม่แบบเข้าถังขยะ (รอก่อนลบจริง)',
   )
+
+  /**
+   * แจ้งว่าแม่แบบกำลังจะหายถาวร
+   *
+   * ผู้ใช้สั่งรอบถังขยะว่า *"แจ้งเตือนผู้ใช้ว่าจะลบแม่แบบนี้ ใครจะใช้ให้ clone ไปแทน"*
+   * และตอนนี้เลือกเป็น *"ระบบแจ้งเรื่องของแม่แบบ: ใกล้ถูกลบถาวร"*
+   *   → กล่องจดหมายคือที่ที่เหมาะกับการเตือนเรื่องแบบนี้
+   *   (ไม่ใช่ toast ตอนกดลบ เพราะ toast หายไปใน 2 วินาที ทั้งที่ผู้ใช้มีเวลาคิด 14 วัน)
+   *
+   * ⚠️ แจ้งทั้งคนที่กดลบ **และ** ทุกคนที่เคยถูกแชร์
+   *   เพราะคนที่ถูกแชร์จะเข้าไปใช้ต่อไม่ได้เลยตอนหายถาวร
+   *   ถ้าอยากเก็บไว้ใช้ต่อ ต้องรู้เรื่องนี้ก่อน ไม่ใช่หลังเปิดแล้วเจอ 404
+   *
+   * ⚠️ ตรงนี้มีชื่อแม่แบบอยู่แล้ว (ดึงมาตอน `trashTemplate` ด้านบน)
+   *   จึงใส่ templateName ได้เลย ต่างจากการแชร์/ถอนสิทธิ์ที่ไม่มี
+   */
+  await notifyMany(app, [user.sub, ...view.sharedWith.map((s) => s.sub)], {
+    kind: 'system',
+    title: 'แม่แบบกำลังจะถูกลบถาวร',
+    body: `"${name}" จะหายถาวรใน ${RETENTION_DAYS} วัน — ถ้าจะใช้ต่อ ให้ clone เก็บไว้ก่อน`,
+    link: `/studio/${templateKey}`,
+    templateName: name,
+  })
+
   return toTombstoneView(doc, user.sub)
 }
 

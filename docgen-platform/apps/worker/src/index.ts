@@ -11,6 +11,7 @@ import { env, natsServers, resolveMongoUrl, now, RenderJob, type DocumentRecord 
 import { ensureBucket, putObject, delObject } from './s3.js'
 import { renderDocument, contentTypeFor } from './docserver.js'
 import { applyBranding } from './branding.js'
+import { notifyUser } from './notify.js'
 
 const COLLECTION = 'documents'
 const CONSUMER = 'render-worker'
@@ -214,15 +215,28 @@ async function main() {
     // ⚠️ v2.29: msg.data เป็น Uint8Array — ต้องใช้ msg.json<T>() ไม่ใช่ JSON.parse(data)
     const { documentId, templateId, outputFormat, data } = msg.json<RenderJob>()
     const started = Date.now()
+    /**
+     * ⚠️ ต้องประกาศ**นอก** try
+     *   ส่วนที่แจ้งจดหมาย "ล้มเหลว" อยู่ใน catch ซึ่งมองตัวแปรใน try ไม่เห็น
+     *   และ `claimed` คือตัวเดียวที่บอกว่าใครเป็นเจ้าของงานนี้
+     */
+    let claimed: { createdBy?: string | null; label?: string | null } | null = null
 
     try {
       logger.info('เริ่มเรนเดอร์', { documentId, templateId })
 
-      const updated = await docs.updateOne(
+      /**
+       * ⚠️ ใช้ findOneAndUpdate แทน updateOne
+       *   เพราะต้องได้ `createdBy` ไปบอกกล่องจดหมายว่าใครเป็นเจ้าของงานนี้
+       *   ถ้าใช้ updateOne ต้องยิง findOne ซ้ำอีกคำขอเพื่อเอาค่านี้ (เกินจำเป็น)
+       *   โครงผลลัพธ์ต่างกันด้วย: matchedCount → ต้องดูว่า null หรือไม่
+       */
+      claimed = await docs.findOneAndUpdate(
         { _id: documentId } as never,
-        { $set: { status: 'rendering', error: null, updatedAt: now() } },
+        { $set: { status: 'rendering', error: null, updatedAt: now() } } as never,
+        { returnDocument: 'before', projection: { createdBy: 1, label: 1, templateId: 1 } as never },
       )
-      if (updated.matchedCount === 0) {
+      if (!claimed) {
         // ไม่พบเอกสาร = ถูกลบไปแล้ว ไม่ใช่ race
         //
         //   API เขียน Mongo ก่อน publish เสมอ (ดู apps/api/src/modules/documents/service.ts)
@@ -279,6 +293,18 @@ async function main() {
       }
       msg.ack()
 
+      await notifyUser(
+        db,
+        {
+          user: claimed.createdBy,
+          kind: 'document',
+          title: 'เอกสารเรนเดอร์เสร็จแล้ว',
+          body: `"${claimed.label ?? 'เอกสาร'}" เรนเดอร์เสร็จแล้ว (.${outputFormat})`,
+          link: `/studio/${templateId}`,
+        },
+        (m, meta) => logger.warn(m, meta ?? {}),
+      )
+
       logger.info('เรนเดอร์สำเร็จ', {
         documentId,
         bytes: branded.length,
@@ -307,6 +333,17 @@ async function main() {
         .catch(() => undefined)
 
       if (isLast) {
+        await notifyUser(
+          db,
+          {
+            user: claimed?.createdBy,
+            kind: 'document',
+            title: 'เอกสารเรนเดอร์ไม่สำเร็จ',
+            body: `"${claimed?.label ?? 'เอกสาร'}" สร้างไม่สำเร็จหลังลอง ${MAX_ATTEMPTS} ครั้ง — ${String(err).slice(0, 200)}`,
+            link: `/studio/${templateId}`,
+          },
+          (m, meta) => logger.warn(m, meta ?? {}),
+        )
         msg.ack() // ทิ้ง ไม่งั้นจะวนลมพั่น
       } else {
         msg.nak() // ส่งคืนให้ NATS redeliver

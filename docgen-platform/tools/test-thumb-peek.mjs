@@ -238,17 +238,47 @@ try {
     const img = tr.querySelector('[data-testid="row-thumb"]')
     const btn = tr.querySelector('[data-testid="row-thumb-btn"]')
     if (!img) return { miss: 'ไม่เจอรูปย่อ' }
+    const cell = img.closest('td')
+    const I = img.getBoundingClientRect()
+    const C = cell.getBoundingClientRect()
+    const B = btn ? btn.getBoundingClientRect() : null
     return {
       hasBtn: !!btn,
       label: btn?.getAttribute('aria-label') || '',
-      w: Math.round(img.getBoundingClientRect().width),
-      h: Math.round(img.getBoundingClientRect().height),
+      w: Math.round(I.width),
+      h: Math.round(I.height),
+      // ⚠️ รูปต้องอยู่ในกล่องเสมอ — ล้นออกมาแล้วจะไปทับชื่อแม่แบบ
+      spillY: Math.round(Math.max(0, I.bottom - C.bottom)),
+      cellH: Math.round(C.height),
+      btnH: B ? Math.round(B.height) : 0,
+      btnCssH: btn ? getComputedStyle(btn).height : '',
     }
   })()`)
   check('เจอแถวของแม่แบบชั่วคราว', !row?.miss, row?.miss ?? '')
   check('ภาพย่อโชว์จริง', !!row?.w, `${row?.w}×${row?.h}px`)
   check('ภาพย่ออยู่ในปุ่ม (กดได้)', !!row?.hasBtn)
   check('ปุ่มมี aria-label บอกว่าดูรูปอะไร', (row?.label ?? '').includes(TMP), row?.label ?? '')
+
+  /**
+   * ⚠️ เกณฑ์นี้จับบั๊กที่ทำให้ "ชื่อแม่แบบทับรูป preview" ได้จริง
+   *
+   *   เดิม `<img>` มี `height: 100%` แต่แม่ของมันคือ `<button>` ที่**ไม่มี height**
+   *   → % ของรูปจึงอ้างกับกล่องที่สูง auto แล้วกลายเป็น auto
+   *   → รูปขยายตามสัดส่วนจริง (A4 สูง 700+ px) แล้วล้นกล่อง 190px
+   *   → รูปไปทับชื่อ/ชิปของการ์ด (ผู้ใช้ส่งภาพมาแก้ได้)
+   *
+   *   วัดได้ `spill` = 719px ก่อนแก้ → 0 หลังใส่ `height: 100%` ให้ปุ่ม
+   */
+  check(
+    'รูปย่อไม่ล้นออกจากกล่อง (ไม่ทับชื่อแม่แบบ)',
+    (row?.spillY ?? 999) <= 1,
+    `ล้น ${row?.spillY}px · กล่อง ${row?.cellH}px · รูป ${row?.h}px · ปุ่ม ${row?.btnCssH}`,
+  )
+  check(
+    'ปุ่มภาพย่อสูงเท่ากล่อง (คือ % ของรูปมีที่อิงแล้ว)',
+    row?.btnH === row?.cellH,
+    `ปุ่ม ${row?.btnH}px · กล่อง ${row?.cellH}px`,
+  )
 
   console.log('\n[2] กดแล้ว popup โผล่พร้อมรูป')
   const c1 = await clickJs(`

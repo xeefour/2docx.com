@@ -378,6 +378,19 @@ button.danger:hover:not(:disabled) {
 .tplrow__thumb button {
   display: block;
   width: 100%;
+  /*
+   * ⚠️ `height: 100%` ต้องอยู่ที่**ปุ่ม** ไม่ใช่แค่กำหนดที่กล่อง
+   *   เพราะแม่ของ `<img>` คือ `<button>` ที่อยู่ข้างใน ไม่ใช่ `td`
+   *   ถ้าปุ่มไม่มีความสูง ค่า % ของรูปจะอ้างกับกล่องที่สูง auto แล้วกลายเป็น auto
+   *   รูปจึงขยายตามสัดส่วนจริง (เอกสาร A4 สูง 700+ px) แล้วล้นกล่อง 190px
+   *   ไปทับชื่อแม่แบบกับชิปด้านล่าง — ผู้ใช้ส่งภาพมาแก้เรื่องนี้
+   *
+   * วัดได้ก่อนแก้: รูปสูง 909px ในกล่อง 190px (ล้น 719px) · หลังแก้: ล้น 0px
+   *
+   * `overflow: hidden` เป็นชั้นกันพลาด ถ้าวันหนึ่งกล่องนี้หลุดอีก
+   */
+  height: 100%;
+  overflow: hidden;
   padding: 0;
   border: 0;
   background: none;
@@ -574,6 +587,8 @@ button.danger:hover:not(:disabled) {
   order: -1;
   padding: 0;
   height: 190px;
+  /* ชั้นกันพลาด — ตัดเกินให้อยู่ในกล่อง ไม่ให้รั่วไปทับการ์ดข้างเคียง */
+  overflow: hidden;
   background: var(--bg-2);
 }
 .tpllist--grid td.tplrow__thumb img {

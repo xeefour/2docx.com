@@ -1,0 +1,629 @@
+{
+  "width": {
+    "360": {
+      "studio": {
+        "w": 244,
+        "vw": 360,
+        "pct": 68,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      },
+      "account": {
+        "w": 244,
+        "vw": 360,
+        "pct": 68,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      },
+      "teams": {
+        "w": 244,
+        "vw": 360,
+        "pct": 68,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      }
+    },
+    "414": {
+      "studio": {
+        "w": 244,
+        "vw": 414,
+        "pct": 59,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      },
+      "account": {
+        "w": 244,
+        "vw": 414,
+        "pct": 59,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      },
+      "teams": {
+        "w": 244,
+        "vw": 414,
+        "pct": 59,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      }
+    },
+    "570": {
+      "studio": {
+        "w": 244,
+        "vw": 570,
+        "pct": 43,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      },
+      "account": {
+        "w": 244,
+        "vw": 570,
+        "pct": 43,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      },
+      "teams": {
+        "w": 244,
+        "vw": 570,
+        "pct": 43,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      }
+    },
+    "768": {
+      "studio": {
+        "w": 244,
+        "vw": 768,
+        "pct": 32,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      },
+      "account": {
+        "w": 244,
+        "vw": 768,
+        "pct": 32,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      },
+      "teams": {
+        "w": 244,
+        "vw": 768,
+        "pct": 32,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      }
+    },
+    "900": {
+      "studio": {
+        "w": 244,
+        "vw": 900,
+        "pct": 27,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      },
+      "account": {
+        "w": 244,
+        "vw": 900,
+        "pct": 27,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      },
+      "teams": {
+        "w": 244,
+        "vw": 900,
+        "pct": 27,
+        "position": "fixed",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      }
+    },
+    "1024": {
+      "studio": {
+        "w": 244,
+        "vw": 1024,
+        "pct": 24,
+        "position": "sticky",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      },
+      "account": {
+        "w": 244,
+        "vw": 1024,
+        "pct": 24,
+        "position": "sticky",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      },
+      "teams": {
+        "w": 244,
+        "vw": 1024,
+        "pct": 24,
+        "position": "sticky",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      }
+    },
+    "1600": {
+      "studio": {
+        "w": 244,
+        "vw": 1600,
+        "pct": 15,
+        "position": "sticky",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      },
+      "account": {
+        "w": 244,
+        "vw": 1600,
+        "pct": 15,
+        "position": "sticky",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      },
+      "teams": {
+        "w": 244,
+        "vw": 1600,
+        "pct": 15,
+        "position": "sticky",
+        "widthProp": "244px",
+        "flex": "0 0 244px",
+        "widestChild": 215
+      }
+    }
+  },
+  "studio": {
+    "rail": {
+      "w": 244,
+      "h": 950,
+      "x": 0,
+      "y": 0,
+      "padding": "20px 14px 64px",
+      "display": "flex",
+      "flexDirection": "column",
+      "gap": "10px",
+      "borderRight": "1px solid rgb(230, 225, 238)",
+      "background": "rgb(255, 255, 255) none repeat scroll 0% 0% / auto padding-box border-box"
+    },
+    "top": {
+      "w": 215,
+      "h": 92,
+      "x": 14,
+      "y": 20,
+      "display": "flex",
+      "flexDirection": "column",
+      "gap": "14px"
+    },
+    "brand": {
+      "w": 215,
+      "h": 36,
+      "x": 14,
+      "y": 20,
+      "gap": "10px",
+      "padding": "0px 4px",
+      "alignItems": "center"
+    },
+    "mark": {
+      "w": 34,
+      "h": 34,
+      "x": 18,
+      "y": 21,
+      "width": "34px",
+      "height": "34px",
+      "fontSize": "18px",
+      "borderRadius": "10px"
+    },
+    "names": {
+      "w": 92,
+      "h": 36,
+      "x": 62,
+      "y": 20,
+      "lineHeight": "19.5px",
+      "fontSize": "15px"
+    },
+    "small": {
+      "w": 92,
+      "h": 15,
+      "x": 62,
+      "y": 41,
+      "fontSize": "11.5px",
+      "color": "rgb(139, 131, 151)"
+    },
+    "label": {
+      "w": 215,
+      "h": 18,
+      "x": 14,
+      "y": 126,
+      "fontSize": "11px",
+      "margin": "4px 0px 0px",
+      "padding": "0px 12px",
+      "letterSpacing": "0.6px",
+      "color": "rgb(139, 131, 151)",
+      "textTransform": "uppercase"
+    },
+    "nav": {
+      "w": 215,
+      "h": 210,
+      "x": 14,
+      "y": 153,
+      "padding": "0px",
+      "margin": "0px"
+    },
+    "list": {
+      "w": 215,
+      "h": 210,
+      "x": 14,
+      "y": 153,
+      "display": "flex",
+      "flexDirection": "column",
+      "gap": "2px"
+    },
+    "tab": {
+      "w": 215,
+      "h": 40,
+      "x": 14,
+      "y": 153,
+      "padding": "9px 12px",
+      "fontSize": "14px",
+      "fontWeight": "600",
+      "color": "rgb(84, 42, 150)",
+      "background": "rgb(243, 236, 252) none repeat scroll 0% 0% / auto padding-box border-box",
+      "borderRadius": "9px",
+      "gap": "10px",
+      "justifyContent": "space-between",
+      "minHeight": "0px",
+      "borderBottom": "0px none rgba(0, 0, 0, 0)",
+      "borderLeft": "0px none rgb(84, 42, 150)",
+      "lineHeight": "22.4px"
+    },
+    "tabOn": {
+      "w": 215,
+      "h": 40,
+      "x": 14,
+      "y": 153,
+      "background": "rgb(243, 236, 252) none repeat scroll 0% 0% / auto padding-box border-box",
+      "color": "rgb(84, 42, 150)",
+      "fontWeight": "600",
+      "borderRadius": "9px"
+    },
+    "action": {
+      "tag": "LABEL",
+      "w": 215,
+      "h": 42,
+      "x": 14,
+      "y": 70,
+      "padding": "8px 14px",
+      "fontSize": "14px",
+      "border": "1px dashed rgb(230, 225, 238)",
+      "background": "rgb(255, 255, 255) none repeat scroll 0% 0% / auto padding-box border-box",
+      "height": "42px",
+      "display": "flex"
+    },
+    "foot": {
+      "w": 215,
+      "h": 49,
+      "x": 14,
+      "y": 837,
+      "paddingTop": "12px",
+      "borderTop": "1px solid rgb(230, 225, 238)",
+      "gap": "10px",
+      "flexDirection": "row",
+      "alignItems": "center"
+    },
+    "tabCount": 7,
+    "tabTexts": [
+      "แม่แบบทั้งหมด44",
+      "ที่ฉันเป็นเจ้าของ",
+      "แชร์กับฉัน",
+      "บุ๊กมาร์ก",
+      "จดหมาย",
+      "ทีมของฉัน",
+      "บัญชีของฉัน"
+    ],
+    "railH": 950,
+    "vh": 950
+  },
+  "account": {
+    "rail": {
+      "w": 244,
+      "h": 950,
+      "x": 0,
+      "y": 0,
+      "padding": "20px 14px 64px",
+      "display": "flex",
+      "flexDirection": "column",
+      "gap": "10px",
+      "borderRight": "1px solid rgb(230, 225, 238)",
+      "background": "rgb(255, 255, 255) none repeat scroll 0% 0% / auto padding-box border-box"
+    },
+    "top": {
+      "w": 215,
+      "h": 129,
+      "x": 14,
+      "y": 20,
+      "display": "flex",
+      "flexDirection": "column",
+      "gap": "14px"
+    },
+    "brand": {
+      "w": 215,
+      "h": 36,
+      "x": 14,
+      "y": 20,
+      "gap": "10px",
+      "padding": "0px 4px",
+      "alignItems": "center"
+    },
+    "mark": {
+      "w": 34,
+      "h": 34,
+      "x": 18,
+      "y": 21,
+      "width": "34px",
+      "height": "34px",
+      "fontSize": "18px",
+      "borderRadius": "10px"
+    },
+    "names": {
+      "w": 58,
+      "h": 36,
+      "x": 62,
+      "y": 20,
+      "lineHeight": "19.5px",
+      "fontSize": "15px"
+    },
+    "small": {
+      "w": 58,
+      "h": 15,
+      "x": 62,
+      "y": 41,
+      "fontSize": "11.5px",
+      "color": "rgb(139, 131, 151)"
+    },
+    "label": {
+      "w": 215,
+      "h": 18,
+      "x": 14,
+      "y": 163,
+      "fontSize": "11px",
+      "margin": "4px 0px 0px",
+      "padding": "0px 12px",
+      "letterSpacing": "0.6px",
+      "color": "rgb(139, 131, 151)",
+      "textTransform": "uppercase"
+    },
+    "nav": {
+      "w": 215,
+      "h": 168,
+      "x": 14,
+      "y": 191,
+      "padding": "0px",
+      "margin": "0px"
+    },
+    "list": {
+      "w": 215,
+      "h": 168,
+      "x": 14,
+      "y": 191,
+      "display": "flex",
+      "flexDirection": "column",
+      "gap": "2px"
+    },
+    "tab": {
+      "w": 215,
+      "h": 40,
+      "x": 14,
+      "y": 191,
+      "padding": "9px 12px",
+      "fontSize": "14px",
+      "fontWeight": "600",
+      "color": "rgb(84, 42, 150)",
+      "background": "rgb(243, 236, 252) none repeat scroll 0% 0% / auto padding-box border-box",
+      "borderRadius": "9px",
+      "gap": "10px",
+      "justifyContent": "space-between",
+      "minHeight": "0px",
+      "borderBottom": "0px none rgba(0, 0, 0, 0)",
+      "borderLeft": "0px none rgb(84, 42, 150)",
+      "lineHeight": "22.4px"
+    },
+    "tabOn": {
+      "w": 215,
+      "h": 40,
+      "x": 14,
+      "y": 191,
+      "background": "rgb(243, 236, 252) none repeat scroll 0% 0% / auto padding-box border-box",
+      "color": "rgb(84, 42, 150)",
+      "fontWeight": "600",
+      "borderRadius": "9px"
+    },
+    "action": null,
+    "foot": {
+      "w": 215,
+      "h": 65,
+      "x": 14,
+      "y": 821,
+      "paddingTop": "12px",
+      "borderTop": "1px solid rgb(230, 225, 238)",
+      "gap": "10px",
+      "flexDirection": "row",
+      "alignItems": "center"
+    },
+    "tabCount": 4,
+    "tabTexts": [
+      "โปรไฟล์",
+      "สรุปการใช้งาน",
+      "การแจ้งเตือน",
+      "บัญชี"
+    ],
+    "railH": 950,
+    "vh": 950
+  },
+  "teams": {
+    "rail": {
+      "w": 244,
+      "h": 950,
+      "x": 0,
+      "y": 0,
+      "padding": "20px 14px 64px",
+      "display": "flex",
+      "flexDirection": "column",
+      "gap": "10px",
+      "borderRight": "1px solid rgb(230, 225, 238)",
+      "background": "rgb(255, 255, 255) none repeat scroll 0% 0% / auto padding-box border-box"
+    },
+    "top": {
+      "w": 215,
+      "h": 36,
+      "x": 14,
+      "y": 20,
+      "display": "flex",
+      "flexDirection": "column",
+      "gap": "14px"
+    },
+    "brand": {
+      "w": 215,
+      "h": 36,
+      "x": 14,
+      "y": 20,
+      "gap": "10px",
+      "padding": "0px 4px",
+      "alignItems": "center"
+    },
+    "mark": {
+      "w": 34,
+      "h": 34,
+      "x": 18,
+      "y": 21,
+      "width": "34px",
+      "height": "34px",
+      "fontSize": "18px",
+      "borderRadius": "10px"
+    },
+    "names": {
+      "w": 49,
+      "h": 36,
+      "x": 62,
+      "y": 20,
+      "lineHeight": "19.5px",
+      "fontSize": "15px"
+    },
+    "small": {
+      "w": 49,
+      "h": 15,
+      "x": 62,
+      "y": 41,
+      "fontSize": "11.5px",
+      "color": "rgb(139, 131, 151)"
+    },
+    "label": {
+      "w": 215,
+      "h": 18,
+      "x": 14,
+      "y": 70,
+      "fontSize": "11px",
+      "margin": "4px 0px 0px",
+      "padding": "0px 12px",
+      "letterSpacing": "0.6px",
+      "color": "rgb(139, 131, 151)",
+      "textTransform": "uppercase"
+    },
+    "nav": {
+      "w": 215,
+      "h": 125,
+      "x": 14,
+      "y": 97,
+      "padding": "0px",
+      "margin": "0px"
+    },
+    "list": {
+      "w": 215,
+      "h": 125,
+      "x": 14,
+      "y": 97,
+      "display": "flex",
+      "flexDirection": "column",
+      "gap": "2px"
+    },
+    "tab": {
+      "w": 215,
+      "h": 40,
+      "x": 14,
+      "y": 97,
+      "padding": "9px 12px",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "color": "rgb(92, 84, 104)",
+      "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+      "borderRadius": "9px",
+      "gap": "10px",
+      "justifyContent": "space-between",
+      "minHeight": "0px",
+      "borderBottom": "0px none rgb(92, 84, 104)",
+      "borderLeft": "0px none rgb(92, 84, 104)",
+      "lineHeight": "22.4px"
+    },
+    "tabOn": {
+      "w": 215,
+      "h": 40,
+      "x": 14,
+      "y": 182,
+      "background": "rgb(243, 236, 252) none repeat scroll 0% 0% / auto padding-box border-box",
+      "color": "rgb(84, 42, 150)",
+      "fontWeight": "600",
+      "borderRadius": "9px"
+    },
+    "action": null,
+    "foot": {
+      "w": 215,
+      "h": 34,
+      "x": 14,
+      "y": 852,
+      "paddingTop": "12px",
+      "borderTop": "1px solid rgb(230, 225, 238)",
+      "gap": "10px",
+      "flexDirection": "row",
+      "alignItems": "center"
+    },
+    "tabCount": 3,
+    "tabTexts": [
+      "Studio",
+      "บัญชีของฉัน",
+      "ทีม"
+    ],
+    "railH": 950,
+    "vh": 950
+  }
+}

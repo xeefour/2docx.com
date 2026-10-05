@@ -11,6 +11,7 @@ export default function Tabs({
   onChange,
   trailing,
   rail,
+  extra,
 }: {
   tabs: TabDef[]
   active: string
@@ -31,6 +32,21 @@ export default function Tabs({
    *   ถ้าเปลี่ยนชื่อ เทสต์จะตกทั้งที่หน้าเว็บถูก
    */
   rail?: boolean
+  /**
+   * เมนูที่ต่อท้ายรายการเดียวกัน ใช้เมื่อเมนูไปหน้าอื่นต้องอยู่**รายการเดียว**กับแท็บ
+   *
+   * ── ทำไมต้องอยู่ใน `.tabs__list` แทนที่จะเป็นกลุ่มใหม่ ──────────────────
+   *   ผู้ใช้สั่ง: *"ปรับ sidebar ให้เหมือนหน้าอื่น เหมือนกับหน้านี้ /account /teams เป็นต้น"*
+   *   วัดแล้วเห็นว่า sidebar ของ /studio มี 2 กลุ่มคั่นเส้น ส่วน /account กับ /teams มีกลุ่มเดียว
+   *   ถ้าวางเป็นกลุ่มที่สอง (แม้ไม่มีเส้นคั่น) `.rail` จะเว้น `gap: 10px` ระหว่างสองกล่อง
+   *   → ยังดูเป็นสองกลุ่มอยู่ดี ต้องรวมเป็น `.tabs__list` เดียวจึงจะได้ gap 2px เหมือนแท็บ
+   *
+   * ⚠️ อยู่ใน `role="tablist"` ด้วย — เป็นข้อถกเถียงเชิง semantics
+   *   แต่เปลี่ยนมาใช้ `role="none"` แล้วเทสต์ที่ไล่ `.tabs__tab` จะนับไม่ครบ
+   *   และปุ่มลิงก์ที่อยู่นอก tablist จะเสียการเลื่อนด้วยลูกศรของ screen reader
+   *   เลยยอมให้มีและใช้ `aria-current` บอกหน้าปัจจุบันแทน
+   */
+  extra?: ReactNode
 }) {
   return (
     <div className={`tabs${rail ? ' tabs--rail' : ''}`}>
@@ -47,6 +63,7 @@ export default function Tabs({
             {t.count !== undefined && t.count > 0 && <span className="tabs__count">{t.count}</span>}
           </button>
         ))}
+        {extra}
       </div>
       {trailing}
     </div>

@@ -540,9 +540,11 @@ console.log('\n[9] เมนูนำทางบนมือถือ (390px) �
 await setWidth(390)
 
 /*
- * จังหวะที่ 1 — ลิ้นชัก**ปิดอยู่**
- * ⚠️ ตอนนี้แท็บอยู่นอกจอโดยเจตนา ไม่ใช่หลุดจอ
- *   เกณฑ์ที่สำคัญจึงเปลี่ยนไปเป็น "ไม่กินความกว้างเนื้อหา + ปุ่มเมนูกดได้"
+ * นับแยก**แท็บกรองรายการ** (role=tab) กับ**เมนูไปหน้าอื่น** (a)
+ *   เพราะผู้ใช้สั่งรวมเป็นรายการเดียวกันแล้ว ให้ sidebar เหมือนหน้า /account และ /teams ที่มีกลุ่มเดียว
+ *   เดิมนับ .tabs__tab ทั้ง sidebar แล้วหักกลับเพื่อแยกสองกลุ่ม
+ *   พอรวมเป็นกลุ่มเดียว ตัวเลขกลายเป็น 7-7=0 แล้วเกณฑ์ "มีลิงก์ 2 อัน" ผ่านเฉย ๆ ทั้งที่ไม่มีลิงก์
+ *   หมายเหตุ: อย่าใส่ comment ที่มี backtick ไว้ในบล็อก evaluate() — มันคือโค้ดที่ส่งไปรันในเบราว์เซอร์
  */
 const closed = await evaluate(`(() => {
   const rail = document.querySelector('[data-testid="studio-rail"]')
@@ -553,7 +555,16 @@ const closed = await evaluate(`(() => {
   const x = bb.x + bb.width / 2, y = bb.y + bb.height / 2
   const hit = document.elementFromPoint(x, y)
   return {
-    tabs: rail.querySelectorAll('.tabs__tab').length,
+    /**
+     * ⚠️ นับ**แท็บกรองรายการ**ด้วย [role=tab] ไม่ใช่นับ .tabs__tab ทั้งหมด
+     *   เพราะเมนูไปหน้าอื่น (ทีม · บัญชีของฉัน) ย้ายเข้ามาอยู่รายการเดียวกันแล้ว
+     *   (ผู้ใช้สั่งให้ sidebar เหมือนหน้า /account · /teams ซึ่งมีกลุ่มเดียว)
+     *   เดิมนับทั้ง sidebar แล้วหักกลับ พอรวมเป็นรายการเดียว ตัวเลขกลายเป็น 7-7=0
+     *   แล้วเกณฑ์ "มีเมนูไปหน้าอื่น 2 ลิงก์" ผ่านเพราะหักกันเอง — เกณฑ์ตายโดยไม่จับบั๊ก
+     */
+    tabs: rail.querySelectorAll('[data-testid="rail-list-nav"] .tabs__tab[role="tab"]').length,
+    /** เมนูไปหน้าอื่น (ลิงก์) — แยกจากแท็บกรองอยู่แล้ว ไม่ต้องหัก */
+    navLinks: rail.querySelectorAll('[data-testid="rail-list-nav"] a.tabs__tab').length,
     /** ขอบขวาของ sidebar ยังอยู่ซ้ายของขอบจออยู่ไหม = พับเก็บแล้ว */
     railRight: Math.round(rb.right),
     btnW: Math.round(bb.width),
@@ -566,7 +577,8 @@ check('เจอ sidebar', !!closed, closed ? '' : 'ไม่เจอ [data-tes
 if (!closed) {
   skipCheck('เมนูบนมือถือ', 'ไม่เจอ sidebar')
 } else {
-  check('มีแท็บครบ 5 อันในเมนู', closed.tabs === 5, `${closed.tabs} แท็บ`)
+  check('มีแท็บกรองครบ 5 อันในเมนู', closed.tabs === 5, `${closed.tabs} แท็บ`)
+  check('เมนูไปหน้าอื่น (ทีม/บัญชี) อยู่ในรายการเดียวกัน', closed.navLinks === 2, `${closed.navLinks} ลิงก์`)
   check('ลิ้นชักพับเก็บนอกจอ (ไม่กินความกว้างเนื้อหา)', closed.railRight <= 1, `ขอบขวาอยู่หลังขอบจอ ${closed.railRight}px`)
   check('ปุ่มเมนูสูงพอแตะนิ้ว ≥36px', closed.btnH >= 36, `${closed.btnW}×${closed.btnH}px`)
   check('ปุ่มเมนูไม่ล้นออกจอ', closed.btnOut === 0, `ล้น ${closed.btnOut}px`)
@@ -587,7 +599,7 @@ if (!closed) {
     const el = document.querySelector('[data-testid="studio-rail"]')
     if (!el) return null
     const r = el.getBoundingClientRect()
-    const tabs = [...el.querySelectorAll('.tabs__tab')]
+    const tabs = [...el.querySelectorAll('[data-testid="rail-list-nav"] .tabs__tab')]
     return {
       railW: Math.round(r.width),
       railRight: Math.round(r.right),
@@ -618,7 +630,7 @@ if (!closed) {
 
   const wasOn = open?.tabs.find((t) => t.on)?.text
   const box = await evaluate(`(() => {
-    const t = [...document.querySelectorAll('.tabs__tab')].find((x) => !x.classList.contains('tabs__tab--on'))
+    const t = [...document.querySelectorAll('[data-testid="rail-list-nav"] .tabs__tab')].find((x) => !x.classList.contains('tabs__tab--on'))
     if (!t) return null
     t.scrollIntoView({ block: 'nearest' })
     const r = t.getBoundingClientRect()
@@ -632,7 +644,7 @@ if (!closed) {
       await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 })
     await sleep(500)
     const after = await evaluate(`(() => {
-      const t = [...document.querySelectorAll('.tabs__tab')].find((x) => x.classList.contains('tabs__tab--on'))
+      const t = [...document.querySelectorAll('[data-testid="rail-list-nav"] .tabs__tab')].find((x) => x.classList.contains('tabs__tab--on'))
       return t ? t.textContent.trim().replace(/\\s+/g, ' ').slice(0, 14) : null
     })()`)
     check('กดแท็บในลิ้นชักแล้วเปลี่ยนจริง', !!after && after !== wasOn, `${wasOn} → ${after}`)
@@ -651,7 +663,7 @@ if (!closed) {
       document.querySelector('[data-testid="rail-open"]')?.click()
     })()`)
     await sleep(350)
-    await evaluate(`document.querySelector('.tabs__tab')?.click()`)
+    await evaluate(`document.querySelector('[data-testid="rail-list-nav"] .tabs__tab')?.click()`)
     await sleep(300)
   }
 }

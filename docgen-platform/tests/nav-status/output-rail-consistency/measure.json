@@ -1,0 +1,126 @@
+{
+  "studio": {
+    "railW": 244,
+    "itemCount": 7,
+    "oneGroup": true,
+    "gaps": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "allGaps": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "counts": 0,
+    "bell": 0,
+    "groups": 1,
+    "actionW": 120,
+    "actionH": 33,
+    "actionFS": "13px",
+    "railW2": 244,
+    "tabPad": "9px 12px",
+    "tabFS": "14px",
+    "tabRadius": "9px",
+    "labelFS": "11px",
+    "labelLS": "0.6px",
+    "footPadTop": "12px",
+    "footBorder": "1px",
+    "onBg": "rgb(243, 236, 252)",
+    "brandGap": "10px",
+    "footText": "ผู้ทดสอบ sidebar 1791184529550ออกจากระบบ",
+    "footLinks": [
+      "ออกจากระบบ"
+    ],
+    "footName": {
+      "overflowX": 62,
+      "linkW": 78,
+      "overlap": 0,
+      "ellipsis": "ellipsis"
+    }
+  },
+  "account": {
+    "railW": 244,
+    "itemCount": 4,
+    "oneGroup": true,
+    "gaps": [
+      2,
+      2,
+      2
+    ],
+    "allGaps": [
+      2,
+      2,
+      2
+    ],
+    "counts": 0,
+    "bell": 0,
+    "groups": 1,
+    "actionW": 0,
+    "actionH": 0,
+    "actionFS": null,
+    "railW2": 244,
+    "tabPad": "9px 12px",
+    "tabFS": "14px",
+    "tabRadius": "9px",
+    "labelFS": "11px",
+    "labelLS": "0.6px",
+    "footPadTop": "12px",
+    "footBorder": "1px",
+    "onBg": "rgb(243, 236, 252)",
+    "brandGap": "10px",
+    "footText": "กลับไป Studioทีมของฉันออกจากระบบ",
+    "footLinks": [
+      "กลับไป Studio",
+      "ทีมของฉัน",
+      "ออกจากระบบ"
+    ],
+    "footName": null
+  },
+  "teams": {
+    "railW": 244,
+    "itemCount": 3,
+    "oneGroup": true,
+    "gaps": [
+      2,
+      2
+    ],
+    "allGaps": [
+      2,
+      2
+    ],
+    "counts": 0,
+    "bell": 0,
+    "groups": 1,
+    "actionW": 0,
+    "actionH": 0,
+    "actionFS": null,
+    "railW2": 244,
+    "tabPad": "9px 12px",
+    "tabFS": "14px",
+    "tabRadius": "9px",
+    "labelFS": "11px",
+    "labelLS": "0.6px",
+    "footPadTop": "12px",
+    "footBorder": "1px",
+    "onBg": "rgb(243, 236, 252)",
+    "brandGap": "10px",
+    "footText": "ผู้ทดสอบ sidebar 1791184529550ออกจากระบบ",
+    "footLinks": [
+      "ออกจากระบบ"
+    ],
+    "footName": {
+      "overflowX": 0,
+      "linkW": 72,
+      "overlap": 189,
+      "ellipsis": "clip"
+    }
+  }
+}

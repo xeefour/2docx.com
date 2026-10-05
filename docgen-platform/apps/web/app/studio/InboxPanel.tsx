@@ -10,10 +10,11 @@
  *
  * ── หลักการที่ยึดในไฟล์นี้ ─────────────────────────────────────────
  *
- * 1. **ฝั่งพ่อ (Studio) เป็นเจ้าของจำนวนที่ยังไม่อ่าน**
- *    แผงนี้โหลดรายการเอง แต่จำนวนยังไม่อ่านบนกระดิ่ง/แท็บเป็นของพ่อ
- *    ทุกครั้งที่มี action เราจึงเรียก `onChanged()` ให้พ่อไปรีเฟรช
- *    แทนที่จะยิงซ้ำเอง (สองที่นับคนละชุด = ป้ายตรงกันไม่ได้)
+ * 1. **แผงนี้เป็นเจ้าของจำนวนที่ยังไม่อ่านของตัวเอง**
+ *    โหลดรายการและตัวเลขเองทั้งหมด ไม่ต้องรอบพ่อมาสั่งรีเฟรช
+ *    เคยมี prop `onChanged` ให้พ่อมาอัปเดตป้ายนับบนกระดิ่ง/แท็บ แต่ผู้ใช้สั่ง
+ *    เอากระดิ่งกับป้ายนับออกให้ sidebar เหมือนหน้า /account · /teams แล้ว
+ *    จึงเหลือเป็น optional (ดู `notifyChanged`)
  *
  * 2. **คลิกฉบับที่ยังไม่อ่าน = ทำเครื่องหมายก่อน แล้วค่อยนำทาง**
  *    ทำแบบ optimistic เพราะถ้ารอเครือข่าย แล้วค่อย push ผู้ใช้จะรู้สึกว่าเว็บค้าง
@@ -100,7 +101,14 @@ const PAGE = 50
 /** รูปแบบรายการที่แผงนี้ถืออยู่ (ไม่ใช้ทั้ง `InboxList` ตรง ๆ เพราะแตะทีละฉบับ) */
 type Row = Notification
 
-export default function InboxPanel({ onChanged }: { onChanged: () => void }) {
+export default function InboxPanel({ onChanged }: { onChanged?: () => void } = {}) {
+  /**
+   * หลังผู้ใช้อ่าน/ลบ จะมีการ `load()` ใหม่เสมอ ซึ่งทำให้รายการและตัวเลขในแผงนี้ถูกต้อง
+   *   `onChanged` เคยมีไว้เพื่อแจ้งพ่อให้รีเฟรช**ป้ายนับบนกระดิ่ง/แท็บ**
+   *   แต่ผู้ใช้สั่งเอากระดิ่งกับป้ายนับออกให้ sidebar เหมือนหน้า /account · /teams แล้ว
+   *   จึงเหลือเป็น optional — ถ้าภายหลังเพิ่มป้ายนับกลับมา ส่ง prop นี้กลับได้เลย
+   */
+  const notifyChanged = () => onChanged?.()
   const router = useRouter()
   const [filter, setFilter] = useState<Filter>('all')
   const [rows, setRows] = useState<Row[]>([])
@@ -153,12 +161,11 @@ export default function InboxPanel({ onChanged }: { onChanged: () => void }) {
         // API ล้ม = ดึงของจริงกลับมา อย่าปล่อยให้หน้าจอโกหกับเซิร์ฟเวอร์
         void load(filter)
       })
-      onChanged()
+      notifyChanged()
       // ⚠️ ล้างเฉพาะเมื่อ `busy` ยังเป็นฉบับนี้อยู่
       //   ถ้าใช้ `setBusy('')` ตรง ๆ จะไปลบสถานะของ action ที่เพิ่งเริ่ม
       //   แล้วเปิดปุ่มทั้งหมดกลางคัน
-      setTimeout(() => setBusy((b) => (b === n._id ? '' : b)), 400)
-    }
+      setTimeout(() => setBusy((b) => (b === n._id ? '' : b)), 400)    }
     if (n.link) router.push(n.link)
   }
 
@@ -170,7 +177,7 @@ export default function InboxPanel({ onChanged }: { onChanged: () => void }) {
     try {
       const n = await api.markAllNotificationsRead(kind)
       await load(filter)
-      onChanged()
+      notifyChanged()
       if (n > 0) setNotice(`อ่านแล้ว ${n} ฉบับ`)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e))
@@ -191,7 +198,7 @@ export default function InboxPanel({ onChanged }: { onChanged: () => void }) {
     try {
       const n = await api.clearNotifications(kind)
       await load(filter)
-      onChanged()
+      notifyChanged()
       setNotice(n > 0 ? `ลบจดหมาย ${n} ฉบับแล้ว` : 'ไม่มีจดหมายให้ลบ')
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e))
@@ -212,7 +219,7 @@ export default function InboxPanel({ onChanged }: { onChanged: () => void }) {
     try {
       await api.deleteNotification(n._id)
       await load(filter)
-      onChanged()
+      notifyChanged()
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e))
     } finally {
@@ -361,8 +368,29 @@ export default function InboxPanel({ onChanged }: { onChanged: () => void }) {
         )}
       </div>
 
-      <p className="muted inbox__foot">
-        {loading ? 'กำลังโหลด…' : `แสดง ${rows.length} ฉบับ · ในกล่องทั้งหมด ${total} ฉบับ · ยังไม่อ่าน ${unread} ฉบับ`}
+      {/*
+       * ⚠️ ตัวเลข "ยังไม่อ่าน" ต้องมี testid ของตัวเอง ไม่ใช่อ่านจากข้อความรวม
+       *   เพราะบรรทัดนี้มีตัวเลขสามตัว (แสดง · ทั้งหมด · ยังไม่อ่าน)
+       *   เทสต์ที่ไล่ regex จะได้ตัวแรกซึ่งไม่ใช่ตัวที่ต้องการ
+       *   (เคยได้ 4 แทน 0 แล้วเกณฑ์ตกทั้งที่ระบบทำงานถูก)
+       */}
+      <p className="muted inbox__foot" data-testid="inbox-foot">
+        {loading ? (
+          'กำลังโหลด…'
+        ) : (
+          /**
+           * ⚠️ ต้องแยก JSX ออกมานอก template literal
+           *   เพราะ `${ … }` รับได้แค่**นิพจน์ JS** ไม่รับ JSX
+           *   เคยลองใส่ `<b>` ไว้ใน `${ }` แล้ว TypeScript พังทันที
+           */
+          <>
+            {`แสดง ${rows.length} ฉบับ · ในกล่องทั้งหมด ${total} ฉบับ · ยังไม่อ่าน `}
+            <b data-testid="inbox-unread" style={{ fontWeight: 600 }}>
+              {unread}
+            </b>
+            {' ฉบับ'}
+          </>
+        )}
       </p>
     </section>
   )

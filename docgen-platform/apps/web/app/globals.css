@@ -1572,7 +1572,7 @@ tbody tr:hover {
     overflow: hidden;
     text-overflow: ellipsis;
     /* สูงพอแตะนิ้วเท่าปุ่มอื่นบนจอแคบ */
-    min-height: 42px;
+    min-height: 30px;
   }
   .tabs__count {
     flex: none;
@@ -3174,12 +3174,21 @@ label {
  *   และตั้ง padding/border/color ไว้แบบ **inline** ใน `UploadButton`
  *   → กฎในไฟล์นี้จึงแก้ได้เฉพาะค่าที่ไม่ได้ตั้ง inline
  *   ถ้าใส่ background แล้วจะไม่มีผล (inline ชนะ) และจะเข้าใจผิดว่า CSS พัง
+ *
+ * ⚠️ `align-self: flex-start` คือหัวใจของการย่อปุ่มให้เล็กลง
+ *   ผู้ใช้สั่งให้ sidebar เหมือนหน้า /account · /teams ซึ่งมีรูปโปรไฟล์ทรงกลม
+ *   เดิมกฎนี้บังคับ `width: 100%` → ปุ่มกินเต็ม sidebar และสูง 42px
+ *   `.rail__top` เป็น flex column การใส่ `width: auto` อย่างเดียวไม่พอ
+ *   เพราะ align-items ของแม่คือ stretch (ค่าเริ่มต้น) → ยังยืดเต็มอยู่
+ *   ต้องกำหนด `align-self` ด้วยถึงจะหดตามเนื้อหาจริง
  */
 .rail__top > label {
-  width: 100%;
+  align-self: flex-start;
+  width: auto;
   box-sizing: border-box;
   text-align: center;
-  min-height: 42px;
+  /* ⚠️ เดิม 42px (ความสูงปุ่มหลักเต็มบรรทัด) — ย่อลงให้เท่าปุ่มเมนูปกติ */
+  min-height: 30px;
   /* ต้องใช้ flex ไม่ใช่ block เพราะ <label> เป็น inline
      ต้องกึ่งกลางทั้งแนวตั้งและแนวนอน ถ้าใช้ block ข้อความจะชิดซ้าย */
   display: flex;

@@ -287,7 +287,7 @@ const goList = async () => {
   await send('Page.navigate', { url: `${WEB}/studio?_=${STAMP}` })
   await sleep(2500)
   await send('Network.setCacheDisabled', { cacheDisabled: true })
-  await waitFor('!!document.querySelector(\'[data-testid="inbox-bell"]\')', 45000)
+  await waitFor('!!document.querySelector(\'[data-testid="rail-list-nav"]\')', 45000)
 }
 
 try {
@@ -303,56 +303,31 @@ try {
    */
   await send('Network.setCookie', { name: 'docgen_session', value: OWNER, url: WEB })
   await goList()
-  await waitFor('!!document.querySelector(\'[data-testid="inbox-bell"]\')', 45000)
+  await waitFor('!!document.querySelector(\'[data-testid="rail-list-nav"]\')', 45000)
 
-  /* ── 1 · กระดิ่งในหัวหน้า ─────────────────────────────────── */
-  console.log('\n[1] กระดิ่ง 🔔 ในหัวหน้า')
-  const bell = await evaluate(`
-    (() => {
-      const el = document.querySelector('[data-testid="inbox-bell"]')
-      if (!el) return null
-      const r = el.getBoundingClientRect()
-      return {
-        h: Math.round(r.height), w: Math.round(r.width),
-        inView: r.top >= 0 && r.bottom <= innerHeight + 1 && r.right <= innerWidth + 1,
-        label: el.getAttribute('aria-label') ?? el.title ?? '',
-      }
-    })()
-  `)
-  check('มีกระดิ่งในหัวหน้า', !!bell)
-  check('กระดิ่งอยู่ในจอ', !!bell?.inView)
-  check('พื้นที่แตะพอสำหรับนิ้ว (≥36px)', (bell?.h ?? 0) >= 36, `${bell?.w}×${bell?.h}px`)
-  check('กระดิ่งมีชื่อให้ screen reader อ่าน', !!bell?.label, bell?.label)
-
-  const bellCount = await evaluate(
-    'document.querySelector(\'[data-testid="inbox-bell-count"]\')?.textContent?.trim() ?? null',
-  )
-  check('ป้ายบอกจำนวนที่ยังไม่อ่านตรงกับของจริง', bellCount === String(unread), `โชว์ "${bellCount}" · จริง ${unread}`)
-
-  const open1 = await clickTestId('inbox-bell')
-  check('กดกระดิ่งแล้วเปิดกล่องเล็ก', !!open1?.ok, open1?.miss ?? open1?.why ?? '')
-  const pop = await evaluate(`
-    (() => {
-      const el = document.querySelector('[data-testid="inbox-bell-pop"]')
-      if (!el) return null
-      const r = el.getBoundingClientRect()
-      const cs = getComputedStyle(el)
-      return {
-        pos: cs.position, z: Number(cs.zIndex),
-        w: Math.round(r.width), h: Math.round(r.height),
-        outRight: Math.round(r.right - innerWidth), outLeft: Math.round(-r.left),
-        outBottom: Math.round(r.bottom - innerHeight),
-      }
-    })()
-  `)
-  check('กล่องเล็กมีขนาดจริง', (pop?.w ?? 0) > 100 && (pop?.h ?? 0) > 40, `${pop?.w}×${pop?.h}px`)
-  check('กล่องเล็กไม่ล้นออกนอกจอ', (pop?.outRight ?? 1) <= 0 && (pop?.outLeft ?? 1) <= 0 && (pop?.outBottom ?? 1) <= 0,
-    `ขวา ${pop?.outRight} · ซ้าย ${pop?.outLeft} · ล่าง ${pop?.outBottom}`)
-  check('ทับ lightbox ได้ (z-index สูงพอ)', (pop?.z ?? 0) > 2147482601, String(pop?.z))
-  await shot('01-bell-open.png')
-
-  await pressKey('Escape')
-  check('Escape ปิดกล่องเล็ก', !(await evaluate('!!document.querySelector(\'[data-testid="inbox-bell-pop"]\')')))
+  /* ── 1 · ไม่มีกระดิ่งแล้ว (ถอดตามที่ผู้ใช้สั่ง) ──────────────────
+   * ⚠️ เดิมหัวข้อนี้ทดสอบกระดิ่ง 🔔 ใน sidebar ทั้งหมด
+   *   ผู้ใช้สั่ง *"เอากระดิ่ง 🔔 ในส่วนล่างออก ให้เหลือชื่อผู้ใช้ + ออกจากระบบเหมือนหน้าอื่น"*
+   *   เพื่อให้ sidebar เหมือนหน้า /account · /teams ที่ไม่มีกระดิ่ง
+   *   → เปลี่ยนจากทดสอบว่ากระดิ่งทำงาน เป็นทดสอบว่ากระดิ่ง**ไม่อยู่** และจดหมายยังเข้าถึงได้
+   */
+  console.log('\n[1] กระดิ่งถูกถอดออกจาก sidebar แล้ว')
+  const noBell = await evaluate(`(() => {
+    const rail = document.querySelector('[data-testid="studio-rail"]')
+    if (!rail) return { miss: true }
+    return {
+      bell: !!rail.querySelector('[data-testid="inbox-bell"]'),
+      bellCount: !!rail.querySelector('[data-testid="inbox-bell-count"]'),
+      /** แท็บจดหมายต้องยังอยู่ ไม่งั้นผู้ใช้เข้าถึงกล่องไม่ได้เลย */
+      inboxTab: [...rail.querySelectorAll('[role="tab"]')]
+        .some((t) => (t.textContent || '').includes('จดหมาย')),
+      /** ตัวเลขนับในแท็บต้องหายไปด้วย (ผู้ใช้สั่งเอาตัวเลขในแท็บออก) */
+      counts: rail.querySelectorAll('.tabs__count').length,
+    }
+  })()`)
+  check('ไม่มีกระดิ่งใน sidebar', noBell?.bell === false && noBell?.bellCount === false)
+  check('ไม่มีตัวเลขนับในแท็บ sidebar', noBell?.counts === 0, `พบ ${noBell?.counts} ป้าย`)
+  check('ยังเข้าถึงจดหมายผ่านแท็บได้', noBell?.inboxTab === true)
 
   /* ── 2 · แท็บจดหมาย ──────────────────────────────────────── */
   console.log('\n[2] แท็บจดหมายในแถบแท็บ')
@@ -445,10 +420,14 @@ try {
   await sleep(1200)
   const afterReadAll = await inbox()
   check('ทุกฉบับถือว่าอ่านแล้ว', afterReadAll?.unread === 0, `unread=${afterReadAll?.unread}`)
-  const bellGone = await evaluate(
-    'document.querySelector(\'[data-testid="inbox-bell-count"]\')?.textContent?.trim() ?? null',
+  /* ⚠️ เดิมตรวจป้ายบนกระดิ่ง — กระดิ่งถูกถอดแล้ว จึงเปลี่ยนไปตรวจที่ตัวเลขในแผงจดหมายแทน
+   *   ยืนยันว่าการอ่านหมดแล้วสะท้อนถึงหน้าจอจริง ไม่ใช่แค่ผลจาก API */
+  const panelUnread = await evaluate(
+    // ⚠️ ต้องใช้ single quote ครอบ selector ภายใน string ที่ห่อด้วย single quote
+    //   ถ้าใช้ double quote ครอบ จะได้ "...[data-testid="x"]..." = CSS ผิด → throw
+    'document.querySelector(\'[data-testid="inbox-unread"]\')?.textContent?.trim() ?? null',
   )
-  check('ป้ายบนกระดิ่งหายไปเมื่ออ่านหมดแล้ว', bellGone === null || bellGone === '0', String(bellGone))
+  check('แผงจดหมายโชว์ว่าอ่านหมดแล้ว', panelUnread === '0', `ยังไม่อ่าน ${panelUnread}`)
 
   const clr = await clickTestId('inbox-clear')
   check('มีปุ่ม "ล้างกล่อง" และกดได้', !!clr?.ok, clr?.miss ?? '')

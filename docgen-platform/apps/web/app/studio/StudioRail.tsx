@@ -25,6 +25,7 @@ export default function StudioRail({
   onTab,
   total,
   action,
+  extraNav,
   footer,
   open,
   onClose,
@@ -36,7 +37,24 @@ export default function StudioRail({
   total: number
   /** ปุ่มอัปโหลดแม่แบบ (ส่งเข้ามาเป็น node เพราะต้องใช้ state ของ `Studio`) */
   action: ReactNode
-  /** กระดิ่งจดหมาย + ออกจากระบบ */
+  /**
+   * เมนูที่พาไปหน้าอื่น (ทีม · บัญชีของฉัน)
+   *
+   * ⚠️ อยู่ในรายการเดียวกับแท็บ ไม่ใช่กลุ่มที่สอง
+   *   ผู้ใช้สั่ง: *"ปรับ sidebar ให้เหมือนหน้าอื่น เหมือนกับหน้านี้ /account /teams เป็นต้น"*
+   *   วัดจากหน้าเว็บจริงแล้วพบว่า /studio เป็นหน้าเดียวที่มี 2 กลุ่มคั่นเส้น
+   *   ส่วน /account กับ /teams มีกลุ่มเดียวทั้งหมด
+   *
+   *   เดิมเป็น `navSections` ที่วาดเป็นกลุ่มแยก + เส้นคั่น
+   *   ถ้าแค่เอาเส้นคั่นออกแต่ยังเป็นคนละกล่อง `.rail` จะเว้น `gap: 10px` ตรงนั้น
+   *   ยังดูเป็นสองกลุ่มอยู่ดี จึงต้องรวมเข้า `.tabs__list` เดียวกันจริง ๆ
+   *   (ดู `extra` ใน `Tabs.tsx`)
+   *
+   * ⚠️ ใช้คลาสชุดเดียวกับแท็บ (`tabs__tab`) จึงได้หน้าตาเหมือนกันโดยไม่ต้องเขียน CSS ใหม่
+   */
+  extraNav?: ReactNode
+  /** ใช้ตอนพิสูจน์บั๊กเท่านั้น — แยกเมนูออกเป็นกลุ่มที่สอง */
+  /** ชื่อผู้ใช้ + ออกจากระบบ */
   footer: ReactNode
   /** เปิดลิ้นชักอยู่หรือไม่ — ใช้กับจอเล็ก */
   open: boolean
@@ -69,8 +87,16 @@ export default function StudioRail({
         </div>
 
         <p className="rail__label">รายการ</p>
-        <nav className="rail__nav">
-          <Tabs tabs={tabs} active={active} onChange={onTab} rail />
+        {/*
+         * ⚠️ `data-testid` นี้ครอบ**รายการเมนูทั้งหมด**ของ sidebar
+         *   ไม่ใช่เฉพาะแท็บกรองรายการ
+         *   เพราะเมนูไปหน้าอื่น (ทีม · บัญชีของฉัน) อยู่รายการเดียวกันแล้ว
+         *   → นับ `.tabs__tab` ในนี้ได้ 7 และต้องได้ 7
+         *   ถ้านับ `.tabs__tab` ทั้ง sidebar โดยไม่จำกัดขอบเขต
+         *   เกณฑ์จะนับเกินเฉพาะวันที่มีปุ่มอื่นที่ใช้คลาสเดียวกันโดยบังคิญ
+         */}
+        <nav className="rail__nav" data-testid="rail-list-nav">
+          <Tabs tabs={tabs} active={active} onChange={onTab} rail extra={extraNav} />
         </nav>
 
         <div className="rail__gap" />

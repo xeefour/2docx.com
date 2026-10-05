@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import {
   api,
   ApiError,
@@ -31,7 +32,8 @@ import Pager from './Pager'
 import ThumbLightbox from './ThumbLightbox'
 import UploadGuide from './UploadGuide'
 import TemplateEditor from './TemplateEditor'
-import InboxBell from './InboxBell'
+// ⚠️ `InboxBell` ถูกถอดออกจาก sidebar แล้ว (ผู้ใช้สั่งให้เหมือนหน้า /account · /teams)
+//   ไฟล์ `InboxBell.tsx` ยังอยู่ เผื่อภายหลังอยากได้ป้ายนับจดหมายกลับมา
 import InboxPanel from './InboxPanel'
 import StudioRail from './StudioRail'
 import { readParam, readTemplateKey, setUrl, studioPath, TAB_PARAM } from './lib/urlState'
@@ -93,14 +95,19 @@ function readListTab(search: string): ListTab {
 /**
  * @param initialKey key ของแม่แบบที่จะเปิดทันที — มาจาก path `/studio/<key>`
  *   (route `app/studio/[key]/page.tsx` ส่งมาให้ จึงรีเฟรชแล้วยังอยู่แม่แบบเดิม)
+ * @param meName ชื่อผู้ใช้สำหรับ footer — มาจาก server แบบเดียวกับหน้า /teams
+ *   (ถ้าดึงฝั่ง client จะเห็น footer ว่างแล้วกระพริบตอนข้อมูลมาถึง)
  */
-export default function Studio({ initialKey }: { initialKey?: string } = {}) {
+export default function Studio({
+  initialKey,
+  meName = '',
+}: { initialKey?: string; meName?: string } = {}) {
   const [templates, setTemplates] = useState<Template[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [access, setAccess] = useState<Record<string, AccessView>>({})
   /** มุมมีรายการ: รายการ | ชิด (จำค่าไว้ต่อคนใน localStorage) */
-  const [page, setPage] = useState(1)
   const [listView, setListView] = useState<'list' | 'grid'>(readStoredView)
+  const [page, setPage] = useState(1)
   /** ลิ้นชักเปิดอยู่หรือไม่ — มีผลเฉพาะจอเล็ก (CSS ซ่อน sidebar บนจอใหญ่) */
   const [railOpen, setRailOpen] = useState(false)
   /** key → รูปตัวอย่างแรก (null = ยังไม่มีรูป หรือดูไม่ได้) */
@@ -109,14 +116,6 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
   const [peek, setPeek] = useState<{ key: string; name: string } | null>(null)
 
   const [bookmarks, setBookmarks] = useState<BookmarkRecord[]>([])
-  /**
-   * จำนวนจดหมายที่ยังไม่อ่าน — ใช้ทั้งป้ายบนกระดิ่งและบนแท็บ "จดหมาย"
-   *
-   * ⚠️ นับที่นี่จุดเดียว ไม่ใช่ให้กระดิ่งกับแท็บนับแยกกัน
-   *    ถ้าสองที่ยิง API เอง ตัวเลขจะคนละช่วงเวลากัน (อันนึงโหลดก่อนอีกอัน)
-   *    ผู้ใช้จะเห็นป้ายสองที่ไม่ตรงกันแล้วเชื่อว่าระบบพัง
-   */
-  const [inboxUnread, setInboxUnread] = useState(0)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
   const [tag, setTag] = useState('')
@@ -154,31 +153,6 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
   useEffect(() => {
     void load()
   }, [load])
-
-  /**
-   * โหลดจำนวนจดหมายที่ยังไม่อ่าน
-   *
-   * ⚠️ `limit: 1` เพราะเราต้องการแค่ตัวเลข ไม่ต้องดึงรายการมาใช้
-   *   (รายการเต็มโหลดใน `InboxPanel` / `InboxBell` ตอนผู้ใช้เปิดดูจริง)
-   *
-   * ⚠️ ไม่ poll — ยิงตอน mount ครั้งเดียว แล้วรีเฟรชเมื่อผู้ใช้อ่าน/ลบ
-   *   การ poll ซ้ำ ๆ เป็นการยิงที่ไม่มีใครขอ และถ้าคนไม่มีจดหมายเลย
-   *   จะเป็นการยิงเปล่าที่ไม่มีทางได้ผลลัพธ์ตลอดชีวิตของหน้านี้
-   */
-  const loadInboxUnread = useCallback(async () => {
-    try {
-      const r = await api.listNotifications({ limit: 1 })
-      setInboxUnread(r.unread)
-    } catch {
-      // ⚠️ เงียบไว้ — ตัวเลขบนกระดิ่งเป็นของเสริม
-      //   ถ้ามาที่ error แล้วบอกผู้ใช้ ทั้งที่จดหมายจริงยังอยู่ในแท็บ
-      //   จะเหมือนกล่องหายทั้งกล่อง แต่จริง ๆ แค่ยิงตัวเลขไม่สำเร็จ
-    }
-  }, [])
-
-  useEffect(() => {
-    void loadInboxUnread()
-  }, [loadInboxUnread])
 
   /**
    * อ่านแท็บหน้ารายการจาก URL ตอน mount
@@ -355,6 +329,8 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
         t.tags.some((x) => x.toLowerCase().includes(q))
       )
     })
+  }, [templates, search, category, tag, tab, access, bookmarkKeys])
+
   /**
    * ── แบ่งหน้า (ผู้ใช้ชี้ว่าเดิมไม่มี) ──────────────────────────────
    * วัดแล้ว: แท็บ "แม่แบบทั้งหมด" มี 43 รายการ หน้าสูง 5,982px = เลื่อน 6 จอ
@@ -388,8 +364,6 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
   useEffect(() => {
     if (page !== safePage) setPage(safePage)
   }, [page, safePage])
-
-  }, [templates, search, category, tag, tab, access, bookmarkKeys])
 
   /**
    * ดึงภาพย่อของทุกแม่แบบที่เห็นในรายการ ใน**คำขอเดียว**
@@ -465,14 +439,18 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
     )
   }
 
+  /**
+   * ⚠️ ไม่ใส่ `count` ทุกแท็บ
+   *   ผู้ใช้สั่งให้ sidebar เหมือนหน้า /account กับ /teams ซึ่งโชว์แค่ชื่อ
+   *   วัดจากหน้าเว็บจริงแล้วตัวเลข (44, 1) เป็นสิ่งเดียวที่ทำให้รายการดูไม่เหมือนหน้าอื่น
+   *   (ตัวเลขยังอยู่ในหัวข้อแถบบนถ้าผู้ใช้ต้องการดูจำนวน)
+   */
   const tabs = [
-    { id: 'all', label: 'แม่แบบทั้งหมด', count: templates.length },
+    { id: 'all', label: 'แม่แบบทั้งหมด' },
     { id: 'mine', label: 'ที่ฉันเป็นเจ้าของ' },
     { id: 'shared', label: 'แชร์กับฉัน' },
-    { id: 'bookmarks', label: 'บุ๊กมาร์ก', count: bookmarks.length },
-    // ⚠️ นับเฉพาะที่ยังไม่อ่าน ไม่ใช่จำนวนทั้งหมดในกล่อง
-    //   ป้ายแบบนี้ผู้ใช้ถึงรู้ว่ายังมีอะไรต้องไปเปิดดู
-    { id: 'inbox', label: 'จดหมาย', count: inboxUnread },
+    { id: 'bookmarks', label: 'บุ๊กมาร์ก' },
+    { id: 'inbox', label: 'จดหมาย' },
   ]
 
   /** ชื่อแท็บที่เปิดอยู่ — ย้ายมาเป็นหัวเรื่องในแถบบน ตอนนี้ชื่อแอปอยู่ที่ sidebar แล้ว */
@@ -499,15 +477,67 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
             onError={setError}
           />
         }
+        extraNav={
+          <>
+            {/* ⚠️ ลิงก์ใน sidebar ต้องปิดลิ้นชักด้วยเมื่อจอเล็ก
+             *   การกดจะเปลี่ยนหน้าให้อยู่แล้ว แต่ระหว่างนั้นผ้าคลุมมืดยังทับอยู่
+             *   ผู้ใช้จะเห็นเนื้อหาค้างเป็นจอเดิมแล้วคิดว่ากดไม่ได้ */}
+            <Link
+              href="/teams"
+              className="tabs__tab"
+              style={{ textDecoration: 'none' }}
+              data-testid="rail-teams"
+              onClick={() => setRailOpen(false)}
+            >
+              ทีมของฉัน
+            </Link>
+            <Link
+              href="/account"
+              className="tabs__tab"
+              style={{ textDecoration: 'none' }}
+              data-testid="rail-account"
+              onClick={() => setRailOpen(false)}
+            >
+              บัญชีของฉัน
+            </Link>
+          </>
+        }
         footer={
           <>
             {/*
-             * ⚠️ กระดิ่งจดหมาย — ตัวเลขมาจาก `loadInboxUnread()` ของหน้านี้ ไม่ใช่จากในกระดิ่งเอง
-             *   เพราะแท็บ "จดหมาย" ใช้ตัวเลขเดียวกัน — สองที่นับเองเมื่อไรก็ drift กัน
+             * ⚠️ ผู้ใช้สั่งเอากระดิ่ง 🔔 ออก ให้เหลือชื่อผู้ใช้ + ออกจากระบบเหมือนหน้าอื่น
+             *   (กระดิ่งเป็นตัวเดียวใน sidebar ที่ไม่ใช่เมนู และ /account · /teams ไม่มี)
+             *
+             *   ผลที่ตามมา: จำนวนจดหมายที่ยังไม่อ่านไม่มีที่โชว์แล้ว
+             *   ผู้ใช้ต้องกดแท็บ "จดหมาย" เพื่อดู → ถ้าภายหลังอยากได้ป้ายนับกลับมา
+             *   ให้ใส่ `count: inboxUnread` ที่แท็บจดหมายได้เลย (โครงยังรองรับอยู่)
              */}
-            <InboxBell unread={inboxUnread} onOpenInbox={() => pickListTab('inbox')} />
+            {meName ? (
+              /**
+               * ⚠️ ชื่อผู้ใช้ยาวได้มาก แต่พื้นที่ใต้แบรนด์กว้างแค่ 216px
+               *
+               *   `.rail__foot` มี `flex-wrap: wrap` อยู่แล้ว
+               *   ถ้าใส่แค่ `min-width: 0` ชื่อจะ**ถูกตัดก่อนย่อ**
+               *   เพราะ flex เลือก "ตัดบรรทัด" ก่อน "บีบให้เล็กลง"
+               *   (เจอตอนวัด: ชื่อลงไปบรรทัดที่สอง แล้วลิงก์ถูกมองว่าซ้อนทับ)
+               *   → ต้องให้ฐานเป็นศูนย์ด้วย `flex: 1 1 0` ถึงจะอยู่บรรทัดเดียวแล้วค่อยย่อ
+               */
+              <span
+                className="muted"
+                style={{
+                  fontSize: 13,
+                  flex: '1 1 0',
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {meName}
+              </span>
+            ) : null}
             {/* ⚠️ auth route ไม่ได้อยู่ใต้ /api — ใช้ /auth/logout */}
-            <a href="/auth/logout" className="muted" style={{ fontSize: 13 }}>
+            <a href="/auth/logout" className="muted" style={{ fontSize: 14, flex: 'none' }}>
               ออกจากระบบ
             </a>
           </>
@@ -648,11 +678,11 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
       )}
 
       {/*
-       * แท็บจดหมาย — โหลด/นับที่ยังไม่อ่านเอง แต่ให้พ่อเป็นคนถือตัวเลขป้ายบนกระดิ่ง
-       * ⚠️ `onChanged` คือจุดเดียวที่ตัวเลขบนกระดิ่งจะถูกรีเฟรช
-       *   ถ้าลืมเรียก ป้ายจะค้างเป็นตัวเลขเก่าจนกว่าจะรีเฟรชหน้า
+       * แท็บจดหมาย — โหลดและนับเองทั้งหมด
+       * ⚠️ ไม่ต้องส่ง `onChanged` แล้ว เพราะผู้ใช้สั่งเอากระดิ่งกับป้ายนับออก
+       *   และให้ sidebar เหมือนหน้า /account · /teams
        */}
-      {tab === 'inbox' && <InboxPanel onChanged={() => void loadInboxUnread()} />}
+      {tab === 'inbox' && <InboxPanel />}
 
       {tab !== 'inbox' && (
       <div className="card" style={{ overflow: 'hidden' }}>
@@ -673,7 +703,44 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
           <table className={`tpllist${listView === 'grid' ? ' tpllist--grid' : ''}`}>
             <thead>
               <tr>
+                <th>ชื่อ</th>
+                <th>หมวด</th>
+                <th>แท็ก</th>
+                <th>ชนิด</th>
+                <th style={{ textAlign: 'right' }}>จัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((t) => {
+                const key = templateKeyOf(t)
+                const view = access[key]
+                return (
+                  <TemplateRow
+                    key={t.versionId}
+                    tpl={t}
+                    view={view}
+                    starred={bookmarkKeys.has(key)}
+                    thumb={thumbs[key] ?? null}
+                    // ⚠️ ต้อง `.catch()` — `toggleBookmark` โยน error ต่อให้ผู้เรียก
+                    //   แต่ตรงนี้ข้อความแสดงผ่าน `setError` ของหน้านี้อยู่แล้ว
+                    //   ถ้าไม่จับ promise จะกลายเป็น unhandledrejection (หน้าจอแดง)
+                    onStar={() => void toggleBookmark(t).catch(() => {})}
+                    activeCategory={category}
+                    activeTag={tag}
+                    onPickCategory={(c) => setCategory(category === c ? '' : c)}
+                    onPickTag={(g) => setTag(tag === g ? '' : g)}
+                    onPeek={() => setPeek({ key, name: t.name })}
+                    onOpen={() => openTemplate(t)}
+                    onChanged={load}
+                    onError={setError}
+                    notify={setToast}
+                  />
+                )
+              })}
+            </tbody>
+          </table>
 
+        )}
       {pageCount > 1 && (
         <Pager
           page={safePage}
@@ -689,63 +756,6 @@ export default function Studio({ initialKey }: { initialKey?: string } = {}) {
         </Pager>
       )}
 
-                <th>ชื่อ</th>
-                <th>หมวด</th>
-                <th>แท็ก</th>
-                <th>ชนิด</th>
-                <th style={{ textAlign: 'right' }}>จัดการ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((t) => {
-                const key = templateKeyOf(t)
-                const view = access[key]
-                return (
- * ⚠️ โหลดซ้ำหลังกู้คืน เพราะแม่แบบกลับมาอยู่ในรายการหลักด้วย
-const TRASH_PAGE_SIZE = 10
-
- *
- * ── แบ่งหน้า (ผู้ใช้ชี้ว่าเดิมไม่มี) ──────────────────────────────────
- * ถังขยะไม่ได้มีแค่ 3 รายการเสมอไป ถ้าผู้ใช้ลบทีละเอกสารแล้วไม่กดกู้คืน
- * ภายใน 14 วันอาจสะสมได้หลายร้อยรายการ และเดิมโหลดมาทั้งหมดมาเรนเดอร์รวดเดียว
- * ตอนนี้แบ่งหน้าที่ API แล้วใช้ `Pager` ตัวเดียวกับหน้าประวัติ
-                  <TemplateRow
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
-                    key={t.versionId}
-                    tpl={t}
-                    view={view}
-                    starred={bookmarkKeys.has(key)}
-                    thumb={thumbs[key] ?? null}
-                    // ⚠️ ต้อง `.catch()` — `toggleBookmark` โยน error ต่อให้ผู้เรียก
-                    //   แต่ตรงนี้ข้อความแสดงผ่าน `setError` ของหน้านี้อยู่แล้ว
-                    //   ถ้าไม่จับ promise จะกลายเป็น unhandledrejection (หน้าจอแดง)
-                    onStar={() => void toggleBookmark(t).catch(() => {})}
-                    activeCategory={category}
-  const pageCount = Math.max(1, Math.ceil(total / TRASH_PAGE_SIZE))
-  /**
-   * ⚠️ ผู้ใช้กดกู้คืน/ลบจนหน้าที่อยู่ไม่มีของแล้ว
-   *   ต้องดึงกลับไปหน้าสุดท้าย ไม่ใช่ค้างหน้าว่างไว้
-   *   (เคยเจอกับหน้าประวัติ: กู้คืนหมดหน้าสุดท้ายแล้วเห็นรายการว่างจนกดกลับไม่ได้)
-   */
-  if (page > pageCount) {
-    setPage(pageCount)
-    return null
-  }
-                    activeTag={tag}
-                    onPickCategory={(c) => setCategory(category === c ? '' : c)}
-                    onPickTag={(g) => setTag(tag === g ? '' : g)}
-                    onPeek={() => setPeek({ key, name: t.name })}
-                    onOpen={() => openTemplate(t)}
-                    onChanged={load}
-                    onError={setError}
-                    notify={setToast}
-                  />
-                )
-              })}
-            </tbody>
-          </table>
-        )}
       </div>
       )}
 
@@ -773,7 +783,15 @@ const TRASH_PAGE_SIZE = 10
  *   แต่พอปิดหน้านั้นไป ก็หาไม่เจออีกเลย แล้วคิดว่ากดลบถาวร
  *
  * ⚠️ โหลดซ้ำหลังกู้คืน เพราะแม่แบบกลับมาอยู่ในรายการหลักด้วย
+ * ⚠️ โหลดซ้ำหลังกู้คืน เพราะแม่แบบกลับมาอยู่ในรายการหลักด้วย
+ *
+ * ── แบ่งหน้า (ผู้ใช้ชี้ว่าเดิมไม่มี) ──────────────────────────────────
+ * ถังขยะไม่ได้มีแค่ 3 รายการเสมอไป ถ้าผู้ใช้ลบทีละเอกสารแล้วไม่กดกู้คืน
+ * ภายใน 14 วันอาจสะสมได้หลายร้อยรายการ และเดิมโหลดมาทั้งหมดมาเรนเดอร์รวดเดียว
+ * ตอนนี้แบ่งหน้าที่ API แล้วใช้ `Pager` ตัวเดียวกับหน้าประวัติ
  */
+const TRASH_PAGE_SIZE = 10
+
 function TrashPanel({
   notify,
   onRestored,
@@ -781,27 +799,9 @@ function TrashPanel({
   notify: (msg: string) => void
   onRestored: () => void
 }) {
-
-      {/**
-       * แถบแบ่งหน้า — ซ่อนตอนมีหน้าเดียว
-       * ถ้าโชว์ตอนมีแค่หน้าเดียว ผู้ใช้จะเห็นปุ่ม ‹ 1 › ที่กดอะไรไม่ได้เลย
-       * แล้วคิดว่าระบบพัง
-       */}
-      {pageCount > 1 && (
-        <Pager
-          page={page}
-          pageCount={pageCount}
-          onChange={setPage}
-          testId="trash-pager"
-          summary={`ทั้งหมด ${total} รายการ`}
-        >
-          {`แสดง ${(page - 1) * TRASH_PAGE_SIZE + 1}–${Math.min(
-            page * TRASH_PAGE_SIZE,
-            total,
-          )}`}
-        </Pager>
-      )}
   const [items, setItems] = useState<Tombstone[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
   const [busy, setBusy] = useState('')
 
   const load = useCallback(() => {
@@ -820,6 +820,16 @@ function TrashPanel({
 
   useEffect(load, [load])
 
+  const pageCount = Math.max(1, Math.ceil(total / TRASH_PAGE_SIZE))
+  /**
+   * ⚠️ ผู้ใช้กดกู้คืน/ลบจนหน้าที่อยู่ไม่มีของแล้ว
+   *   ต้องดึงกลับไปหน้าสุดท้าย ไม่ใช่ค้างหน้าว่างไว้
+   *   (เคยเจอกับหน้าประวัติ: กู้คืนหมดหน้าสุดท้ายแล้วเห็นรายการว่างจนกดกลับไม่ได้)
+   */
+  if (page > pageCount) {
+    setPage(pageCount)
+    return null
+  }
   if (items.length === 0) return null
 
   return (
@@ -916,6 +926,26 @@ function TrashPanel({
           </div>
         ))}
       </div>
+
+      {/**
+       * แถบแบ่งหน้า — ซ่อนตอนมีหน้าเดียว
+       * ถ้าโชว์ตอนมีแค่หน้าเดียว ผู้ใช้จะเห็นปุ่ม ‹ 1 › ที่กดอะไรไม่ได้เลย
+       * แล้วคิดว่าระบบพัง
+       */}
+      {pageCount > 1 && (
+        <Pager
+          page={page}
+          pageCount={pageCount}
+          onChange={setPage}
+          testId="trash-pager"
+          summary={`ทั้งหมด ${total} รายการ`}
+        >
+          {`แสดง ${(page - 1) * TRASH_PAGE_SIZE + 1}–${Math.min(
+            page * TRASH_PAGE_SIZE,
+            total,
+          )}`}
+        </Pager>
+      )}
     </div>
   )
 }
@@ -1303,14 +1333,20 @@ function UploadButton({
           border: `1px dashed ${over ? 'var(--brand)' : 'var(--line)'}`,
           background: over ? 'var(--brand-soft)' : 'var(--surface)',
           color: over ? 'var(--brand-dark)' : 'var(--ink-2)',
-          padding: '8px 14px',
+          // ⚠️ เล็กลงเพื่อให้เหมือนรูปโปรไฟล์ใน /account (ผู้ใช้สั่งย่อ)
+          //   เดิมกินเต็มความกว้าง sidebar และสูง 42px เท่าปุ่มหลัก
+          //   แต่ sidebar ตอนนี้เหลือแค่รายการเมนู → ปุ่มหลักที่ใหญ่ที่สุดกลับกินพื้นที่เมนู
+          //   ยังคงเป็นเส้นประเพราะเป็นปลายทางวางไฟล์ (ลากไฟล์มาวางได้) ไม่ใช่แค่ปุ่มกด
+          padding: '5px 10px',
           borderRadius: 8,
           cursor: 'pointer',
           margin: 0,
-          fontSize: 14,
+          fontSize: 13,
           userSelect: 'none',
+          gap: 5,
         }}
       >
+        <span aria-hidden="true">↑</span>
         {busy ? 'กำลังอัปโหลด…' : 'อัปโหลดแม่แบบ'}
       </label>
 

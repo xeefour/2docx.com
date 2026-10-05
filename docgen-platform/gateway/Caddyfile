@@ -17,7 +17,8 @@
 #  ── ตารางเส้นทาง ───────────────────────────────────────────
 #  /api/*      → api:4000          (Fastify mount ใต้ /api)
 #  /auth/*     → api:4000          (Casdoor callback ไม่ได้อยู่ใต้ /api)
-#  /docs       → api:4000
+#  /docs       → api:4000          (Swagger UI)
+#  /docs/*     → api:4000          (css/js/favicon ของ Swagger UI)
 #  /files/*    → rustfs-ui:8080    (หน้าไฟล์ใน S3)
 #  /logs/*     → loki:3100         (ค้น log)
 #  อื่นทั้งหมด → web:3000          (เว็บ Next.js)
@@ -69,7 +70,16 @@
 	}
 
 	# เอกสาร API เปิดได้โดยไม่ต้องจำพอร์ต
-	handle /docs {
+	# ⚠️ ต้อง match ทั้ง `/docs` และ `/docs/*` ไม่งั้นไฟล์ชั้นในจะตกไปโดนเว็บ
+	#   หน้า Swagger UI ดึงอีก 7 ไฟล์จาก `/docs/static/…` (css/js/favicon)
+	#   ถ้า match แค่ `/docs` พวกนั้นจะหลุดไปจบที่ catch-all ด้านล่าง → 404
+	#   (เจอตอนผ่าน gateway: HTML 200 แต่ static 404 ทั้งหมด)
+	#
+	# ⚠️ ต้องใช้ named matcher เพราะ `handle` รับ path matcher ได้แค่ตัวเดียว
+	#   (`handle /docs /docs/* { }` ทำให้ caddy validate ไม่ผ่าน — เจอตอนลองจริง)
+	#   และไม่ใช้ `/docs*` เพราะจะไปจับ `/docsomething` ไปด้วย
+	@docs path /docs /docs/*
+	handle @docs {
 		reverse_proxy api:4000
 	}
 	handle /openapi.json {

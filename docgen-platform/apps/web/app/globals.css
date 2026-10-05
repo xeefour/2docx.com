@@ -250,7 +250,13 @@ button.danger:hover:not(:disabled) {
   flex-direction: column;
   background: rgb(12 9 18 / 82%);
   backdrop-filter: blur(2px);
-  overflow: auto;
+  /*
+   * ⚠️ เปลี่ยนจาก `auto` เป็น `hidden` เพราะผู้ใช้สั่งให้ซูมรูปได้
+   *   ถ้ายังให้ทั้ง popup เลื่อน แถบบน (ซึ่งมีปุ่มซูม เลื่อนรูป และปิด)
+   *   จะเลื่อนหายไปพร้อมรูป ปุ่มที่ผู้ใช้กดบ่อยที่สุดกลับหายไปด้วย
+   *   ย้ายการเลื่อนไปไว้ที่ `.lightbox__stage` แทน → เลื่อนแค่รูป ปุ่มอยู่กับที่เสมอ
+   */
+  overflow: hidden;
 }
 .lightbox__bar {
   position: sticky;
@@ -304,6 +310,12 @@ button.danger:hover:not(:disabled) {
   padding: 12px;
   /* ต้องเผื่อที่ให้ปุ่มเลื่อน ถ้าไม่งั้นรูปกว้างเต็มจนปุ่มถูกดันออกนอกจอ */
   min-height: 0;
+  /*
+   * พื้นที่เลื่อนของ popup — ต้องอยู่ที่นี่ ไม่ใช่ที่ `.lightbox`
+   *   เพราะซูมแล้วรูปใหญ่กว่าพื้นที่วาง ถ้าไม่ให้เลื่อนตรงนี้
+   *   ส่วนที่เกินจะถูกตัดทิ้งไปเงียบ ๆ (ผู้ใช้กดซูมแล้วเห็นว่าไม่มีอะไรเกิดขึ้น)
+   */
+  overflow: auto;
 }
 .lightbox__img {
   display: block;
@@ -333,31 +345,95 @@ button.danger:hover:not(:disabled) {
   font-size: 14px;
   padding: 40px 20px;
 }
-.lightbox__nav {
+/*
+ * ── ชุดปุ่มบนแถบหัวไฟล์ ──────────────────────────────────────────
+ * ผู้ใช้สั่ง: *"เพิ่มปุ่ม zoom in out หน้าถัดไปถ้ามีหลายรูป … ให้อยู่ใกล้กับปุ่มปิด"*
+ * เดิมปุ่ม ‹ › ซ้อนบนตัวรูป ซึ่งถูกดันจนแตะไม่ถึงตอนรูปกว้างเต็มจอ
+ *   และบังตัวเล็ก ๆ ที่ผู้ใช้กำลังซูมดูอยู่
+ *
+ * ⚠️ ทุกปุ่มบนแถบนี้ต้องกำหนด `color` เอง
+ *   กฎ `button { color: #fff }` ของ globals.css (บรรทัด 48) มีผลกับทุกปุ่ม
+ *   ถ้าไม่กำหนด ปุ่มบนพื้นมืดจะเป็นตัวอักษรขาวบนขาว = มองไม่เห็นปุ่ม
+ */
+.lightbox__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex: none;
-  width: 44px;
-  height: 64px;
+}
+.lightbox__zoom,
+.lightbox__pager {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 10%);
+}
+.lightbox__zoom button,
+.lightbox__pager button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
   border: 0;
-  border-radius: 10px;
-  background: rgb(255 255 255 / 16%);
+  border-radius: 8px;
+  background: transparent;
   color: #fff;
-  font-size: 30px;
+  font-size: 17px;
   line-height: 1;
   cursor: pointer;
 }
-.lightbox__nav:hover:not(:disabled) {
-  background: rgb(255 255 255 / 30%);
+.lightbox__zoom button:hover:not(:disabled),
+.lightbox__pager button:hover:not(:disabled) {
+  background: rgb(255 255 255 / 22%);
+}
+/* ปิดซูมต่ำสุด/สูงสุดแล้วต้องกดต่อไม่ได้ — ถ้าไม่บอกผู้ใช้จะกดไปเรื่อย ๆ */
+.lightbox__zoom button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+/* ปุ่มตัวเลข = ระดับซูม กดเพื่อกลับพอดีจอ */
+.lightbox__zoom .lightbox__zoomval {
+  min-width: 52px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  background: rgb(255 255 255 / 8%);
+}
+.lightbox__pager button {
+  font-size: 20px;
+}
+
+/* ปุ่มไปฟอร์ม — ข้อความเดิม "ไปที่ฟอร์ม →" บอกได้แค่ว่าจะไปไหน ไม่บอกว่าทำอะไร */
+.lightbox__toform {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 6px 12px;
+  border-radius: 10px;
+  /* ลิงก์หลักบนพื้นมืดต้องกำหนดสีเอง กฎ button{color:#fff} ไม่ครอบ a */
+  color: #fff;
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.lightbox__toform-ic {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.lightbox__bar .ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .lightbox__foot {
-  position: sticky;
-  bottom: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   padding: 10px 14px;
   background: rgb(12 9 18 / 92%);
@@ -365,13 +441,6 @@ button.danger:hover:not(:disabled) {
 }
 .lightbox__foot .muted {
   color: rgb(255 255 255 / 75%);
-}
-.lightbox__foot a {
-  flex: none;
-}
-/* ลิงก์หลักบนพื้นมืดต้องกำหนดสีเอง กฎ button{color:#fff} ไม่ครอบ a */
-.lightbox__foot a.primary {
-  color: #fff;
 }
 
 /* ภาพย่อบนแถวต้องดูกดได้ — เดิมเป็น <img> จึงไม่มีอาการชี้เมาส์ */
@@ -402,15 +471,35 @@ button.danger:hover:not(:disabled) {
   outline-offset: 2px;
 }
 
+/*
+ * จอแคบ — ตัดคำออกเหลือแต่ไอคอน
+ *
+ * ⚠️ ต้องวัดว่าตัดแล้วปุ่มทุกตัวยังอยู่ในจอจริง ไม่ใช่เชื่อว่าตัดแล้วพอดี
+ *   (เดิมปุ่ม ‹ › ซ้อนบนรูป ที่จอ 360px ปุ่มถูกดันออกนอกจอไปแล้ว)
+ */
 @media (max-width: 720px) {
-  .lightbox__nav {
-    width: 40px;
-    height: 56px;
+  .lightbox__bar {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .lightbox__toform-tx,
+  .lightbox__close-tx {
+    display: none;
+  }
+  .lightbox__toform {
+    padding: 6px 10px;
+  }
+  .lightbox__zoom .lightbox__zoomval {
+    min-width: 44px;
   }
   .lightbox__foot {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
+    padding: 8px 10px;
+  }
+}
+/* จอแควมาก (มือถือแนวตั้ง) — ซ่อนระดับซูมเหลือไอคอนล้วน ปุ่มซูมยังกดได้ */
+@media (max-width: 420px) {
+  .lightbox__zoomval {
+    display: none;
   }
 }
 
@@ -3530,3 +3619,4 @@ label {
   color: var(--ink);
   font-size: 12.5px;
 }
+

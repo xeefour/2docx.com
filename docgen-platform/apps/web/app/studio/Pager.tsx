@@ -118,8 +118,19 @@ export default function Pager({
               type="button"
               style={{
                 ...btn,
+                /**
+                 * ⚠️ ต้องเขียน `border` เต็ม ไม่ใช่ `borderColor`
+                 *   `btn` ตั้ง `border` (shorthand) ไว้แล้ว ถ้าตรงนี้ใช้ `borderColor`
+                 *   (longhand) เมื่อกดเปลี่ยนหน้า ปุ่มเดิมจะ**ถูกถอด** `borderColor`
+                 *   ขณะที่ `border` ยังอยู่ → React เตือนว่า
+                 *   *"Removing a style property during rerender (borderColor)
+                 *     when a conflicting property is set (border) can lead to
+                 *     styling bugs"* แล้วพูดกันผิดเรื่อง
+                 *   เขียน `border` เต็มทั้งสองสถานะ = ไม่มี longhand ต้องถอดเลย
+                 *   (หน้าตาผลลัพธ์เหมือนเดิมทุกประการ)
+                 */
                 ...(p === cur
-                  ? { background: 'var(--brand)', color: '#fff', borderColor: 'var(--brand)' }
+                  ? { background: 'var(--brand)', color: '#fff', border: '1px solid var(--brand)' }
                   : {}),
               }}
               data-testid={`${testId}-page-${p}`}

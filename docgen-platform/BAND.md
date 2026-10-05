@@ -364,10 +364,13 @@ git commit -F logs/msg.txt
 2. สำเนา 3 — ย่อหน้าเนื้อหาหลัก 537 ตัวอักษรไม่มี `w:jc` (รอผู้ใช้ตัดสินใจ)
 3. ย้ายเจ้าของย้อนหลัง 21 แม่แบบ · แม่แบบ `1522001636999175194` หายถาวร
 4. **หมุน Casdoor client secret** — ถูกเปิดเผยในแชทแล้ว
-5. consumer `WORKERS` เก่าใน stream `JOBS` ค้าง 473 ข้อ (รอสั่งลบ)
-6. เรื่อง พ.ศ. (`:add(543)`) · favicon 404 · `.odt` ยังไม่ตั้ง `fo:language` / `lang: 'th-TH'`
-7. Next dev overlay badge "N 1 Issue" ยังไม่สืบว่าเป็นอะไร
-8. ไฟล์ชั่วคราวใน `.git/` ลบไม่ได้ (permission gate) — ไม่ถูก track
+5. เรื่อง พ.ศ. (`:add(543)`) · `.odt` ยังไม่ตั้ง `fo:language` / `lang: 'th-TH'`
+6. Next dev overlay badge "N 1 Issue"
+   สืบแล้ว (2026-10-05) — **ไม่ reproduce** ทั้ง `/` และ `/studio`: console ไม่มี
+   error/warning เลย (มีแต่ข้อความ React DevTools ปกติ) ไม่มีป้ายใน shadow DOM
+   ของ `nextjs-portal` และ `tsc --noEmit` ของเว็บผ่าน · น่าจะเป็น error ชั่วคราว
+   ตอน session อื่นแก้โค้ดอยู่ · ถ้ากลับมาให้จับ console ก่อน ไม่ต้องเดา
+7. ไฟล์ชั่วคราวใน `.git/` ลบไม่ได้ (permission gate) — ไม่ถูก track
 
 ---
 

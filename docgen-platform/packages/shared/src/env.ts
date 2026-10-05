@@ -24,7 +24,19 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
-  API_HOST: z.string().default('0.0.0.0'),
+  /**
+   * ⚠️ ค่าเริ่มต้นต้องเป็น `127.0.0.1` ไม่ใช่ `0.0.0.0`
+   *
+   *   ค่าเริ่มต้นนี้มีผลตอนรันบน **host** ตอน dev — ซึ่งเป็นกรณีที่พลาดง่ายที่สุด
+   *   วัดจริง 2026-10-05: ทั้ง API (:4001) และเว็บ (:3000) ถูก bind ที่ 0.0.0.0
+   *   ทำให้เข้าได้จาก LAN (`192.168.100.200:3000` ได้ 200) และจาก Tailscale
+   *   ทั้ง tailnet (`100.77.216.111:3000` ได้ 200) ทั้งที่ตั้งใจปิดไว้
+   *
+   *   ใน container ต้องเป็น `0.0.0.0` เพื่อให้ gateway ยิงเข้ามาได้
+   *   → `docker-compose.yml` ตั้ง `API_HOST: 0.0.0.0` ให้ service `api` ไว้แล้ว
+   *   ค่าเริ่มต้นจึงเป็นแบบ "พลาดแล้วปลอดภัย" (fail-safe) ไม่ใช่เปิดกว้างโดยค่าเริ่มต้น
+   */
+  API_HOST: z.string().default('127.0.0.1'),
   API_PORT: z.coerce.number().int().positive().default(4000),
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
 

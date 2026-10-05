@@ -119,6 +119,41 @@ npm run dev:web        # หรือ cd apps/web && npm run dev
 > cookie ที่ Casdoor ตั้งไว้ผูกกับ host ถ้าไม่ตรงกันจะล็อกอินไม่ได้
 > (cookie ไม่แยกพอร์ต — `:4001` กับ `:3000` ใช้ cookie ชุดเดียวกันได้)
 
+## ทางเข้าเดียวของทั้งระบบ = `http://127.0.0.1:8090`
+
+**gateway** คือ Caddy ใน container `docgen-gateway` ผูกไว้ที่ `127.0.0.1:8090` เท่านั้น
+ทุกอย่างที่ต้องเข้าได้ต้องผ่านทางนี้ทางเดียว
+
+| path | ไปที่ | มีใน dev บน host (`:3000`) ไหม |
+|---|---|---|
+| `/` · `/studio` · `/studio/[key]` · `/account` · `/teams` · `/teams/[id]` | เว็บ Next.js | ✅ |
+| `/api/*` · `/auth/*` | API | ✅ (Next rewrite) |
+| `/docs` · `/docs/*` · `/openapi.json` | Swagger UI | ✅ (Next rewrite) |
+| `/healthz` | ตรวจว่า gateway ยังฟัง | ❌ 404 |
+| `/files/*` | หน้าไฟล์ใน S3 (rustfs-ui) | ❌ 404 |
+| `/logs/*` | ค้น log (Loki) | ❌ 404 |
+
+> ⚠️ `localhost:3000` **ไม่ใช่ gateway** — เป็น Next.js dev server ที่รันบน host
+> เข้าได้แค่หน้าเว็บ ส่วน `/healthz` `/files` `/logs` ไม่มี เพราะอยู่ที่ชั้น Caddy เท่านั้น
+
+### พอร์ตบน host ผูก loopback ทั้งหมด (แก้ 2026-10-05)
+
+| พอร์ต | อะไร | ก่อนแก้ | หลังแก้ |
+|---|---|---|---|
+| `:3000` | Next.js dev บน host | `:::3000` = ทุก interface | `127.0.0.1` |
+| `:4001` | Fastify dev บน host | `0.0.0.0` | `127.0.0.1` |
+| `:8090` | gateway Caddy | `127.0.0.1` | `127.0.0.1` |
+
+เคยเปิดทั้ง LAN และ Tailscale ทั้ง tailnet (วัดจริง: `192.168.100.200:3000` และ
+`100.77.216.111:3000` ได้ 200) ทั้งที่คิดว่าปิดไว้แล้ว
+
+- `apps/web/package.json` ใส่ `-H 127.0.0.1` ให้ทั้ง `dev` และ `start`
+- `API_HOST` ค่าเริ่มต้นเปลี่ยนเป็น `127.0.0.1` (พลาดแล้วปลอดภัย)
+- **container ยังเป็น `0.0.0.0` ตามเดิม** เพราะ `docker-compose.yml` ตั้งให้ service `api`
+  ไม่งั้น gateway ยิงเข้าไม่ถึง
+
+ตรวจเองได้ด้วย `node logs/check-no-lan-exposure.mjs` (13 ข้อ)
+
 ## เปิด docserver ให้ dev ใช้ชั่วคราว
 
 `dokploy-infra/docker-compose.yml` **ไม่ผูกพอร์ตให้ docserver เลย** ตั้งแต่ 2026-10-05

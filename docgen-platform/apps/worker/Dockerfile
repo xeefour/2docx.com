@@ -14,7 +14,10 @@ COPY tsconfig.base.json ./
 COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
 COPY apps/worker ./apps/worker
-RUN npm run build
+# ⚠️ ห้ามใช้ `npm run build` (สคริปต์ที่ราก) ที่นี่ — เหตุผลเดียวกับ apps/api/Dockerfile
+#    สคริปต์รากสั่ง build `@docgen/web` ด้วย แต่ image นี้ไม่ได้ copy โฟลเดอร์เว็บมา
+#    → "No workspaces found: --workspace=@docgen/web"
+RUN npm run build -w @docgen/shared && npm run build -w @docgen/worker
 
 FROM base AS prod-deps
 COPY package.json package-lock.json* ./

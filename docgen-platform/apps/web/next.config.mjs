@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url'
+
 /**
  * ⚠️ rewrite `/api` ไปที่ Fastify — นี่คือเหตุผลที่ Studio ใช้งานได้โดยไม่ต้องตั้ง CORS
  *
@@ -23,6 +25,24 @@ export default {
   // (แถบนั้นต้องกดได้ตอนหน้าค้าง ถ้าถูกทับก็กดไม่ได้) → ย้ายไปมุมล่างขวา
   // ตัวนี้มีเฉพาะตอน dev เท่านั้น production ไม่มี
   devIndicators: { position: 'bottom-right' },
+
+  /**
+   * ── สำหรับ Docker ─────────────────────────────────────────────
+   * `standalone` ให้ Next ออกมาเป็น `server.js` + `node_modules` ชุดเล็ก
+   *   (ตัด dependency ที่ไม่ได้ใช้ออก) → ไม่ต้องก๊อป `node_modules` ทั้งก้อนเข้า image
+   *   ตอน dev ค่านี้ไม่มีผล เพราะ `next dev` ไม่ได้ใช้โหมดนี้
+   *
+   * ⚠️ `outputFileTracingRoot` ต้องเป็น**สตริง** ไม่ใช่ URL object
+   *    (ส่ง `new URL(...)` ไปตรง ๆ แล้ว `next build` พังด้วย
+   *     `The "path" argument must be of type string. Received an instance of URL`)
+   *
+   *    ต้องชี้ที่**ราก monorepo** ไม่ใช่ `apps/web`
+   *    เพราะเว็บ import จาก `@docgen/shared` ซึ่งอยู่คนละ workspace
+   *    ถ้าไม่ตั้ง Next จะ trace แค่ใน `apps/web` แล้ว build ออกมา runtime error
+   *    ว่า "Cannot find module '@docgen/shared'"
+   */
+  output: 'standalone',
+  outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
 
   async rewrites() {
     return [

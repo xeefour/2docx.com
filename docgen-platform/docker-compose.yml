@@ -16,6 +16,64 @@ name: docgen
 #  ระหว่าง dev ปกติจะไม่ใช้ stack นี้ แต่รันบน host ตรง ๆ ด้วย npm run dev
 # ─────────────────────────────────────────────────────────────
 
+# ── ตั้งค่า log ร่วมทั้ง stack ─────────────────────────────────
+#  ตัว app พิมพ์ JSON บรรทัดยาว (payload ของงานเรนเดอร์) → ต้องจำกัดขนาด
+#  ค่าเดียวกับ ../dokploy-infra เพื่อให้เห็นชุดเดียวกันทั้งเครื่อง
+#
+#  ⚠️ ต้องอยู่ระดับบนสุดของไฟล์ ไม่ใช่ใต้ services:
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
+# ── ตั้งค่าที่ api และ worker ใช้ร่วมกัน ────────────────────────────
+#  ทั้งคู่ validate ด้วย `env` schema ชุดเดียวกันจาก @docgen/shared
+#    ตัวไหนขาดตัวแปรไปตัวเดียว container นั้นจะ crash ตอน boot แล้ว
+#    restart วนจนกว่าจะสำเร็จ (เคยเป็นแบบนี้กับ CASDOOR_* ที่ไม่ได้ส่งให้เลย)
+#
+#  ⚠️ ค่าที่ต้องเปลี่ยนตอนขึ้น production จริง:
+#     CORS_ORIGINS / AUTH_SUCCESS_REDIRECT / CASDOOR_REDIRECT_URI
+#     ใส่ใน .env เป็นโดเมนจริง
+x-app-env: &app-env
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  # ⚠️ ต่างจาก .env ตอน dev — ใน Docker ต้องใช้ชื่อ service
+  #
+  # ⚠️ `authSource=admin` **ต้องมี** — user 'docgen' ถูกสร้างไว้ในฐาน `admin`
+  #    (ดู mongo-init ใน ../dokploy-infra) ไม่ใช่ในฐาน `app` ที่อยู่ใน path
+  #    ถ้าไม่ระบุ driver จะ default ไปหา user ในฐานจาก path
+  #    → ได้ "MongoServerError: Authentication failed." แล้ว restart วน
+  #    (ค่าใน .env ตอน dev มีอยู่แล้ว ต่างจากของใน Docker เดิมที่หายไป)
+  MONGO_URL: mongodb://docgen:${MONGO_PASSWORD}@mongo-1:27017,mongo-2:27017,mongo-3:27017/app?replicaSet=rs0&authSource=admin
+  MONGO_INIT_URL: mongodb://docgen:${MONGO_PASSWORD}@mongo-1:27017/admin?replicaSet=rs0&directConnection=true&authSource=admin
+  VALKEY_URL: redis://:${VALKEY_PASSWORD}@valkey:6379
+  NATS_URL: nats://app:${NATS_PASSWORD}@nats:4222
+  NATS_STREAM: ${NATS_STREAM:-DOCGEN}
+  NATS_SUBJECT: ${NATS_SUBJECT:-jobs.render}
+  S3_ENDPOINT: http://rustfs:9000
+  S3_REGION: ${S3_REGION:-us-east-1}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+  S3_SECRET_KEY: ${S3_SECRET_KEY}
+  S3_BUCKET: ${S3_BUCKET:-documents}
+  S3_FORCE_PATH_STYLE: "true"
+  DOCSERVER_URL: http://docserver:4000
+  DOCSERVER_API_KEY: ${DOCSERVER_API_KEY:-carbon-ce}
+  DOCSERVER_TIMEOUT_MS: ${DOCSERVER_TIMEOUT_MS:-300000}
+  # ── Casdoor SSO ─────────────────────────────────────────────
+  # ⚠️ ไม่มีค่า default ใน schema → ขาดแล้ว validate ไม่ผ่านทันที
+  #    (worker ไม่ได้ใช้จริง แต่มัน import `env` ตัวเดียวกัน จึงต้องมีครบ)
+  CASDOOR_ISSUER: ${CASDOOR_ISSUER}
+  CASDOOR_CLIENT_ID: ${CASDOOR_CLIENT_ID}
+  CASDOOR_CLIENT_SECRET: ${CASDOOR_CLIENT_SECRET}
+  CASDOOR_REDIRECT_URI: ${CASDOOR_REDIRECT_URI}
+  CASDOOR_SCOPES: ${CASDOOR_SCOPES:-openid profile email}
+  AUTH_SUCCESS_REDIRECT: ${AUTH_SUCCESS_REDIRECT:-http://localhost:3000}
+  SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-docgen_session}
+  SESSION_TTL: ${SESSION_TTL:-86400}
+  MONGO_DB: ${MONGO_DB:-app}
+  OUTPUT_BRAND: ${OUTPUT_BRAND:-2docx.com}
+
 services:
   # ══ API ════════════════════════════════════════════════════
   api:
@@ -23,33 +81,25 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      NODE_ENV: production
-      LOG_LEVEL: ${LOG_LEVEL:-info}
+      <<: *app-env
       API_HOST: 0.0.0.0
       API_PORT: 4000
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
-      # ⚠️ ต่างจาก .env ตอน dev — ใน Docker ต้องใช้ชื่อ service
-      MONGO_URL: mongodb://docgen:${MONGO_PASSWORD}@mongo-1:27017,mongo-2:27017,mongo-3:27017/app?replicaSet=rs0
-      MONGO_INIT_URL: mongodb://docgen:${MONGO_PASSWORD}@mongo-1:27017/?replicaSet=rs0&directConnection=true
-      VALKEY_URL: redis://:${VALKEY_PASSWORD}@valkey:6379
-      NATS_URL: nats://app:${NATS_PASSWORD}@nats:4222
-      NATS_STREAM: ${NATS_STREAM:-DOCGEN}
-      NATS_SUBJECT: ${NATS_SUBJECT:-jobs.render}
-      S3_ENDPOINT: http://rustfs:9000
-      S3_REGION: ${S3_REGION:-us-east-1}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
-      S3_SECRET_KEY: ${S3_SECRET_KEY}
-      S3_BUCKET: ${S3_BUCKET:-documents}
-      S3_FORCE_PATH_STYLE: "true"
-      DOCSERVER_URL: http://docserver:4000
-      DOCSERVER_API_KEY: ${DOCSERVER_API_KEY:-carbon-ce}
-      DOCSERVER_TIMEOUT_MS: ${DOCSERVER_TIMEOUT_MS:-300000}
-    ports:
-      - "4001:4000"
+    # ── ไม่ publish พอร์ตออกเครื่องอีกต่อไป ──────────────────
+    #
+    # เดิมเป็น  ports: ["4001:4000"]  ซึ่ง Docker ผูกกับ 0.0.0.0
+    #   → ใครใน LAN ก็ยิง http://192.168.0.106:4001 ได้
+    #
+    # ตอนนี้เข้าผ่าน gateway ตัวเดียว (ดู service `gateway` ท้ายไฟล์)
+    #   และ API กับ web คุยกันผ่าน network `infra` โดยตรง ไม่ต้องออกพอร์ตเลย
+    #
+    # ถ้าจะ debug จาก host ให้สตาร์ตด้วย override:
+    #   docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d
     networks: [infra]
     # ⚠️ mongo-init อยู่ project อื่น (dokploy-infra) → depends_on ข้าม project ไม่ได้
     #    ต้องขึ้น infra ก่อน แล้วค่อยขึ้น stack นี้
     #    ถ้า infra ยังไม่พร้อม แอปจะ crash ตอน boot แล้ว restart วนจนกว่าจะสำเร็จ
+    logging: *logging
     restart: unless-stopped
 
   # ══ Worker ═════════════════════════════════════════════════
@@ -57,26 +107,12 @@ services:
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
+    # ใช้บล็อกเดียวกับ API — ดูเหตุผลที่ `x-app-env` ข้างบน
     environment:
-      NODE_ENV: production
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      MONGO_URL: mongodb://docgen:${MONGO_PASSWORD}@mongo-1:27017,mongo-2:27017,mongo-3:27017/app?replicaSet=rs0
-      MONGO_INIT_URL: mongodb://docgen:${MONGO_PASSWORD}@mongo-1:27017/?replicaSet=rs0&directConnection=true
-      VALKEY_URL: redis://:${VALKEY_PASSWORD}@valkey:6379
-      NATS_URL: nats://app:${NATS_PASSWORD}@nats:4222
-      NATS_STREAM: ${NATS_STREAM:-DOCGEN}
-      NATS_SUBJECT: ${NATS_SUBJECT:-jobs.render}
-      S3_ENDPOINT: http://rustfs:9000
-      S3_REGION: ${S3_REGION:-us-east-1}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
-      S3_SECRET_KEY: ${S3_SECRET_KEY}
-      S3_BUCKET: ${S3_BUCKET:-documents}
-      S3_FORCE_PATH_STYLE: "true"
-      DOCSERVER_URL: http://docserver:4000
-      DOCSERVER_API_KEY: ${DOCSERVER_API_KEY:-carbon-ce}
-      DOCSERVER_TIMEOUT_MS: ${DOCSERVER_TIMEOUT_MS:-300000}
+      <<: *app-env
     networks: [infra]
     # ดูหมายเหตุข้างบน — รอ infra ไม่ได้ข้าม project
+    logging: *logging
     restart: unless-stopped
     deploy:
       replicas: 1
@@ -84,7 +120,60 @@ services:
         limits:
           memory: 1G
 
+  # ══ Web UI: Next.js ═══════════════════════════════════════
+  #  ย้ายเข้า Docker เพื่อให้ gateway ชี้เข้าได้ใน network เดียวกัน
+  #  (ถ้ารันบน host ตัว proxy ใน container จะชี้เข้าไม่ถึง)
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      NODE_ENV: production
+      # ⚠️ Next เรียก `rewrites()` ตอน `next build` แล้วฝังผลลัพธ์ลง build output
+      #    แก้ค่านี้ตอน runtime จึงไม่มีผล ต้อง rebuild ใหม่
+      #    ค่าเดียวกันอยู่ใน ARG ของ Dockerfile แล้ว
+      API_ORIGIN: http://api:4000
+    networks: [infra]
+    # ดูหมายเหตุข้างบน — รอ infra ไม่ได้ข้าม project
+    logging: *logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ══ Gateway: ทางเข้าเดียวของทั้งระบบ ══════════════════════
+  #  แยกบริการตาม prefix ของ path — ดูตารางเส้นทางใน ./gateway/Caddyfile
+  #
+  #  ⚠️ ไม่มี `ports:` จงใจ — Dokploy จะ map โดเมนเข้ามาที่พอร์ต 80 ของ
+  #     container นี้โดยตรง ถ้า publish ออกมาเองจะชนกับ container อื่น
+  #
+  #  พอร์ต 8090 ด้านล่างผูกแค่ 127.0.0.1 = เข้าถึงจาก LAN ไม่ได้
+  #     มีไว้ให้ debug จากเครื่องนี้ได้ (`curl http://127.0.0.1:8090/healthz`)
+  #     ตอน production ตัดบรรทัดนี้ทิ้งได้เลย ไม่มีผลกับการทำงาน
+  gateway:
+    image: caddy:2.10-alpine
+    container_name: docgen-gateway
+    volumes:
+      - ./gateway/Caddyfile:/etc/caddy/Caddyfile:ro
+      # cert ของ Let's Encrypt — ถ้าไม่เก็บไว้ ทุกครั้งที่ restart ต้องขอใหม่
+      - gateway-data:/data
+      - gateway-config:/config
+    ports:
+      - "127.0.0.1:8090:80"
+    networks: [infra]
+    logging: *logging
+    restart: unless-stopped
+
 # ไม่มี volume ของตัวเองแล้ว — MongoDB อยู่ที่ ../dokploy-infra
+
+# volume ของตัวเองมีแค่ตัวเดียว: cert ของ Caddy
+# (ข้อมูลทั้งหมดอยู่ที่ ../dokploy-infra และ RustFS ไม่ใช่ Mongo volume)
+volumes:
+  gateway-data:
+    name: docgen-gateway-data
+  gateway-config:
+    name: docgen-gateway-config
 
 networks:
   infra:

@@ -18,7 +18,14 @@ COPY tsconfig.base.json ./
 COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
 COPY apps/worker ./apps/worker
-RUN npm run build
+# ⚠️ ห้ามใช้ `npm run build` (สคริปต์ที่ราก) ที่นี่
+#    สคริปต์รากสั่ง build ทั้ง 4 workspace รวมถึง `@docgen/web`
+#    แต่ Dockerfile นี้ไม่ได้ copy `apps/web` มา (เพราะ image นี้ไม่ต้องใช้เว็บ)
+#    → npm จะหา workspace ไม่เจอแล้วล้มว่า
+#      "No workspaces found: --workspace=@docgen/web"
+#    (เคยเป็นบั๊กมาตั้งแต่มีเว็บในสคริปต์ราก — image นี้จึงไม่เคย build สำเร็จ)
+#    เว็บ build ที่ `apps/web/Dockerfile` แยก
+RUN npm run build -w @docgen/shared && npm run build -w @docgen/api
 
 # ── stage 3: เอาเฉพาะที่ขึ้น production ──────────────────────
 FROM base AS prod-deps

@@ -1,0 +1,119 @@
+// ─────────────────────────────────────────────────────────────
+//  Grafana Alloy — agent ดูด log จากทุก container → Loki
+//
+//  ทำงาน 3 ขั้น:
+//    1. discovery.docker    หา container ทั้งเครื่อง (ผ่าน Docker API)
+//    2. discovery.relabel   เปลี่ยน meta label เป็น label จริง เพื่อให้ query ได้
+//    3. loki.process        ตัด noise ที่รู้แล้วออกก่อนส่งเข้า Loki
+//
+//  ทำไมต้องตัด noise: mongo 3 ตัวผลิต log ~99.6% ของทั้งระบบ และเกือบทั้งหมด
+//  เป็น replication noise ที่ไม่มีประโยชน์ (ดูหลักฐานใน tools/docker-logs.ps1)
+//  ถ้าไม่ตัด ดิสก์จะเต็มเร็วและ query จะจมในเสียงรบกวน
+//
+//  ดู UI/debug ของ Alloy ได้ที่ http://127.0.0.1:12345
+// ─────────────────────────────────────────────────────────────
+
+logging {
+	level  = "info"
+	format = "logfmt"
+}
+
+// ── 1. หา container ทุกตัวบนเครื่องนี้ ──────────────────────────
+discovery.docker "containers" {
+	host             = "unix:///var/run/docker.sock"
+	refresh_interval = "30s"
+}
+
+// ── 2. แปลง meta label ของ Docker ให้เป็น label จริง ────────────
+//    ทำให้ใน Grafana query ได้แบบ {container="mongo-1"}
+//    หรือ {compose_project="dokploy-infra", service="mongo-1"}
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	// ชื่อ container: Docker ให้มาขึ้นต้นด้วย "/" → ตัดออก
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.+)"
+		target_label  = "container"
+	}
+
+	// ชื่อ compose project (เช่น dokploy-infra) — ไม่มีใน container ที่
+	// ไม่ได้มาจาก compose (เช่น teable-postgres) → label จะไม่ถูกสร้าง
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+		regex         = "(.+)"
+		target_label  = "compose_project"
+	}
+
+	// ชื่อ service ในไฟล์ compose
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		regex         = "(.+)"
+		target_label  = "service"
+	}
+
+	// job = project.service ให้รวมเป็นชื่อเดียวที่อ่านง่าย
+	rule {
+		source_labels = [
+			"__meta_docker_container_label_com_docker_compose_project",
+			"__meta_docker_container_label_com_docker_compose_service",
+		]
+		separator     = "."
+		regex         = "(.+)\\.?(.+)"
+		target_label  = "job"
+	}
+
+	// ⚠️ อย่าเพิ่ม rule action = "labeldrop" ที่นี่
+	//    แม้จะดูเหมือนช่วยลดจำนวน stream แต่มันจะลบ
+	//    __meta_docker_container_id ด้วย ซึ่งคือ label ที่
+	//    loki.source.docker ใช้บอกว่า "จะอ่าน log ของ container ไหน"
+	//    ผลคือ Alloy รันปกติ ไม่มี error แต่อ่านได้ 0 บรรทัดตลอด
+	//    (เจอแล้วระหว่างตั้งค่าจริง — ดูสังเกตการณ์ท้ายไฟล์)
+}
+
+// ── 3. อ่าน log จากทุก container ที่ discovery เจอ ─────────────
+//  ⚠️ บล็อกนี้คือตัวที่ "ดูด log" — ถ้าตกไป Alloy จะรันได้ปกติ
+//    ไม่มี error แต่ไม่มีอะไรส่งเข้า Loki เลย (Loki จะไม่มี label ให้เห็น)
+loki.source.docker "containers" {
+	host             = "unix:///var/run/docker.sock"
+	targets          = discovery.relabel.containers.output
+	forward_to       = [loki.process.containers.receiver]
+	refresh_interval = "15s"
+	labels           = { source = "docker" }
+}
+
+// ── 4. ตัด noise ก่อนส่งเข้า Loki ───────────────────────────────
+loki.process "containers" {
+	forward_to = [loki.write.default.receiver]
+
+	// ตัดบรรทัดที่เป็น mongo replication noise ที่รู้แล้ว
+	// ใช้รูปแบบ "msg":"..." ของ mongo เป็นตัวกรอง เพื่อไม่ไปตัด
+	// ข้อความที่คนละโปรแกรมเขียนแล้วบังเอิญพิมพ์คำเดียวกัน
+	stage.drop {
+		expression = `"msg":"(client metadata|Connection accepted|Connection ended|Connection not authenticating|Received first command on ingress connection since session start or auth handshake|Successfully authenticated|Auth metrics report|Acquired connection for remote operation and completed writing to wire|Interrupted operation as its client disconnected)"`
+
+		drop_counter_reason = "mongo-replication-noise"
+	}
+
+	// ตัดบรรทัด auth ที่ client ตัดการเชื่อมต่อทิ้งเอง (เจอทุกวินาทีตอน
+	// mongod ยังไม่ได้ใส่ --auth ตามที่ระบุไว้ใน dokploy-infra/docker-compose.yml)
+	stage.drop {
+		expression          = "AuthenticationAbandoned"
+		drop_counter_reason = "mongo-auth-abandoned"
+	}
+
+	// บังคับขนาดบรรทัดไม่เกิน 16 KiB — กันบรรทัดผิดปกติกินพื้นที่
+	stage.truncate {
+		rule {
+			limit  = "16KiB"
+			suffix = "…[ตัด]"
+		}
+	}
+}
+
+// ── ส่งเข้า Loki ────────────────────────────────────────────────
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}

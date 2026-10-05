@@ -1,0 +1,8 @@
+{
+  "durable_name": "WORKERS",
+  "ack_policy": "explicit",
+  "max_deliver": 3,
+  "filter_subject": ">",
+  "replay_policy": "instant",
+  "ack_wait": 30000000000
+}

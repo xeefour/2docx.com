@@ -1,0 +1,3 @@
+# มี secret อยู่ในนี้ — ห้าม commit
+.env
+rclone/rclone.conf

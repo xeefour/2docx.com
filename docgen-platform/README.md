@@ -83,29 +83,27 @@ cp .env.example .env
 
 ใส่ค่าให้ตรงกับ stack `dokploy-infra` — ดู `.env` ของ stack นั้นได้เลย
 
-### 3. ขึ้น infrastructure
+### 3. ขึ้นทั้งระบบ (คำสั่งเดียว)
 
 ```bash
 cd ../dokploy-infra
 docker compose up -d
 ```
 
-> ⚠️ **ต้องขึ้น stack นี้ก่อนเสมอ** — ทุก service ที่แอปต้องใช้อยู่ที่นี่
-> รวมถึง MongoDB replica set ที่ย้ายเข้ามาแล้ว
+> ✅ **ตั้งแต่ 2026-10-05 รวมเป็น project เดียวแล้ว** — เดิมต้องสั่งสองทาง
+> (`dokploy-infra` แล้วค่อย `docgen-platform`) เพราะเป็นคนละ project
+> ตอนนี้ทั้ง infra 10 ตัว + ตัวแอป 4 ตัว อยู่ใน `dokploy-infra/docker-compose.yml`
+> ไฟล์ compose ของโปรเจกต์นี้ถูกลบแล้ว และ `depends_on` ใช้ได้จริง
+> (api/worker รอ `mongo-init` เสร็จก่อนเริ่ม จึงไม่ crash วนอีก)
 >
-> `mongo-init` จะรันครั้งเดียวแล้วจบ (initiate replica set + สร้าง user `docgen`)
-> ถ้ามีอยู่แล้วจะข้ามให้เอง รันซ้ำเพื่อ sync password: `docker compose up mongo-init`
->
-> ⚠️ ถ้า `mongo-init` เพิ่ง initiate ใหม่ อาจต้องรอ ~30 วินาทีให้เลือก primary เสร็จ
-> ระหว่างนั้น API/worker จะ crash ตอน boot แล้ว restart วนจนกว่าจะสำเร็จ — ไม่เป็นไร
+> ⚠️ โค้ดยังอยู่ที่ `../docgen-platform` — build context ของ compose ชี้มาที่นี่
+> ถ้าย้ายโค้ดไปด้วย ต้องแก้ `context:` ในไฟล์ compose
 
-### 4. ขึ้น API + worker
+### 4. (ไม่ต้องทำอีก) — ขึ้น API + worker
 
-```bash
-docker compose up -d api worker
-```
+`docker compose up -d` ครอบคลุม api · web · worker · gateway แล้ว
 
-API ที่ `http://localhost:4001` · Swagger UI ที่ `/docs` · spec JSON ที่ `/openapi.json`
+เข้าผ่าน **gateway ที่ `http://127.0.0.1:8090`** · Swagger UI ที่ `/docs` · spec JSON ที่ `/openapi.json`
 
 ### 4.1 ขึ้นเว็บ + 2docx Studio
 

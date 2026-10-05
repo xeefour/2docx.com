@@ -1,0 +1,10 @@
+# ── copy ไฟล์นี้เป็น rclone/rclone.conf แล้วเติม key จาก .env ──
+# ห้าม commit (อยู่ใน .gitignore แล้ว)
+
+[s3rust]
+type = s3
+provider = Other
+access_key_id = <STORAGE_ACCESS_KEY>
+secret_access_key = <STORAGE_SECRET_KEY>
+endpoint = http://rustfs:9000
+region = us-east-1

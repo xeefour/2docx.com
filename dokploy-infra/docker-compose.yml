@@ -1,0 +1,695 @@
+name: dokploy-infra
+
+# ─────────────────────────────────────────────────────────────
+#  Dokploy Infra — ทั้งระบบรวม stack เดียว
+#
+#  เริ่ม:              docker compose up -d
+#  พร้อม tunnel:       docker compose --profile tunnel up -d
+#  ดูสถานะ:           docker compose ps
+#  ปิด:                docker compose down          (เก็บข้อมูลไว้)
+#  ล้างข้อมูลหมด:      docker compose down -v       (ระวัง — ลบ volume ด้วย)
+#
+# ── รวมตัวแอปเข้ามาตอน 2026-10-05 ──────────────────────────────
+#  เดิมแยกเป็นสอง project:
+#    · dokploy-infra  — infra 10 ตัว (mongo/nats/valkey/rustfs/docserver/loki/alloy)
+#    · docgen        — ตัวแอป 4 ตัว (api/web/worker/gateway)
+#  ทั้งคู่ join network `infra` ชื่อเดียวกัน แต่คนละ project → Dokploy
+#  ต้อง deploy เป็นสอง app และ `depends_on` ข้าม project ใช้ไม่ได้
+#  ตอนนี้รวมเป็น project เดียวแล้ว จึงใช้ depends_on ได้
+#
+#  ⚠️ โค้ดยังอยู่ที่ ../docgen-platform (build context ชี้ไปที่นั่น)
+#     ย้ายโค้ดไปด้วยถ้าจะทำให้ทั้งระบบอยู่ที่โฟลเดอร์เดียว
+# ─────────────────────────────────────────────────────────────
+
+# RAM รวมที่วัดได้ตอน idle: ~1.4 GB ของ 8 ตัวเดิม
+#   (MongoDB 3 node กินเยอะสุด ~430 MB, docserver ~660 MB)
+#   + ตัวแอปอีก ~3 container — ดูค่าจริงที่ `docker stats`
+
+# ── ตั้งค่า log ร่วมทั้ง stack ─────────────────────────────────
+#  เดิมไม่มี log-opts เลย (docker inspect แสดง Config = {} ว่างเปล่า)
+#  → json-file โตไม่จำกัด ล้มไม่มีวัน
+#
+#  ข้อมูลจริงที่วัดได้: mongo-1/2/3 โตถึง ~156 MB ต่อตัวใน 3 วัน
+#  (~52 MB/วัน/ตัว) และเป็น 99.6% ของ log ทั้งเครื่อง
+#
+#  max-size 50m + max-file 3 = ไม่เกิน ~150 MB ต่อ container
+#  เพียงพอสำหรับไล่ดูย้อนหลัง แล้วเก็บย้อนหลังนานกว่านี้ที่ Loki
+#  (ดู ../observability/) ไม่ต้องพึ่งไฟล์บนดิสก์
+#
+#  ⚠️ ต้องอยู่ระดับบนสุดของไฟล์ ไม่ใช่ใต้ services:
+#     (compose ไม่ยอมให้ x- field ที่ระดับ services)
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
+# ── ตั้งค่าที่ api และ worker ใช้ร่วมกัน ────────────────────────────
+#  ทั้งคู่ validate ด้วย `env` schema ชุดเดียวกันจาก @docgen/shared
+#    ตัวไหนขาดตัวแปรไปตัวเดียว container นั้นจะ crash ตอน boot แล้ว
+#    restart วนจนกว่าจะสำเร็จ
+#
+#  ⚠️ ค่าที่ต้องเปลี่ยนตอนขึ้น production จริง:
+#     CORS_ORIGINS / AUTH_SUCCESS_REDIRECT / CASDOOR_REDIRECT_URI
+#     ใส่ใน .env เป็นโดเมนจริง
+#
+#  ⚠️ ค่าด้านล่างอ่านจาก `.env` ที่อยู่**โฟลเดอร์เดียวกับไฟล์นี้**
+#     ถ้าย้ายไฟล์ compose ไปโฟลเดอร์อื่น ค่าทั้งหมดนี้จะกลายเป็นค่าว่างทันที
+#     และ container จะ crash ตอน boot (เคยเจอกับ CASDOOR_* ที่ไม่ได้ส่งให้เลย)
+x-app-env: &app-env
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  # ⚠️ ต่างจาก .env ตอน dev — ใน Docker ต้องใช้ชื่อ service
+  #    และต้องเป็น 0.0.0.0 ไม่ใช่ 127.0.0.1 มิฉะนั้น gateway ยิงเข้าไม่ถึง
+  #    (ค่าเริ่มต้นใน @docgen/shared เป็น 127.0.0.1 อยู่แล้ว ตั้งใจให้ปลอดภัยตอนรันบน host)
+  #
+  # ⚠️ `authSource=admin` **ต้องมี** — user 'docgen' ถูกสร้างไว้ในฐาน `admin`
+  #    (ดู mongo-init ด้านบน) ไม่ใช่ในฐาน `app` ที่อยู่ใน path
+  #    ถ้าไม่ระบุ driver จะ default ไปหา user ในฐานจาก path
+  #    → ได้ "MongoServerError: Authentication failed." แล้ว restart วน
+  MONGO_URL: mongodb://docgen:${MONGO_PASSWORD}@mongo-1:27017,mongo-2:27017,mongo-3:27017/app?replicaSet=rs0&authSource=admin
+  MONGO_INIT_URL: mongodb://docgen:${MONGO_PASSWORD}@mongo-1:27017/admin?replicaSet=rs0&directConnection=true&authSource=admin
+  VALKEY_URL: redis://:${VALKEY_PASSWORD}@valkey:6379
+  NATS_URL: nats://app:${NATS_PASSWORD}@nats:4222
+  NATS_STREAM: ${NATS_STREAM:-DOCGEN}
+  NATS_SUBJECT: ${NATS_SUBJECT:-jobs.render}
+  S3_ENDPOINT: http://rustfs:9000
+  S3_REGION: ${S3_REGION:-us-east-1}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+  S3_SECRET_KEY: ${S3_SECRET_KEY}
+  S3_BUCKET: ${S3_BUCKET:-documents}
+  S3_FORCE_PATH_STYLE: "true"
+  DOCSERVER_URL: http://docserver:4000
+  DOCSERVER_API_KEY: ${DOCSERVER_API_KEY:-carbon-ce}
+  DOCSERVER_TIMEOUT_MS: ${DOCSERVER_TIMEOUT_MS:-300000}
+  # ── Casdoor SSO ─────────────────────────────────────────────
+  # ⚠️ ไม่มีค่า default ใน schema → ขาดแล้ว validate ไม่ผ่านทันที
+  #    (worker ไม่ได้ใช้จริง แต่มัน import `env` ตัวเดียวกัน จึงต้องมีครบ)
+  CASDOOR_ISSUER: ${CASDOOR_ISSUER}
+  CASDOOR_CLIENT_ID: ${CASDOOR_CLIENT_ID}
+  CASDOOR_CLIENT_SECRET: ${CASDOOR_CLIENT_SECRET}
+  CASDOOR_REDIRECT_URI: ${CASDOOR_REDIRECT_URI}
+  CASDOOR_SCOPES: ${CASDOOR_SCOPES:-openid profile email}
+  AUTH_SUCCESS_REDIRECT: ${AUTH_SUCCESS_REDIRECT:-http://localhost:3000}
+  SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-docgen_session}
+  SESSION_TTL: ${SESSION_TTL:-86400}
+  MONGO_DB: ${MONGO_DB:-app}
+  OUTPUT_BRAND: ${OUTPUT_BRAND:-2docx.com}
+
+services:
+  # ══ Database: MongoDB replica set 3 node ════════════════════
+  #  Community Edition แบบ standalone ไม่มี multi-document transaction
+  #  และ change stream ที่ใช้ production ได้ → ต้องเป็น replica set
+  #
+  # ⚠️ volume ตั้งชื่อตายตัว (docgen-mongo1/2/3) ไม่ผูกกับชื่อ project
+  #    ถ้าเปลี่ยนเป็นชื่อย่อ volume จะถูกสร้างใหม่ → replica set จะเห็นเป็นคนละชุด
+  #    แล้วข้อมูลเดิมหาย (ย้าย stack ด้วย แต่ห้ามลบบรรทัด name:)
+  mongo-1:
+    image: mongo:8
+    container_name: mongo-1
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    ports:
+      # ผูก localhost เหมือน service อื่นทุกตัว — DB ไม่ควรรับจาก LAN
+      # (api/worker ที่รันใน Docker ใช้ชื่อ service บน network infra ไม่ต้องใช้พอร์ตนี้)
+      - "127.0.0.1:27017:27017"
+    volumes: [mongo1-data:/data/db]
+    networks: [infra]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: *logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  mongo-2:
+    image: mongo:8
+    container_name: mongo-2
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    ports:
+      - "127.0.0.1:27018:27017"
+    volumes: [mongo2-data:/data/db]
+    networks: [infra]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: *logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  mongo-3:
+    image: mongo:8
+    container_name: mongo-3
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    ports:
+      - "127.0.0.1:27019:27017"
+    volumes: [mongo3-data:/data/db]
+    networks: [infra]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: *logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ── เตรียม replica set + สร้าง user (ครั้งเดียว แล้วจบ) ──────
+  # restart: no → รันเสร็วก็จบ ไม่ต้อง start ซ้ำ
+  # ทำ idempotent ทั้งหมด → สลับ stack ไปมาได้โดยไม่พัง
+  mongo-init:
+    image: mongo:8
+    container_name: mongo-init
+    networks: [infra]
+    environment:
+      MONGO_PASSWORD: ${MONGO_PASSWORD:?ตั้งค่า MONGO_PASSWORD ใน .env}
+    depends_on:
+      mongo-1: { condition: service_healthy }
+      mongo-2: { condition: service_healthy }
+      mongo-3: { condition: service_healthy }
+    restart: "no"
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -e
+        echo "กำลัง initiate replica set..."
+        mongosh --host mongo-1:27017 --quiet --eval '
+          try {
+            print("replica set มีอยู่แล้ว: " + rs.status().set);
+          } catch (e) {
+            const r = rs.initiate({
+              _id: "rs0",
+              members: [
+                { _id: 0, host: "mongo-1:27017" },
+                { _id: 1, host: "mongo-2:27017" },
+                { _id: 2, host: "mongo-3:27017" }
+              ]
+            });
+            print("initiate: " + JSON.stringify(r));
+          }
+        '
+        echo "รอให้ primary พร้อม..."
+        # รอ "primary ของเซ็ต" ไม่ใช่ของ mongo-1 เฉพาะ
+        # primary อาจเป็น node ไหนก็ได้ และหลัง restart อาจสลับไปอีก
+        READY=""
+        for i in $$(seq 1 45); do
+          N=$$(mongosh --host mongo-1:27017 --quiet --eval \
+            'rs.status().members.filter(m => m.stateStr === "PRIMARY").length' 2>/dev/null | tr -d '[:space:]')
+          if [ "$$N" = "1" ]; then
+            READY=1
+            break
+          fi
+          sleep 2
+        done
+        if [ -z "$$READY" ]; then
+          echo "timeout รอ primary ไม่สำเร็จ" >&2
+          exit 1
+        fi
+        echo "มี primary แล้ว ✓"
+
+        # ⚠️ เขียน user ต้องต่อไปที่ PRIMARY เท่านั้น
+        #    ถ้า hardcode mongo-1 แล้ว node นั้นเป็น SECONDARY
+        #    จะได้ "not primary" — ซึ่งเป็นเรื่องปกติของ replica set
+        PRIMARY=$$(mongosh --host mongo-1:27017 --quiet --eval \
+          'rs.status().members.filter(m => m.stateStr === "PRIMARY")[0].name')
+        echo "primary คือ $$PRIMARY"
+
+        # ตอนนี้ mongod ยังไม่เปิด --auth (ดูหมายเหตุเรื่อง keyFile ท้ายไฟล์)
+        # แต่ client ที่ใส่ credential จะ authenticate ตอนเชื่อมต่อ
+        # → user ต้องมีจริง ไม่งั้นจะได้ "Authentication failed" ทั้งที่ปิด auth แล้ว
+        echo "สร้าง/อัปเดต user 'docgen'..."
+        mongosh --host "$$PRIMARY" --quiet --eval "
+          db = db.getSiblingDB('admin');
+          if (db.getUser('docgen')) {
+            db.updateUser('docgen', { pwd: '$MONGO_PASSWORD', roles: [ { role: 'root', db: 'admin' } ] });
+            print('อัปเดต password แล้ว');
+          } else {
+            db.createUser({ user: 'docgen', pwd: '$MONGO_PASSWORD', roles: [ { role: 'root', db: 'admin' } ] });
+            print('สร้าง user ใหม่แล้ว');
+          }
+        "
+
+        echo "ตรวจสอบการเข้าถึง..."
+        mongosh "mongodb://docgen:$$MONGO_PASSWORD@$$PRIMARY/admin" --quiet --eval 'db.runCommand({ping:1}).ok' | grep -q 1
+        echo "เข้าถึงได้ ✓"
+
+  # ══ Queue: NATS + JetStream ═════════════════════════════════
+  nats:
+    image: nats:2.11-alpine
+    container_name: nats
+    logging: *logging
+    restart: unless-stopped
+    command: ["-c", "/etc/nats/nats.conf"]
+    environment:
+      # nats.conf อ้าง $NATS_PASSWORD — ห้ามใส่ quote ในไฟล์ conf
+      NATS_PASSWORD: ${NATS_PASSWORD:?ตั้งค่า NATS_PASSWORD ใน .env}
+    volumes:
+      - ./nats/nats.conf:/etc/nats/nats.conf:ro
+      - nats-data:/data
+    ports:
+      - "127.0.0.1:4222:4222"    # client
+      - "127.0.0.1:8222:8222"    # monitoring
+      - "127.0.0.1:8081:8080"    # websocket (host 8081 เพราะ 8080 ถูก rustfs-ui ใช้แล้ว)
+    networks: [infra]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz | grep -q ok"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ══ Cache: Valkey ═══════════════════════════════════════════
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: valkey
+    logging: *logging
+    restart: unless-stopped
+    # password ส่งผ่าน CLI — valkey.conf ไม่รองรับ env substitution
+    command:
+      - valkey-server
+      - /etc/valkey/valkey.conf
+      - --requirepass
+      - ${VALKEY_PASSWORD:?ตั้งค่า VALKEY_PASSWORD ใน .env}
+    environment:
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:?ตั้งค่า VALKEY_PASSWORD ใน .env}
+    volumes:
+      - ./valkey/valkey.conf:/etc/valkey/valkey.conf:ro
+    ports:
+      # 16379 ไม่ใช่ 6379 — เครื่องนี้มี Redis บน WSL จอง 6379 ไว้แล้ว
+      - "127.0.0.1:16379:6379"
+    networks: [infra]
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$VALKEY_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 700M
+
+  # ══ Object storage: RustFS (S3-compatible) ═══════════════════
+  # แทน MinIO ซึ่ง Community Edition ถูก archive เม.ย. 2026
+  rustfs:
+    image: rustfs/rustfs:1.0.0     # pin เวอร์ชัน อย่าใช้ latest
+    container_name: rustfs
+    logging: *logging
+    restart: unless-stopped
+    command: /data
+    environment:
+      RUSTFS_ACCESS_KEY: ${STORAGE_ACCESS_KEY:?ตั้งค่า STORAGE_ACCESS_KEY ใน .env}
+      RUSTFS_SECRET_KEY: ${STORAGE_SECRET_KEY:?ตั้งค่า STORAGE_SECRET_KEY ใน .env}
+      RUSTFS_ADDRESS: ":9000"
+      # console ยังใช้ไม่ได้ (port ฟังแต่ตอบเป็น S3 error) — เปิดเผื่อรุ่นหน้าแก้
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_PBKDF_PASSPHRASE: ${STORAGE_PASSPHRASE:?ตั้งค่า STORAGE_PASSPHRASE ใน .env}
+    volumes:
+      - rustfs-data:/data
+    ports:
+      - "127.0.0.1:9000:9000"    # ผูกแค่ localhost — ให้รัน dev บน host ได้
+    networks: [infra]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/minio/health/live || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ══ Web UI: rclone file browser สำหรับ RustFS ════════════════
+  # ⚠️ image rclone/rclone ไม่ได้ bundle Web GUI มา → `rcd` ได้ 404
+  #    `serve http` = file listing + ดาวน์โหลด (อ่านอย่างเดียว ไม่มีปุ่มอัปโหลด)
+  # ⚠️ rclone cache รายการไดเรกทอรี — สร้าง bucket ใหม่แล้วไม่เห็น ให้ restart
+  rustfs-ui:
+    image: rclone/rclone:latest
+    container_name: rustfs-ui
+    logging: *logging
+    restart: unless-stopped
+    # ต้อง quote: ไม่งั้น YAML ตีความ s3rust: เป็น mapping
+    # ผูก 0.0.0.0 ชัดเจน ไม่งั้น default เป็น [::] (IPv6 อย่างเดียว) แล้วเข้าจาก host ไม่ได้
+    command: "serve http s3rust: --addr 0.0.0.0:8080"
+    ports:
+      - "127.0.0.1:8080:8080"    # ผูกแค่ localhost — UI ไม่มี auth
+    volumes:
+      - ./rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
+    networks: [infra]
+    depends_on: [rustfs]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # ══ Document server: Carbone 5.15.2 + ฟอนต์ราชการไทย ══════
+  # สร้างจากโปรเจกต์ 2docx.com (tests/Dockerfile)
+  #   FROM carbone/carbone-ee:full-5.15.2  + ฟอนต์ SIPA + LibreOffice 26.2
+  #
+  # ⚠️ config.json ตั้ง "authentication": false → API ไม่มี auth
+  #
+  # ── ทำไม CARBONE_STUDIO = "false" ────────────────────────────
+  #   หน้า Carbone Studio (`/#/home`) เปิดให้ทุกคนที่ยิงถึงพอร์ตนี้ได้
+  #   และมันไม่มี auth เลย ทั้งที่ระบบเรามี `/studio` ของตัวเองที่ใช้แทนแล้ว
+  #   → ปิดทิ้ง ไม่งั้นต่อให้เปิดโดเมนจริง ก็เปิด Studio ให้เข้าฟรี
+  #
+  #   ⚠️ `CARBONE_TEMPLATE_MANAGEMENT` ต้องเป็น "true" ต่อไป
+  #      ตัวนี้คุม REST API ที่ระบบเราใช้จริง ไม่ใช่แค่หน้าเว็บ:
+  #        · GET    /templates          (health check + หน้า /studio ของเรา)
+  #        · POST   /template           (ปุ่ม "อัปโหลดแม่แบบ")
+  #        · GET    /template/{id}      (ปุ่ม "ดาวน์โหลด")
+  #        · POST   /render/{id}        (งานเรนเดอร์ของ worker)
+  #      วัดแล้วว่าปิด Studio แล้วทั้ง 4 ยังทำงานครบ 8/8 (ดู BAND.md หัวข้อ 9)
+  #
+  # ── ทำไมไม่มี ports: ────────────────────────────────────────
+  #   เดิมเป็น `127.0.0.1:4000:4000` ตอนนี้**ตัดออกแล้ว**
+  #     · ตอนนี้ผู้กับ `172.19.0.0/16` เฉพาะในเครือข่าย Docker
+  #     · ทดสอบแล้วว่า host เข้าผ่าน IP ของ container ไม่ได้ (Docker Desktop WSL2)
+  #       → ตัดพอร์ตแล้ว = ข้ามจากเครื่องนี้ยิงเข้าไปไม่ได้เลยจริง ๆ
+  #     · ระบบที่รันอยู่จริง (api/worker ใน container) ยังใช้ได้ปกติ
+  #       เพราะคุยผ่านชื่อ `docserver` บน network `infra`
+  #
+  #   ⚠️ dev server ที่รัน**บน host** จะยิงไม่ถึง และแก้แล้วไม่มีช่องพอร์ตให้เปิด
+  #      ดูเหตุผลที่วัดได้ใน `../docgen-platform/README.md` → "docserver เข้าถึงได้ทางเดียว"
+  docserver:
+    image: xeefour/2docx-docserver:5.15.2
+    container_name: docserver
+    logging: *logging
+    restart: unless-stopped
+    command: ["webserver"]
+    environment:
+      CARBONE_STUDIO: "false"           # เดิม "true" — ปิดหน้า Studio (ไม่มี auth)
+      CARBONE_TEMPLATE_MANAGEMENT: "true"  # ห้ามปิด! ระบบเราใช้ REST API ตัวนี้
+    # ไม่มี ports: — ดูเหตุผลข้างบน
+    volumes:
+      # ⚠️ 4 โฟลเดอร์นี้ต้อง persist — เดิมไม่มี volume เลย
+      #    แม่แบบที่อัปโหลด (11 ไฟล์) กับ metadata.db จะหายทุกครั้งที่ recreate
+      - docserver-template:/app/template
+      - docserver-database:/app/database
+      - docserver-render:/app/render
+      - docserver-queue:/app/queue
+    networks: [infra]
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --max-time 4 http://127.0.0.1:4000/status || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ══ Observability: รวบรวม log ทุก container ไว้ที่เดียว ═══════
+  #
+  #  โครงสร้าง:  Alloy อ่าน log ผ่าน Docker API → ตัด noise → ส่งเข้า Loki
+  #  ไม่มีหน้าเว็บสำหรับอ่าน — อ่านผ่าน Loki HTTP API โดย LLM แทน
+  #  (ตัด Grafana ออกแล้ว 21 ต.ค. 2026: ผู้ใช้อ่าน log เองไม่ได้
+  #   ใช้ RAM 388 MB แต่ไม่ได้ประโยชน์ จึงตัดทิ้ง ดูเหตุผลใน
+  #   observability/README.md)
+  #  ค้นหาย้อนหลังได้ 14 วัน (ตั้งค่าใน observability/loki/loki-config.yaml)
+  #
+  #  Alloy ตัด mongo replication noise (~99.6% ของ log ทั้งเครื่อง) ทิ้ง
+  #  ก่อนส่งเข้า Loki — ถ้าเอาออก จะกลับไปเป็น ~1.3 ล้านบรรทัด/74 MB
+  #  แทน 200,000 บรรทัด/8 MB
+  #
+  #  ⚠️ Alloy ใช้ prefix "v" ใน tag (v1.20.1) ต่างจาก Loki ที่ไม่มี
+  #  ⚠️ Promtail เลิกสนับสนุนแล้ว (EOL 2 มี.ค. 2026) ตามเอกสาร Grafana
+  #
+  #  ดูสรุปสุขภาพ + ปัญหา:  tools\docker-logs.ps1 และ tools\log-report.ps1
+  #  ⚠️ ผูก 127.0.0.1 เท่านั้น เพราะ Loki เปิด auth_enabled: false
+  loki:
+    image: grafana/loki:3.7.8        # pin เวอร์ชัน อย่าใช้ latest
+    container_name: loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki-config.yaml", "-target=all"]
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./observability/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    networks: [infra]
+    # ⚠️ ตั้ง healthcheck ไม่ได้ — image เป็น distroless ไม่มี sh/wget/curl
+    #    (ลอง CMD-SHELL แล้ว container ขึ้น "unhealthy" เสมอ แม้ Loki จะปกติ)
+    #    เช็คเองจาก host:  curl http://127.0.0.1:3100/ready  →  "ready"
+    #    Loki ใช้เวลา ~30-45 วินาทีกว่าจะ ready · Alloy retry ให้เอง
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  alloy:
+    image: grafana/alloy:v1.20.1
+    container_name: alloy
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+      # ⚠️ ให้สิทธิ์อ่าน docker socket = สิทธิ์คุมเครื่องทั้งลำ
+      #    (RO กันแก้ config แต่ยังสร้าง/หยุด container ได้)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "127.0.0.1:12345:12345"     # UI/debug ของ Alloy เอง
+    networks: [infra]
+    depends_on:
+      # service_started ไม่ใช่ service_healthy: Loki เป็น distroless ตั้ง
+      # healthcheck ไม่ได้ และ Alloy จะ retry เองจนกว่า Loki จะพร้อม
+      loki: { condition: service_started }
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ══════════════════════════════════════════════════════════════
+  #  ตัวแอป 2docx.com — เดิมอยู่ที่ docgen-platform/docker-compose.yml
+  #  ย้ายเข้ามารวมที่นี่ตอน 2026-10-05 เพราะเป็นระบบเดียวกันจริง ๆ
+  #  (ย้ายเพราะต้องการ stack เดียวสำหรับ Dokploy ไม่ใช่สอง project)
+  #
+  #  ⚠️ `context:` ชี้ไป `../docgen-platform` เพราะโค้ดยังอยู่ที่นั่น
+  #     Docker อ่าน path สัมพัทธ์จาก **โฟลเดอร์ที่ไฟล์ compose อยู่** ไม่ใช่จาก cwd
+  #     → สั่งจากที่ไหนก็ได้ผลเหมือนกัน
+  #
+  #  ✅ ตอนรวมแล้ว `depends_on` ใช้ได้จริง (เดิมอยู่คนละ project ข้ามกันไม่ได้)
+  #     api/worker จึงรอ mongo-init + nats + valkey + rustfs + docserver ให้พร้อมก่อน
+  # ══════════════════════════════════════════════════════════════
+
+  # ── API: Fastify 5 + Zod 4 ───────────────────────────────────
+  api:
+    build:
+      context: ../docgen-platform
+      dockerfile: apps/api/Dockerfile
+    container_name: docgen-api
+    environment:
+      <<: *app-env
+      API_HOST: 0.0.0.0
+      API_PORT: 4000
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    # ── ไม่ publish พอร์ตออกเครื่อง ────────────────────────────
+    #
+    # เดิมเป็น ports: ["4001:4000"] ซึ่ง Docker ผูกกับ 0.0.0.0
+    #   → ใครใน LAN ก็ยิง http://192.168.0.106:4001 ได้ (วัดจริงแล้วตอบ 200)
+    #
+    # ตอนนี้เข้าผ่าน gateway ตัวเดียว และ API กับ web คุยกันผ่าน network `infra`
+    #
+    # ถ้าจะ debug จาก host ให้สตาร์ตด้วย override:
+    #   docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d
+    networks: [infra]
+    depends_on:
+      # ต้องรอ mongo-init เสร็จก่อน ไม่งั้น API crash ตอน boot แล้ว restart วน
+      # (เคยเป็นแบบนี้เพราะข้าม project รอไม่ได้)
+      mongo-init: { condition: service_completed_successfully }
+      nats: { condition: service_started }
+      valkey: { condition: service_started }
+      rustfs: { condition: service_started }
+      docserver: { condition: service_started }
+    logging: *logging
+    restart: unless-stopped
+
+  # ── Worker: ดึงงานจาก NATS → เรนเดอร์ผ่าน docserver → เก็บลง S3 ──
+  worker:
+    build:
+      context: ../docgen-platform
+      dockerfile: apps/worker/Dockerfile
+    container_name: docgen-worker
+    # ใช้บล็อกเดียวกับ API — ดูเหตุผลที่ `x-app-env` ข้างบน
+    environment:
+      <<: *app-env
+    networks: [infra]
+    depends_on:
+      mongo-init: { condition: service_completed_successfully }
+      nats: { condition: service_started }
+      valkey: { condition: service_started }
+      rustfs: { condition: service_started }
+      docserver: { condition: service_started }
+    logging: *logging
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 1G
+
+  # ── Web UI: Next.js ──────────────────────────────────────────
+  #  ย้ายเข้า Docker เพื่อให้ gateway ชี้เข้าได้ใน network เดียวกัน
+  web:
+    build:
+      context: ../docgen-platform
+      dockerfile: apps/web/Dockerfile
+    container_name: docgen-web
+    environment:
+      NODE_ENV: production
+      # ⚠️ Next เรียก `rewrites()` ตอน `next build` แล้วฝังผลลัพธ์ลง build output
+      #    แก้ค่านี้ตอน runtime จึงไม่มีผล ต้อง rebuild ใหม่
+      #    ค่าเดียวกันอยู่ใน ARG ของ Dockerfile แล้ว
+      API_ORIGIN: http://api:4000
+    networks: [infra]
+    depends_on:
+      api: { condition: service_started }
+    logging: *logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ── Gateway: ทางเข้าเดียวของทั้งระบบ ─────────────────────────
+  #  แยกบริการตาม prefix ของ path — ดูตารางเส้นทางในไฟล์ Caddyfile
+  #
+  #  ⚠️ พอร์ต 8090 ผูกแค่ 127.0.0.1 = เข้าถึงจาก LAN ไม่ได้
+  #     มีไว้ให้ debug จากเครื่องนี้ได้ (`curl http://127.0.0.1:8090/healthz`)
+  #     ตอน production ตัดบรรทัดนี้ทิ้งได้เลย ไม่มีผลกับการทำงาน
+  #     เพราะ Dokploy map โดเมนเข้าที่พอร์ต 80 ของ container โดยตรง
+  gateway:
+    image: caddy:2.10-alpine
+    container_name: docgen-gateway
+    volumes:
+      - ../docgen-platform/gateway/Caddyfile:/etc/caddy/Caddyfile:ro
+      # cert ของ Let's Encrypt — ถ้าไม่เก็บไว้ ทุกครั้งที่ restart ต้องขอใหม่
+      - docgen-gateway-data:/data
+      - docgen-gateway-config:/config
+    ports:
+      - "127.0.0.1:8090:80"
+    networks: [infra]
+    depends_on:
+      web: { condition: service_started }
+      api: { condition: service_started }
+    logging: *logging
+    restart: unless-stopped
+
+  # ══ Cloudflare Tunnel ════════════════════════════════════════
+  # อยู่ใต้ profile เพราะ CF_TUNNEL_TOKEN ยังไม่ได้ใส่
+  # ใส่ token แล้วสั่ง:  docker compose --profile tunnel up -d
+  #
+  # route ทั้ง NATS และ Valkey ต้องตั้งใน Cloudflare Zero Trust dashboard
+  # (โหมด token เป็น remotely-managed — ingress ในไฟล์ถูกข้าม)
+  #   nats.yourdomain.com   -> tcp://nats:4222
+  #   cache.yourdomain.com -> tcp://valkey:6379
+  #   storage.yourdomain.com -> http://rustfs-ui:8080
+  #   s3.yourdomain.com    -> http://rustfs:9000
+  #   mongo.yourdomain.com -> tcp://mongo-1:27017   ⚠️ ยังไม่มี auth อย่างเดียว
+  # แล้วสร้าง Access Application ครบทุก hostname
+  #
+  # ── เรื่องความปลอดภัยที่ยังไม่จัดการ ─────────────────────────
+  #
+  # 1. mongod ยังไม่ได้ใส่ --auth → ใครก็เข้า DB ได้ (ตอนนี้ผูกแค่ 127.0.0.1 ก่อน)
+  #    ถ้าจะเปิด ต้องทำ 3 อย่างพร้อมกัน:
+  #      a) สร้าง keyfile — openssl rand -base64 756 > mongo-keyfile (chmod 400)
+  #      b) ใส่ --keyFile /etc/mongo-keyfile ใน command ของทั้ง 3 node
+  #         (ใส่ --keyFile แล้ว MongoDB เปิด internal auth เอง ไม่ต้องใส่ --auth)
+  #      c) mount keyfile เข้า /etc/mongo-keyfile:ro
+  #    ทำทีละ node ไม่ได้ — ต้องเปิดพร้อมกันทั้ง 3 ไม่งั้น node ที่ยังไม่มี keyfile
+  #    จะหา primary ไม่เจอ แล้ว replica set พัง
+  #
+  # 2. docserver ตั้ง "authentication": false → REST API ไม่มี auth
+  #    สถานะตอนนี้ (แก้แล้ว 2026-10-05):
+  #      · หน้าเว็บ Carbone Studio ปิดไปแล้ว (CARBONE_STUDIO=false)
+  #      · ผูกไว้แค่ 127.0.0.1 → เข้าจาก LAN หรือเครื่องอื่นไม่ได้
+  #    เหลือความเสี่ยงเดียว: REST API ยังไม่มี auth ถ้าใครรันบนเครื่องนี้ได้
+  #    และยิงเข้ามาตรง ๆ (เช่น docker exec หรือพอร์ตที่เปิดผิด)
+  #    ทางแก้ที่เหลือคือใส่ API key ใน config.json ตอน build image
+  # ─────────────────────────────────────────────────────────────
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    profiles: [tunnel]
+    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN:?ใส่ CF_TUNNEL_TOKEN ใน .env ก่อน}
+    networks: [infra]
+    depends_on: [nats, valkey, rustfs]
+
+networks:
+  # ยังเป็น external แม้ตอนนี้รวมเป็น project เดียวแล้ว
+  #   เหตุผล: `docker compose down` จะได้ไม่ลบ network ทิ้ง
+  #   ถ้าเปลี่ยนเป็น network ปกติ คำสั่ง down จะลบ `infra` ด้วย
+  #   และ container ของ project อื่นที่ join อยู่จะหลุดเครือข่ายทันที
+  #
+  # สร้างไว้ครั้งเดียวตอนติดตั้ง:  docker network create infra
+  infra:
+    name: infra
+    external: true
+
+volumes:
+  nats-data:
+    name: nats-data
+  # ชื่อตายตัว — ห้ามเปลี่ยน (ดูคำอธิบายข้างบน mongo-1)
+  mongo1-data:
+    name: docgen-mongo1
+  mongo2-data:
+    name: docgen-mongo2
+  mongo3-data:
+    name: docgen-mongo3
+  rustfs-data:
+    name: rustfs-data
+  loki-data:
+    name: loki-data
+  alloy-data:
+    name: alloy-data
+  docserver-template:
+    name: docserver-template
+  docserver-database:
+    name: docserver-database
+  docserver-render:
+    name: docserver-render
+  docserver-queue:
+    name: docserver-queue
+  # cert ของ Caddy — ชื่อเดิม เคยอยู่ในไฟล์ของ docgen-platform
+  # ย้ายมาไฟล์นี้แต่ name: เดิมไว้ → volume เดิมถูกใช้ต่อ ไม่ต้องขอ cert ใหม่
+  docgen-gateway-data:
+    name: docgen-gateway-data
+  docgen-gateway-config:
+    name: docgen-gateway-config

@@ -70,6 +70,14 @@ let seq = 0
 const waiting = new Map()
 /** เก็บทุก response ที่โหลดตอนเปิดหน้า เพื่อหา 4xx/5xx */
 const responses = []
+/**
+ * เก็บข้อความจาก console ของเบราว์เซอร์
+ * ⚠️ ต้องเก็บเพราะการละเมิด CSP **ไม่ทำให้ request ล้มเหลว**
+ *   มันแค่บล็อกการทำงานของ JS ส่วนหนึ่ง → ไม่มี 4xx/5xx ให้เห็น
+ *   และหน้ายังโหลด "สำเร็จ" ตามที่เกณฑ์เดิมวัด
+ *   เจอแล้วตอนผู้ใช้รายงาน: ทุกเกณฑ์ผ่านหมด แต่หน้าขาวและ console เต็ม error
+ */
+const securityLog = []
 
 const send = (m, p = {}) =>
   new Promise((resolve, reject) => {
@@ -84,6 +92,21 @@ ws.addEventListener('message', (ev) => {
     responses.push({ url: m.params.response.url, status: m.params.response.status })
     return
   }
+  // Chrome รายงานการละเมิด CSP ผ่าน Log domain ด้วย source = "security"
+  if (m.method === 'Log.entryAdded') {
+    const e = m.params.entry
+    if (e.source === 'security' || /Content Security Policy/i.test(e.text ?? '')) {
+      securityLog.push({ level: e.level, source: e.source, text: e.text })
+    }
+    return
+  }
+  if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') {
+    const text = (m.params.args ?? []).map((a) => a.value ?? a.description ?? '').join(' ')
+    if (/Content Security Policy|violates the following/i.test(text)) {
+      securityLog.push({ level: 'error', source: 'console', text })
+    }
+    return
+  }
   const s = waiting.get(m.id)
   if (!s) return
   waiting.delete(m.id)
@@ -92,6 +115,7 @@ ws.addEventListener('message', (ev) => {
 await new Promise((r) => ws.addEventListener('open', r))
 await send('Page.enable')
 await send('Runtime.enable')
+await send('Log.enable')
 await send('Network.enable')
 await send('Network.setCacheDisabled', { cacheDisabled: true })
 
@@ -114,6 +138,7 @@ const waitFor = async (expr, ms = 30000) => {
 for (const t of TARGETS) {
   console.log(`\n── ${t.name} (${t.base}) ────────────────────────────────\n`)
   responses.length = 0
+  securityLog.length = 0
 
   // อุ่น: Next dev คอมไพล์ route ครั้งแรกช้า
   await send('Page.navigate', { url: `${t.base}/docs` })
@@ -203,6 +228,23 @@ for (const t of TARGETS) {
   const specResp = responses.find((r) => r.url.includes('/json'))
   check('Swagger โหลดสเปกจาก URL ที่ถูกต้อง (ลงท้ายด้วย /json)', /\/json$/.test(specUrl ?? ''), specUrl ?? '—')
   check('สเปกตอบเป็น JSON ไม่ใช่ HTML', specResp?.status === 200, specResp ? `${specResp.status} · ${specResp.url.split('?')[0]}` : 'ไม่เห็นคำขอสเปก')
+
+  // ── ชั้น 4 · CSP ต้องไม่บล็อกหน้าตัวเอง ───────────────────────────
+  /**
+   * ⚠️ บั๊กนี้**ไม่ทำให้เกณฑ์ข้างบนตกเลย** เพราะไม่มี request ไหนล้มเหลว
+   *   หน้ายังโหลดได้ ยังเห็น 72 endpoint แต่สไตล์ถูกบล็อกทิ้งเงียบ ๆ
+   *   ผู้ใช้เจอเป็น console เต็ม error และหน้าดูเพี้ยน
+   *   → ต้องมีเกณฑ์จับเอง ไม่งั้นจะผ่านทั้งที่พัง
+   */
+  check('ไม่มีการละเมิด CSP ตอนเปิดหน้า', securityLog.length === 0, securityLog.length ? securityLog.slice(0, 2).map((s) => s.text.slice(0, 110)).join(' | ') : 'console สะอาด')
+
+  // ตรวจ header จริงด้วย fetch — ยืนยันว่าผ่อนแค่ style-src และที่อื่นยังเข้ม
+  const csp = await fetch(`${t.base}/docs`, { redirect: 'manual' }).then((r) => r.headers.get('content-security-policy') ?? '')
+  const styleSrc = (csp.match(/style-src([^;]*)/)?.[1] ?? '').trim()
+  check('CSP ให้ inline style ได้ (Swagger inject style ตอนรัน)', styleSrc.includes("'unsafe-inline'"), styleSrc || 'ไม่มี directive style-src')
+  check('CSP ยังบังคับ script-src เข้มอยู่', /script-src\s+'self'\s*(;|$)/.test(csp) && !/script-src[^;]*unsafe-inline/.test(csp), (csp.match(/script-src[^;]*/)?.[0] ?? 'ไม่มี').trim())
+  check('CSP ยังบังคับ object-src เป็น none', /object-src\s+'none'/.test(csp), (csp.match(/object-src[^;]*/)?.[0] ?? 'ไม่มี').trim())
+  check('CSP ยังบังคับ frame-ancestors เข้มอยู่', /frame-ancestors\s+'self'/.test(csp), (csp.match(/frame-ancestors[^;]*/)?.[0] ?? 'ไม่มี').trim())
 
   const { data } = await send('Page.captureScreenshot', { format: 'png' })
   writeFileSync(join(OUT, `${t.name}.png`), Buffer.from(data, 'base64'))

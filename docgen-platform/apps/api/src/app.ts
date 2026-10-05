@@ -21,6 +21,8 @@ import { s3Plugin } from './plugins/s3.js'
 import { documentRoutes } from './modules/documents/route.js'
 import { templateRoutes } from './modules/templates/route.js'
 import { studioRoutes } from './modules/studio/route.js'
+import { accountRoutes } from './modules/account/route.js'
+import { teamRoutes } from './modules/teams/route.js'
 import { peopleRoutes } from './modules/people/route.js'
 import { healthRoutes } from './modules/health/route.js'
 import { authRoutes } from './modules/auth/route.js'
@@ -138,11 +140,42 @@ export async function buildApp(): Promise<FastifyInstance> {
   // spec เป็น JSON — เอาไป generate client หรือยิงด้วย Postman ได้
   app.get('/openapi.json', { schema: { hide: true } }, async () => app.swagger())
 
-  // UI สำหรับลองยิง API ด้วยมือ
+  /**
+   * UI สำหรับลองยิง API ด้วยมือ
+   *
+   * ⚠️ `staticCSP` — เขียนเป็น object แทน `true` เพราะค่าเริ่มต้นของไลบรารี
+   *   สร้าง `style-src 'self' https:` **ไม่มี 'unsafe-inline'**
+   *   (ดู `node_modules/@fastify/swagger-ui/static/csp.json` ที่ค่า style เป็น `[]`)
+   *   แต่ตัว Swagger UI เองกลับ inject inline style ตอนรัน (React ใส่ `style` attribute)
+   *   → เบราว์เซอร์บล็อกทิ้ง ผู้ใช้เห็น error เต็ม console
+   *     "Applying inline style violates the following Content Security Policy directive"
+   *
+   *   ⚠️ เขียน object เองแทน `transformStaticCSP` เพราะไม่อยากผูกกับข้อความ
+   *      ค่าเริ่มต้นของไลบรารี (ถ้าไลบรารีเปลี่ยนรูปแบบ string จะพังเงียบ ๆ)
+   *
+   * ⚠️ ผ่อนแค่ `style-src` เท่านั้น ที่เหลือยังเข้มเท่าเดิมทุกข้อ
+   *   และ hook นี้อยู่ใน scope ของ plugin → กระทบเฉพาะ route `/docs`
+   *   route `/api/*` ไม่มี CSP อยู่แล้ว (ดู `helmet` ด้านบนที่ปิดไว้)
+   *
+   *   ทางเลือกอื่นที่เข้มกว่า (hash / nonce) ใช้ไม่ได้จริง
+   *   เพราะ Swagger สร้าง style ตอนรันแบบไม่รู้ค่าล่วงหน้า
+   */
   await app.register(swaggerUi, {
     routePrefix: '/docs',
     uiConfig: { docExpansion: 'list', deepLinking: true },
-    staticCSP: true,
+    staticCSP: {
+      'default-src': ["'self'"],
+      'base-uri': ["'self'"],
+      'font-src': ["'self'", 'https:', 'data:'],
+      'frame-ancestors': ["'self'"],
+      'img-src': ["'self'", 'data:', 'validator.swagger.io'],
+      'object-src': ["'none'"],
+      'script-src': ["'self'"],
+      'script-src-attr': ["'none'"],
+      // ⚠️ ต้องมี 'unsafe-inline' เพราะ Swagger inject style attribute ตอนรัน
+      'style-src': ["'self'", "'unsafe-inline'"],
+      'upgrade-insecure-requests': [],
+    },
   })
 
   await app.register(
@@ -150,6 +183,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(documentRoutes)
       await api.register(templateRoutes)
       await api.register(studioRoutes)
+      await api.register(accountRoutes)
+      await api.register(teamRoutes)
       await api.register(peopleRoutes)
       await api.register(healthRoutes)
     },

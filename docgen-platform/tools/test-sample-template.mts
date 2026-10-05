@@ -50,7 +50,7 @@ for (const w of ['ผู้รับ', 'เรื่อง', 'เลขที่
 check('ไม่มี alias (Carbone 5 ไม่รองรับ ถ้ามีผู้ใช้จะได้ข้อความ {…} ดิบ)', !xml.includes('รหัสเอกสาร'))
 
 console.log('\n[3] เรนเดอร์จริงกับ docserver แล้วเอกสารต้องไม่ซ้ำ/ไม่เพี้ยน')
-// ⚠️ ถ้า docserver ยิงไม่ถึง แปลว่ายังไม่ได้เปิดสะพราน → npm run dev:docserver
+// ⚠️ docserver ไม่มีพอร์ต → host ยิงไม่ถึง ต้องรันจากในเครือข่าย Docker
 const base = (process.env.DOCSERVER_URL ?? 'http://127.0.0.1:4000').replace(/\/$/, '')
 const H = {
   Authorization: `Bearer ${process.env.DOCSERVER_API_KEY}`,

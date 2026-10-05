@@ -1,6 +1,7 @@
 ﻿// ⚠️ อ่านปลายทางจาก DOCSERVER_URL เหมือนสคริปต์อื่นทั้งหมด
-//    (เดิมฮาร์ดโค้ด http://127.0.0.1:4000 ซึ่งพอร์ตนี้ถูกปิดแล้วตอน 2026-10-05
-//     → ถ้าต้องรันสคริปต์นี้ ให้เปิดสะพรานก่อน: npm run dev:docserver)
+//    (เดิมฮาร์ดโค้ด http://127.0.0.1:4000 ซึ่งพอร์ตนี้ถูกปิดแล้วตอน 2026-10-05)
+//    docserver ไม่มีพอร์ต → host ยิงไม่ถึง ต้องรันจากในเครือข่าย Docker
+//    เช่น: docker exec docgen-worker-1 node <สคริปต์นี้>
 const BASE=(process.env.DOCSERVER_URL||'http://127.0.0.1:4000').replace(/\/$/,'')
 const H={Authorization:'Bearer '+process.env.DOCSERVER_API_KEY,'carbone-version':'5','Content-Type':'application/json'}
 const tpl=(b)=>Buffer.from(`<html><body>${b}</body></html>`).toString('base64')

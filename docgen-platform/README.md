@@ -154,28 +154,34 @@ npm run dev:web        # หรือ cd apps/web && npm run dev
 
 ตรวจเองได้ด้วย `node logs/check-no-lan-exposure.mjs` (13 ข้อ)
 
-## เปิด docserver ให้ dev ใช้ชั่วคราว
+## docserver เข้าถึงได้ทางเดียว — จากในเครือข่าย Docker
 
-`dokploy-infra/docker-compose.yml` **ไม่ผูกพอร์ตให้ docserver เลย** ตั้งแต่ 2026-10-05
-เพราะ Carbone ไม่มี auth — ทางเข้าเดียวคือชื่อ `docserver` ในเครือข่าย Docker
+`dokploy-infra/docker-compose.yml` **ไม่ผูกพอร์ตให้ docserver เลย** (ตั้งแต่ 2026-10-05)
+เพราะ Carbone ไม่มี auth — ไม่มีช่องให้เปิดพอร์ตนี้ออกไปข้างนอก
 
-ผลคือ process ที่รัน**บน host** (dev API `:4001`, dev worker, สคริปต์ใน `tools/`)
-ยิง `http://127.0.0.1:4000` ไม่ได้ จึงต้องเปิด "สะพราน" ตอนต้องใช้:
+| ผู้เรียก | เข้าได้ไหม | ผ่านอะไร |
+|---|---|---|
+| `api` / `worker` ใน container | ✅ | ชื่อ `docserver` ในเครือข่าย `infra` |
+| gateway (ตรวจสุขภาพ) | ✅ | ยิงผ่าน `api` เสมอ ไม่ได้ยิงตรง |
+| process บน host (dev API `:4001`, `tools/*.mjs`) | ❌ | — |
+| เครื่องอื่นใน LAN / tailnet | ❌ | — |
 
-```bash
-npm run dev:docserver          # เปิด  (container socat ฟัง 127.0.0.1:4000 → docserver:4000)
-npm run dev:docserver:stop     # ปิด
-```
+> ⚠️ **host เข้าไม่ถึง container แม้แต่ทางอ้อม** — ทดสอบจริง 3 ทาง ล้มเหลวทั้งหมด
+> (ยิง IP `172.19.0.8` · ยิงชื่อ `docserver` · ยิง gateway ตรง ๆ ที่ port 80)
+> เพราะ Docker Desktop ใช้ WSL2 ซึ่งแยก network namespace ของ host ออกจากของ container
+> ทางเดียวที่จะออกจากเครื่องได้คือ **พอร์ตที่ publish** เท่านั้น ซึ่งไม่มีแล้ว
 
-- เปิดซ้ำได้ ถ้ายังทำงานอยู่จะบอกว่าไม่ต้องทำอะไร
-- ถ้า docserver ยังไม่ healthy สคริปต์จะไม่เปิดให้ (กันไว้ก่อนว่าปลายทางไม่มี)
-- ปิดสะพรานแล้ว = กลับเป็นปิดสนิททันที ไม่ต้องแตะ compose
+### ผลกระทบต่อ dev บน host
 
-> ระบบที่รันจริง (gateway + api + worker ใน container) **ไม่ต้องใช้สะพราน**
-> เพราะคุยกันผ่านเครือข่ายอยู่แล้ว — ตรวจได้จาก `GET /api/health` ว่า docserver = `up`
+ระบบที่รันจริงผ่าน gateway ไม่กระทบเลย (`/api/health` ยังขึ้น 6/6)
+ส่วน dev บน host ที่รัน API ที่ `:4001` จะยิง docserver ไม่ถึง จึง:
 
-ไม่ได้ใช้ IP ของ container แทนเพราะทดสอบแล้วว่า host ยิง `172.19.x.x` ไม่ถึง
-(Docker Desktop ใช้ WSL2 ซึ่งแยก network namespace) และ IP ก็เปลี่ยนทุกครั้งที่ recreate
+- `GET /api/health` ที่ `:4001` ตอบ **503** เพราะเช็ค docserver ไม่ผ่าน
+- งานที่ต้องเรนเดอร์ (อัปโหลดแม่แบบ ดาวน์โหลด ภาพย่อ เอกสาร) ที่ยิงตรงจาก `:4001` จะไม่ผ่าน
+- สคริปต์ใน `tools/` ที่ยิง `DOCSERVER_URL` ต้องรันจากในเครือข่ายเท่านั้น
+  (เช่น `docker exec docgen-worker-1 node script.mjs`)
+
+**ถ้าต้องการทดสอบส่วนที่ต้องใช้ docserver ให้ใช้ gateway ที่ `:8090`** ซึ่งเป็นระบบจริงอยู่แล้ว
 
 ## `/docs` เปิดสาธารณ — ตั้งใจ
 

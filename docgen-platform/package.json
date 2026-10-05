@@ -16,6 +16,8 @@
     "dev:shared": "tsc -b --watch --preserveWatchOutput packages/shared",
     "dev:worker": "npm run dev -w @docgen/worker",
     "dev:web": "npm run dev -w @docgen/web",
+    "dev:docserver": "node --env-file=.env tools/docserver-bridge.mjs",
+    "dev:docserver:stop": "node --env-file=.env tools/docserver-bridge.mjs stop",
     "typecheck": "tsc -b --pretty packages/shared apps/api apps/worker",
     "clean": "rimraf packages/shared/dist apps/api/dist apps/worker/dist apps/web/.next"
   },

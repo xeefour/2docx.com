@@ -1,4 +1,8 @@
-﻿const H={Authorization:'Bearer '+process.env.DOCSERVER_API_KEY,'carbone-version':'5','Content-Type':'application/json'}
+﻿// ⚠️ อ่านปลายทางจาก DOCSERVER_URL เหมือนสคริปต์อื่นทั้งหมด
+//    (เดิมฮาร์ดโค้ด http://127.0.0.1:4000 ซึ่งพอร์ตนี้ถูกปิดแล้วตอน 2026-10-05
+//     → ถ้าต้องรันสคริปต์นี้ ให้เปิดสะพรานก่อน: npm run dev:docserver)
+const BASE=(process.env.DOCSERVER_URL||'http://127.0.0.1:4000').replace(/\/$/,'')
+const H={Authorization:'Bearer '+process.env.DOCSERVER_API_KEY,'carbone-version':'5','Content-Type':'application/json'}
 const tpl=(b)=>Buffer.from(`<html><body>${b}</body></html>`).toString('base64')
 const data={ วันที่:'2026-09-30T00:00:00.000Z' }
 const cases=[
@@ -10,10 +14,10 @@ const cases=[
 for(const lang of ['en-us','th-th']){
   console.log(`\n───── ${lang} ─────`)
   for(const [label,tag] of cases){
-    const r=await fetch('http://127.0.0.1:4000/render/template',{method:'POST',headers:H,
+    const r=await fetch(BASE+'/render/template',{method:'POST',headers:H,
       body:JSON.stringify({template:tpl(`<p>${tag}</p>`),data,lang,timezone:'Asia/Bangkok',convertTo:'html'})})
     const j=await r.json(); if(!j.success){console.log(`  ${label.padEnd(16)} → ERROR`);continue}
-    const res=await fetch(`http://127.0.0.1:4000/render/${j.data.renderId}`,{headers:H})
+    const res=await fetch(`${BASE}/render/${j.data.renderId}`,{headers:H})
     console.log(`  ${label.padEnd(16)} → ${(await res.text()).replace(/<[^>]+>/g,'').trim()}`)
   }
 }

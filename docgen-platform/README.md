@@ -119,6 +119,29 @@ npm run dev:web        # หรือ cd apps/web && npm run dev
 > cookie ที่ Casdoor ตั้งไว้ผูกกับ host ถ้าไม่ตรงกันจะล็อกอินไม่ได้
 > (cookie ไม่แยกพอร์ต — `:4001` กับ `:3000` ใช้ cookie ชุดเดียวกันได้)
 
+## เปิด docserver ให้ dev ใช้ชั่วคราว
+
+`dokploy-infra/docker-compose.yml` **ไม่ผูกพอร์ตให้ docserver เลย** ตั้งแต่ 2026-10-05
+เพราะ Carbone ไม่มี auth — ทางเข้าเดียวคือชื่อ `docserver` ในเครือข่าย Docker
+
+ผลคือ process ที่รัน**บน host** (dev API `:4001`, dev worker, สคริปต์ใน `tools/`)
+ยิง `http://127.0.0.1:4000` ไม่ได้ จึงต้องเปิด "สะพราน" ตอนต้องใช้:
+
+```bash
+npm run dev:docserver          # เปิด  (container socat ฟัง 127.0.0.1:4000 → docserver:4000)
+npm run dev:docserver:stop     # ปิด
+```
+
+- เปิดซ้ำได้ ถ้ายังทำงานอยู่จะบอกว่าไม่ต้องทำอะไร
+- ถ้า docserver ยังไม่ healthy สคริปต์จะไม่เปิดให้ (กันไว้ก่อนว่าปลายทางไม่มี)
+- ปิดสะพรานแล้ว = กลับเป็นปิดสนิททันที ไม่ต้องแตะ compose
+
+> ระบบที่รันจริง (gateway + api + worker ใน container) **ไม่ต้องใช้สะพราน**
+> เพราะคุยกันผ่านเครือข่ายอยู่แล้ว — ตรวจได้จาก `GET /api/health` ว่า docserver = `up`
+
+ไม่ได้ใช้ IP ของ container แทนเพราะทดสอบแล้วว่า host ยิง `172.19.x.x` ไม่ถึง
+(Docker Desktop ใช้ WSL2 ซึ่งแยก network namespace) และ IP ก็เปลี่ยนทุกครั้งที่ recreate
+
 ## `/docs` เปิดสาธารณ — ตั้งใจ
 
 Swagger UI ที่ `/docs` **ไม่ต้อง login** เป็นการตัดสินใจ ไม่ใช่ลืม
@@ -2342,7 +2365,7 @@ node --env-file=.env tools/render-check.mjs      # เรนเดอร์จ�
 ต่างจาก `.app` ที่ HSTS บังคับ HTTPS และเป็น TLD จริงของ Google — Tailscale ไม่มีปัญหาทั้งสองอย่าง
 
 ```bash
-tailscale serve --bg --https=443 --set-path=/        http://127.0.0.1:4000
+tailscale serve --bg --https=443 --set-path=/        http://127.0.0.1:3000
 tailscale serve --bg --https=443 --set-path=/gateway http://127.0.0.1:4001
 tailscale serve --bg --https=443 --set-path=/storage  http://127.0.0.1:8080
 tailscale serve --bg --https=8443                     http://127.0.0.1:9000
@@ -2350,6 +2373,11 @@ tailscale serve --bg --https=8443                     http://127.0.0.1:9000
 tailscale serve status     # ดูทั้งหมด
 tailscale serve reset      # ถอดออกทั้งหมด
 ```
+
+> 🚫 **อย่าผูก docserver เข้า tailnet**
+> ตั้ง `"authentication": false` และ REST API ไม่มี auth → ใครก็เรียกเรนเดอร์ได้
+> ตอนนี้ไม่มีพอร์ตผูกไว้แล้ว ผูกเข้า tunnel = เปิดช่องใหม่โดยไม่จำเป็น
+> ถ้าจำเป็นต้องเข้าจากเครื่องอื่นจริง ๆ ให้ใช้ `ssh -L 4000:docserver:4000 <host>` แทน
 
 | URL | ไปที่ |
 |---|---|
@@ -2361,10 +2389,13 @@ tailscale serve reset      # ถอดออกทั้งหมด
 | `https://<host>.ts.net/storage/` | rustfs-ui (ดูไฟล์ใน S3) |
 | `https://<host>.ts.net:8443/documents/...` | RustFS ตรง ๆ (สำหรับ presigned URL) |
 
-> ⚠️ **Carbone Studio เดิมถูกถอดออกจาก tailnet แล้ว** เหลือเข้าถึงที่ `localhost:4000` เท่านั้น
-> เพราะ root ของโดเมนถูกให้เว็บของเราแล้ว และ `carbone-studio.js` ยิง API ด้วย absolute path
-> (`/render/` `/template/`) ถ้าย้ายไป subpath จะพังทันที
-> ใช้ **2docx Studio** แทน — ดูที่ `## 2docx Studio`
+> ⚠️ **Carbone Studio ถูกปิดไปแล้ว (2026-10-05)** — ไม่ต้อง (และไม่ควร) ผูกเข้า tailnet
+> ผู้ใช้มี `/studio` ของตัวเองที่ใช้แทนแล้ว ส่วนตัว Carbone ไม่มี auth เลย
+> → ตั้ง `CARBONE_STUDIO: "false"` ใน `dokploy-infra/docker-compose.yml` ปิดหน้าเว็บทิ้ง
+> → **ตัด `ports:` ของ docserver ออกด้วย** ตอนนี้ไม่มีพอร์ตผูกไว้เลย
+> ที่เหลือคือ REST API ที่ระบบเราเรียกใช้อยู่ (`/templates` `/template` `/render`)
+> เข้าถึงได้จาก container ในเครือข่าย `infra` เท่านั้น
+> ดู `## เปิด docserver ให้ dev ใช้ชั่วคราว` สำหรับกรณีที่รันบน host
 
 ### presigned URL ต้องชี้ tailnet ไม่ใช่ localhost
 

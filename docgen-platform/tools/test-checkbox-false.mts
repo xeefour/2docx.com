@@ -82,6 +82,7 @@ console.log('\n[1] normalizeCarboneData — false เป็น "" แต่ท�
 
 // ── [2] docserver จริง — การแปลงเปลี่ยนผลลัพธ์จริงไหม ──────────────
 console.log('\n[2] docserver 5.15.2 จริง — ค่า false ดิบพิมพ์คำว่า "false" จริงหรือเปล่า')
+// ⚠️ ถ้า docserver ยิงไม่ถึง แปลว่ายังไม่ได้เปิดสะพราน → npm run dev:docserver
 const base = (process.env.DOCSERVER_URL ?? 'http://127.0.0.1:4000').replace(/\/$/, '')
 const H = {
   Authorization: `Bearer ${process.env.DOCSERVER_API_KEY}`,

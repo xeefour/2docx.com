@@ -36,7 +36,7 @@ export const PANE_PARAM = 'pane'
  *   /studio          → null
  *   /studio/         → null   (มี slash ท้าย)
  *   /studio/15210…   → '15210…'
- *   /docs            → null   (ไม่ใช่หน้า studio)
+ *   /apis            → null   (ไม่ใช่หน้า studio)
  */
 export function readTemplateKey(pathname: string): string | null {
   const path = pathname.replace(/\/+$/, '') // ตัด slash ท้ายทิ้ง

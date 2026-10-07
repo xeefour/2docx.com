@@ -51,16 +51,16 @@ export default {
       // ไม่งั้นผู้ใช้กด "เข้าสู่ระบบ" แล้วได้ 404 จาก Next
       { source: '/auth/:path*', destination: `${API_ORIGIN}/auth/:path*` },
       // เอกสาร API ให้เปิดจากเว็บได้โดยไม่ต้องจำพอร์ต
-      // ⚠️ ต้องเป็น `/docs/:path*` ไม่ใช่ `/docs`
+      // ⚠️ ต้องเป็น `/apis/:path*` ไม่ใช่ `/apis`
       //   เพราะหน้า Swagger UI ไม่ได้โหลดไฟล์เดียว
-      //   HTML ที่ `/docs` จะดึงอีก 7 ไฟล์จาก `/docs/static/…` (css/js/favicon)
-      //   ถ้า rewrite แค่ `/docs` ไฟล์เหล่านั้นจะหลุดไปโดน Next ตอบ 404
+      //   HTML ที่ `/apis` จะดึงอีก 7 ไฟล์จาก `/apis/static/…` (css/js/favicon)
+      //   ถ้า rewrite แค่ `/apis` ไฟล์เหล่านั้นจะหลุดไปโดน Next ตอบ 404
       //   → ผู้ใช้เห็นหน้าขาวพร้อม error ใน console
-      //   (เจอตอนเปิด localhost:3000/docs · HTML 200 แต่ static 404 ทั้งหมด)
+      //   (เจอตอนเปิด localhost:3000/apis · HTML 200 แต่ static 404 ทั้งหมด)
       //
-      //   `:path*` คือศูนย์หรือมากส่วน จึงครอบทั้ง `/docs` และ `/docs/static/…`
-      //   ถ้าน้อยกว่า 0 segment จะไม่ match `/docs` แล้วหน้าเสียทันที
-      { source: '/docs/:path*', destination: `${API_ORIGIN}/docs/:path*` },
+      //   `:path*` คือศูนย์หรือมากส่วน จึงครอบทั้ง `/apis` และ `/apis/static/…`
+      //   ถ้าน้อยกว่า 0 segment จะไม่ match `/apis` แล้วหน้าเสียทันที
+      { source: '/apis/:path*', destination: `${API_ORIGIN}/apis/:path*` },
       { source: '/openapi.json', destination: `${API_ORIGIN}/openapi.json` },
     ]
   },

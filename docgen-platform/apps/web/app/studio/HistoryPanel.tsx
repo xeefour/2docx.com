@@ -138,8 +138,11 @@ export default function HistoryPanel({ templateKey }: { templateKey: string }) {
         />
       </div>
 
-      {/* ── รายการล่าสุด ── */}
-      <div className="card" data-testid="history-docs" style={{ overflow: 'hidden' }}>
+      {/*
+       * ── รายการล่างสุด ──
+       * `padding: 0` — หัวข้อกับแต่ละแถวจัด padding ตัวเอง ถ้าไม่กำกับจะซ้อนกับค่าตั้งต้นของ `.card`
+       */}
+      <div className="card" data-testid="history-docs" style={{ overflow: 'hidden', padding: 0 }}>
         <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line)' }}>
           <h2 style={{ margin: 0, fontSize: 15 }}>ฉบับล่าสุด</h2>
         </div>

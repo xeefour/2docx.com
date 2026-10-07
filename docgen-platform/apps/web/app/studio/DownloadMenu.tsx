@@ -393,7 +393,7 @@ export default function DownloadMenu({
           </div>
 
           {(status || error) && (
-            <div className="dl__status" style={error ? { color: 'var(--danger, #c0392b)' } : undefined}>
+            <div className="dl__status" style={error ? { color: 'var(--err)' } : undefined}>
               {error ?? status}
             </div>
           )}

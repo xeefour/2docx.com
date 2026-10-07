@@ -35,7 +35,7 @@ const btn: React.CSSProperties = {
   fontSize: 12,
   borderRadius: 6,
   border: '1px solid var(--line)',
-  background: '#fff',
+  background: 'var(--surface)',
   /**
    * ⚠️ ต้องกำหนด `color` เองด้วย
    *   กฎ `button { color: #fff }` ของ globals.css (บรรทัด 48) ตั้งสีตัวอักษรไว้ให้ทุกปุ่ม
@@ -130,7 +130,7 @@ export default function Pager({
                  *   (หน้าตาผลลัพธ์เหมือนเดิมทุกประการ)
                  */
                 ...(p === cur
-                  ? { background: 'var(--brand)', color: '#fff', border: '1px solid var(--brand)' }
+                  ? { background: 'var(--brand)', color: 'var(--on-brand)', border: '1px solid var(--brand)' }
                   : {}),
               }}
               data-testid={`${testId}-page-${p}`}

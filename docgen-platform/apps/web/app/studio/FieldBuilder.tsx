@@ -323,7 +323,8 @@ export default function FieldBuilder({
           <div className="fieldset__legend" style={{ marginBottom: 8 }}>
             {g.group}
           </div>
-          <div className="card" style={{ overflow: 'hidden' }}>
+          {/* `padding: 0` — แต่ละแถวในการ์ดนี้จัด padding ตัวเอง ถ้าไม่กำกับจะซ้อนกับค่าตั้งต้นของ `.card` */}
+          <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
             {g.fields.map((f) => {
               const i = draft.indexOf(f)
               const open = editing === i

@@ -36,6 +36,9 @@ import TemplateEditor from './TemplateEditor'
 //   ไฟล์ `InboxBell.tsx` ยังอยู่ เผื่อภายหลังอยากได้ป้ายนับจดหมายกลับมา
 import InboxPanel from './InboxPanel'
 import StudioRail from './StudioRail'
+import BookmarkButton, { type BookmarkTeam } from './BookmarkButton'
+import RailMenuButton from '../components/RailMenuButton'
+import { CrossLinks } from '../components/NavLinks'
 import { readParam, readTemplateKey, setUrl, studioPath, TAB_PARAM } from './lib/urlState'
 
 /**
@@ -116,6 +119,14 @@ export default function Studio({
   const [peek, setPeek] = useState<{ key: string; name: string } | null>(null)
 
   const [bookmarks, setBookmarks] = useState<BookmarkRecord[]>([])
+  /**
+   * ทีมของผู้ใช้ — เป็นตัวเลือกใน dropdown ของปุ่มดาว
+   *
+   * ⚠️ โหลดพร้อมกันใน `load()` แล้ว ไม่ต้องโหลดซ้ำในปุ่ม
+   *   เก็บเป็น `BookmarkTeam[]` (มีแค่ team+name) เพราะปุ่มดาวใช้แค่สองค่านี้
+   *   ส่วน `TeamAccess` ที่ API คืนมามี role/จำนวนสมาชิกเพิ่ม ซึ่่งไม่ได้ใช้ตรงนี้
+   */
+  const [teams, setTeams] = useState<BookmarkTeam[]>([])
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
   const [tag, setTag] = useState('')
@@ -130,14 +141,22 @@ export default function Studio({
   const load = useCallback(async () => {
     try {
       setError(null)
-      const [t, c, b] = await Promise.all([
+      const [t, c, b, tm] = await Promise.all([
         api.listTemplates(),
         api.categories(),
         api.bookmarks(),
+        /*
+         * ⚠️ ทีมต้องโหลด**ที่หน้ารายการ** ไม่ใช่ฝั่งปุ่มดาวหรือแท็บแชร์
+         *   เพราะปุ่มดาวมีทั้งในตารางรายการและในหน้าแก้ไข
+         *   ถ้าแต่ละที่โหลดเอง จะเกิดหลายรอบและอาจได้ค่าไม่ตรงกัน
+         *   (เกิดแบบเดียวกับที่ sidebar ต้องรวมเป็นชิ้นเดียว)
+         */
+        api.myTeams().catch(() => ({ items: [] })),
       ])
       setTemplates(t.items)
       setCategories(c.items)
       setBookmarks(b.items)
+      setTeams(tm.items)
       // สิทธิ์ทีเดียวทั้งหมด — ถามทีละตัวจะเป็น N+1
       if (t.items.length > 0) {
         const map = await api.resolveAccess(t.items.map(templateKeyOf))
@@ -283,29 +302,58 @@ export default function Studio({
     [bookmarks],
   )
 
+  /** ทีมที่บุ๊กมาร์กแต่ละแม่แบบเก็บไว้ — null = ส่วนตัว */
+  const bookmarkTeams = useMemo(() => {
+    const m = new Map<string, string | null>()
+    for (const b of bookmarks) m.set(b.templateKey, b.team ?? null)
+    return m
+  }, [bookmarks])
+
   /**
-   * กดดาว → เพิ่ม/ลบบุ๊กมาร์ก (เรียกจากปุ่มในตาราง และจากปุ่มดาวในหน้าแก้ไข)
+   * เก็บบุ๊กมาร์กลงที่ที่เลือก — เรียกซ้ำ = **เปลี่ยนที่เก็บ** ไม่ใช่สร้างซ้ำ
+   * (หนึ่งแม่แบบมีบุ๊กมาร์กได้รายการเดียว ดู `BookmarkRecord`)
+   *
+   * ⚠️ `team` คือ "เก็บไว้ที่ไหน" **ไม่ใช่** ย้ายแม่แบบเข้าทีม
+   *   ย้ายแม่แบบอยู่ที่ `api.setTemplateTeam` (แท็บการแชร์และสิทธิ์)
+   *   ปนสองเรื่องนี้แล้วผู้ใช้จะเผลอแชร์แม่แบบตัวเองออกไปทั้งทีม
    *
    * ⚠️ ต้อง `throw` ต่อให้ผู้เรียกด้วย
    *   หน้าแก้ไข `return` ออกจากหน้านี้ไปก่อนถึงจุดที่เรนเดอร์ `error`
    *   ถ้ากลืน error ทิ้ง ผู้ใช้จะเห็นดาวไม่เปลี่ยนและไม่มีข้อความบอกว่าเพราะอะไร
    */
-  async function toggleBookmark(t: Template) {
-    const key = templateKeyOf(t)
+  async function bookmarkTo(t: Template, team: string | null) {
     try {
-      if (bookmarkKeys.has(key)) {
-        await api.removeBookmark(key)
-        setBookmarks((b) => b.filter((x) => x.templateKey !== key))
-      } else {
-        await api.addBookmark({ templateKey: key, versionId: t.versionId, templateName: t.name })
-        const r = await api.bookmarks()
-        setBookmarks(r.items)
-      }
+      await api.addBookmark({
+        templateKey: templateKeyOf(t),
+        versionId: t.versionId,
+        templateName: t.name,
+        team,
+      })
+      const r = await api.bookmarks()
+      setBookmarks(r.items)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e))
       throw e
     }
   }
+
+  /** เอาบุ๊กมาร์กออกทั้งหมด (ไม่สนว่าเก็บไว้ที่ไหน) */
+  async function unbookmark(t: Template) {
+    const key = templateKeyOf(t)
+    try {
+      await api.removeBookmark(key)
+      setBookmarks((b) => b.filter((x) => x.templateKey !== key))
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+      throw e
+    }
+  }
+
+  /*
+   * (เดิมมี `toggleBookmark` ที่เดาเองว่าจะเพิ่มหรือลบจากสถานะปัจจุบัน
+   *  ตอนนี้ผู้เรียกต้องบอก**ปลายทาง**ชัดเจนแทน เพราะเมื่อมีทีม
+   *  ปุ่มเดียวต้องเลือกได้ว่าจะย้ายที่เก็บ ซึ่ง "เดา" ไม่ได้)
+   */
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -426,7 +474,10 @@ export default function Studio({
            * ในตารางตรงกันเสมอ ไม่ต้องยิง `load()` ใหม่
            */
           bookmarked={bookmarkKeys.has(templateKeyOf(open))}
-          onToggleBookmark={() => toggleBookmark(open)}
+          bookmarkTeam={bookmarkTeams.get(templateKeyOf(open)) ?? null}
+          teams={teams}
+          onBookmark={(team) => bookmarkTo(open, team)}
+          onUnbookmark={() => unbookmark(open)}
           onClose={closeTemplate}
           onSaved={async (msg) => {
             setToast(msg)
@@ -458,6 +509,20 @@ export default function Studio({
 
   return (
     <div className="shell">
+      {/*
+       * ⚠️ ผู้ใช้สั่งเอากระดิ่ง 🔔 ออก ให้เหลือชื่อผู้ใช้ + ออกจากระบบเหมือนหน้าอื่น
+       *   (กระดิ่งเป็นตัวเดียวใน sidebar ที่ไม่ใช่เมนู และ /account · /teams ไม่มี)
+       *
+       *   ผลที่ตามมา: จำนวนจดหมายที่ยังไม่อ่านไม่มีที่โชว์แล้ว
+       *   ผู้ใช้ต้องกดแท็บ "จดหมาย" เพื่อดู → ถ้าภายหลังอยากได้ป้ายนับกลับมา
+       *   ให้ใส่ `count: inboxUnread` ที่แท็บจดหมายได้เลย (โครงยังรองรับอยู่)
+       *
+       *   ส่วนล่าง (ชื่อผู้ใช้ + ออกจากระบบ) ย้ายไปอยู่ใน `RailFooter` ตัวเดียวกับทุกหน้า
+       *   จึงเหลือส่งแค่ `userName` — ไม่ต้องเขียน `flex: 1 1 0` ซ้ำในทุกหน้า
+       *
+       * ⚠️ คอมเมนต์ต้องอยู่**ก่อนเปิดแท็ก** ไม่ใช่ระหว่างแอตทริบิวต์
+       *   JSX attribute ไม่รับคอมเมนต์ตรงตำแหน่งนั้น → error "'...' expected"
+       */}
       <StudioRail
         tabs={tabs}
         active={tab}
@@ -478,83 +543,26 @@ export default function Studio({
           />
         }
         extraNav={
-          <>
-            {/* ⚠️ ลิงก์ใน sidebar ต้องปิดลิ้นชักด้วยเมื่อจอเล็ก
-             *   การกดจะเปลี่ยนหน้าให้อยู่แล้ว แต่ระหว่างนั้นผ้าคลุมมืดยังทับอยู่
-             *   ผู้ใช้จะเห็นเนื้อหาค้างเป็นจอเดิมแล้วคิดว่ากดไม่ได้ */}
-            <Link
-              href="/teams"
-              className="tabs__tab"
-              style={{ textDecoration: 'none' }}
-              data-testid="rail-teams"
-              onClick={() => setRailOpen(false)}
-            >
-              ทีมของฉัน
-            </Link>
-            <Link
-              href="/account"
-              className="tabs__tab"
-              style={{ textDecoration: 'none' }}
-              data-testid="rail-account"
-              onClick={() => setRailOpen(false)}
-            >
-              บัญชีของฉัน
-            </Link>
-          </>
+          /**
+           * ⚠️ เมนูข้ามหน้าย้ายไปอยู่ใน CrossLinks (components/NavLinks.tsx) แล้ว
+           *   เพราะเคยมี 4 ชุดที่แต่ละหน้าเขียนเอง คนละที่คนละลำดับ
+           *   ผู้ใช้สั่ง 2026-10-07: "อื่น ๆ ทำให้เหมือนกับ /studio"
+           *   ตอนนี้หน้านี้เป็นเจ้าของแบบอ้างอิง → ตำแหน่งและลำดับต้องเหมือนทุกหน้า
+           *
+           * ⚠️ onNavigate ปิดลิ้นชักเมื่อจอเล็ก
+           *   การกดจะเปลี่ยนหน้าให้อยู่แล้ว แต่ระหว่างนั้นผ้าคลุมมืดยังทับอยู่
+           *   ผู้ใช้จะเห็นเนื้อหาค้างเป็นจอเดิมแล้วคิดว่ากดไม่ได้
+           */
+          <CrossLinks current="/studio" onNavigate={() => setRailOpen(false)} />
         }
-        footer={
-          <>
-            {/*
-             * ⚠️ ผู้ใช้สั่งเอากระดิ่ง 🔔 ออก ให้เหลือชื่อผู้ใช้ + ออกจากระบบเหมือนหน้าอื่น
-             *   (กระดิ่งเป็นตัวเดียวใน sidebar ที่ไม่ใช่เมนู และ /account · /teams ไม่มี)
-             *
-             *   ผลที่ตามมา: จำนวนจดหมายที่ยังไม่อ่านไม่มีที่โชว์แล้ว
-             *   ผู้ใช้ต้องกดแท็บ "จดหมาย" เพื่อดู → ถ้าภายหลังอยากได้ป้ายนับกลับมา
-             *   ให้ใส่ `count: inboxUnread` ที่แท็บจดหมายได้เลย (โครงยังรองรับอยู่)
-             */}
-            {meName ? (
-              /**
-               * ⚠️ ชื่อผู้ใช้ยาวได้มาก แต่พื้นที่ใต้แบรนด์กว้างแค่ 216px
-               *
-               *   `.rail__foot` มี `flex-wrap: wrap` อยู่แล้ว
-               *   ถ้าใส่แค่ `min-width: 0` ชื่อจะ**ถูกตัดก่อนย่อ**
-               *   เพราะ flex เลือก "ตัดบรรทัด" ก่อน "บีบให้เล็กลง"
-               *   (เจอตอนวัด: ชื่อลงไปบรรทัดที่สอง แล้วลิงก์ถูกมองว่าซ้อนทับ)
-               *   → ต้องให้ฐานเป็นศูนย์ด้วย `flex: 1 1 0` ถึงจะอยู่บรรทัดเดียวแล้วค่อยย่อ
-               */
-              <span
-                className="muted"
-                style={{
-                  fontSize: 13,
-                  flex: '1 1 0',
-                  minWidth: 0,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {meName}
-              </span>
-            ) : null}
-            {/* ⚠️ auth route ไม่ได้อยู่ใต้ /api — ใช้ /auth/logout */}
-            <a href="/auth/logout" className="muted" style={{ fontSize: 14, flex: 'none' }}>
-              ออกจากระบบ
-            </a>
-          </>
-        }
+        userName={meName}
         open={railOpen}
         onClose={() => setRailOpen(false)}
       />
 
       <div className="shell__main">
         <div className="pagebar">
-          <button
-            className="pagebar__menu"
-            onClick={() => setRailOpen(true)}
-            data-testid="rail-open"
-          >
-            เมนู
-          </button>
+          <RailMenuButton onOpen={() => setRailOpen(true)} />
           <h1 className="pagebar__title">{activeTitle}</h1>
         </div>
 
@@ -684,8 +692,18 @@ export default function Studio({
        */}
       {tab === 'inbox' && <InboxPanel />}
 
+      {/*
+       * `padding: 0` ในการ์ดข้างล่าง — แถวรายการจัด padding ตัวเองทั้งหมด
+       *   ถ้าไม่กำกับจะซ้อนกับค่าตั้งต้นของ `.card`
+       *
+       * ⚠️ คอมเมนต์นี้ต้องอยู่**นอก**วงเล็บของ `{cond && ( … )}` ไม่ใช่ข้างใน
+       *   เพราะข้างในคือตำแหน่งนิพจน์ JS ที่ไม่รับคอมเมนต์ JSX
+       *
+       * ⚠️ และห้ามพิมพ์รูปแบบคอมเมนต์ JSX ซ้อนในคอมเมนต์นี้
+       *   เพราะเครื่องหมายปิดจะไปปิดคอมเมนต์นี้ก่อนเวลา → ทั้งไฟล์พัง
+       */}
       {tab !== 'inbox' && (
-      <div className="card" style={{ overflow: 'hidden' }}>
+      <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
         {loading ? (
           <div className="muted" style={{ padding: 40, textAlign: 'center' }}>
             กำลังโหลด…
@@ -721,10 +739,13 @@ export default function Studio({
                     view={view}
                     starred={bookmarkKeys.has(key)}
                     thumb={thumbs[key] ?? null}
-                    // ⚠️ ต้อง `.catch()` — `toggleBookmark` โยน error ต่อให้ผู้เรียก
+                    bookmarkTeam={bookmarkTeams.get(key) ?? null}
+                    teams={teams}
+                    // ⚠️ ต้อง `.catch()` — `bookmarkTo` โยน error ต่อให้ผู้เรียก
                     //   แต่ตรงนี้ข้อความแสดงผ่าน `setError` ของหน้านี้อยู่แล้ว
                     //   ถ้าไม่จับ promise จะกลายเป็น unhandledrejection (หน้าจอแดง)
-                    onStar={() => void toggleBookmark(t).catch(() => {})}
+                    onBookmark={(team) => void bookmarkTo(t, team).catch(() => {})}
+                    onUnbookmark={() => void unbookmark(t).catch(() => {})}
                     activeCategory={category}
                     activeTag={tag}
                     onPickCategory={(c) => setCategory(category === c ? '' : c)}
@@ -955,8 +976,11 @@ function TemplateRow({
   tpl,
   view,
   starred,
+  bookmarkTeam,
+  teams,
+  onBookmark,
+  onUnbookmark,
   thumb,
-  onStar,
   activeCategory,
   activeTag,
   onPickCategory,
@@ -970,9 +994,15 @@ function TemplateRow({
   tpl: Template
   view?: AccessView
   starred: boolean
+  /** ทีมที่บุ๊กมาร์กนี้เก็บไว้ — null = ส่วนตัว */
+  bookmarkTeam: string | null
+  /** ตัวเลือกทีมของผู้ใช้ (โหลดที่หน้ารายการแล้วส่งลงมา) */
+  teams: BookmarkTeam[]
+  /** เลือกที่เก็บ — null = ส่วนตัว */
+  onBookmark: (team: string | null) => void
+  onUnbookmark: () => void
   /** URL ภาพย่อ (null = ยังไม่มีรูปตัวอย่าง) */
   thumb?: string | null
-  onStar: () => void
   /** หมวด/แท็กที่กำลังกรองอยู่ — ใช้ไฮไลต์ชิปที่ถูกเลือก */
   activeCategory: string
   activeTag: string
@@ -1087,6 +1117,20 @@ function TemplateRow({
         >
           {tpl.name || '(ไม่มีชื่อ)'}
         </button>
+        {/*
+         * ป้ายบอกว่าบุ๊กมาร์กนี้เก็บไว้ที่ไหน
+         *   จำเป็นเพราะผู้ใช้เลือกได้หลายที่ (ส่วนตัว / ทีม) แล้วตอนกลับมาดูแท็บบุ๊กมาร์ก
+         *   จะเห็นเป็นรายการเดียวกันทั้งหมด ถ้าไม่มีป้ายจะไม่รู้ว่าอันไหนอยู่ทีมไหน
+         *
+         * ⚠️ ชื่อทีมมาจาก `teams` ที่โหลดครั้งเดียวที่หน้ารายการ
+         *   ถ้าหาไม่เจอ (เช่นทีมถูกลบไปแล้วแต่ข้อมูลยังค้าง) ให้ซ่อนป้าย
+         *   แทนที่จะแสดงคำว่า "ไม่มีทีม" ซึ่งทำให้ผู้ใช้งงว่าทำไมตัวเองมีทีมนั้นไม่ได้
+         */}
+        {starred && bookmarkTeam && teams.some((t) => t.team === bookmarkTeam) && (
+          <span className="pill" data-testid="bookmark-team-badge">
+            ทีม · {teams.find((t) => t.team === bookmarkTeam)?.name}
+          </span>
+        )}
         <div className="muted mono" style={{ fontSize: 11 }}>
           {tpl.versionId.slice(0, 16)}…
         </div>
@@ -1132,16 +1176,18 @@ function TemplateRow({
         {tpl.type}
       </td>
       <td className="tplrow__acts" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-        <button
+        <BookmarkButton
+          bookmarked={starred}
+          team={bookmarkTeam}
+          teams={teams}
+          onPick={onBookmark}
+          onRemove={onUnbookmark}
           className="ghost tplrow__i-star"
-          onClick={onStar}
-          aria-pressed={starred}
-          aria-label={starred ? 'เอาออกจากบุ๊กมาร์ก' : 'เพิ่มในบุ๊กมาร์ก'}
-          title={starred ? 'เอาออกจากบุ๊กมาร์ก' : 'เพิ่มในบุ๊กมาร์ก'}
-          style={{ padding: '4px 9px', color: starred ? 'var(--warn)' : undefined }}
-        >
-          {starred ? '★' : '☆'}
-        </button>{' '}
+          testId="bookmark-toggle-row"
+          templateKey={templateKeyOf(tpl)}
+          labelOn="เอาออกจากบุ๊กมาร์ก"
+          labelOff="เพิ่มในบุ๊กมาร์ก"
+        />{' '}
         <button
           className="ghost tplrow__i-open"
           onClick={onOpen}

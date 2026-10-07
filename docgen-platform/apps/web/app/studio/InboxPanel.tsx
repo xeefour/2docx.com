@@ -46,6 +46,7 @@ export const KIND_LABEL: Record<NotificationKind, string> = {
   access: 'สิทธิ์',
   document: 'งานเอกสาร',
   system: 'ระบบ',
+  issue: 'ปัญหาที่แจ้ง',
 }
 
 /**
@@ -57,6 +58,7 @@ export const KIND_ICON: Record<NotificationKind, string> = {
   access: '🔑',
   document: '📄',
   system: '⚙️',
+  issue: '🐛',
 }
 
 /**
@@ -84,7 +86,7 @@ export function timeAgo(at: Date | string): string {
 /** ประเภทที่ตัวกรองให้เลือก — `all` = ทุกประเภทรวมกัน */
 type Filter = NotificationKind | 'all'
 
-const FILTERS: Filter[] = ['all', 'share', 'access', 'document', 'system']
+const FILTERS: Filter[] = ['all', 'share', 'access', 'document', 'system', 'issue']
 
 /** testid ของปุ่มตัวกรอง — เทสต์อัตโนมัติอ้างตามชื่อนี้ ห้ามเปลี่ยน */
 const FILTER_TESTID: Record<Filter, string> = {
@@ -93,6 +95,7 @@ const FILTER_TESTID: Record<Filter, string> = {
   access: 'inbox-filter-access',
   document: 'inbox-filter-document',
   system: 'inbox-filter-system',
+  issue: 'inbox-filter-issue',
 }
 
 /** ขอจาก API มากี่ฉบับต่อครั้ง — พอให้ผู้ใช้เลื่อนอ่านได้โดยไม่ต้องกดรีเฟรช */

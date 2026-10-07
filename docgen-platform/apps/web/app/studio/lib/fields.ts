@@ -101,6 +101,45 @@ export function sortFields(fields: FieldDef[]): FieldDef[] {
   })
 }
 
+// ── ค่ายาว (hash / URL / id) ───────────────────────────────────
+
+/** เกินนี้ถือว่ายาวเกินอ่าน แล้วต้องย่อ */
+export const LONG_VALUE_AT = 40
+
+/**
+ * ค่านี้ "อ่านไม่ออกอยู่แล้ว" จึงควรย่อ — หรือเปล่า
+ *
+ * ── ทำไมต้องกรองก่อนย่อ ไม่ย่อทุกค่าที่ยาว ──────────────────────────────
+ *   ย่อข้อความที่คนอ่านออก = **ทำลายข้อมูลที่ผู้ใช้ต้องใช้อ่าน**
+ *   ค่าที่ยาวแต่ยังต้องอ่านทั้งหมด เช่น ชื่อ-ที่อยู่ภาษาไทย (ไม่มีช่องว่างระหว่างคำ!)
+ *   หรือประโยคยาว ๆ ต้องอยู่เป็นช่องกรอกปกติ ให้เลื่อนดูเองทางแนวนอน
+ *
+ *   สิ่งที่ย่อแล้ว**มีประโยชน์จริง**มีแค่ 3 อย่าง คือค่าที่ "อ่านออกแต่จำไม่ได้"
+ *   ได้แก่ hash / id / URL / base64 — ล้วนเป็น ASCII ที่ไม่มีช่องว่าง
+ *   ถ้าเจอภาษาไทยในค่านั้น แปลว่ามันคือข้อความที่คนเขียน ไม่ใช่รหัส
+ */
+export function looksLikeToken(s: string): boolean {
+  if (s.length <= LONG_VALUE_AT) return false
+  if (/\s/.test(s)) return false
+  // อักขระนอก ASCII = ภาษาอื่นที่คนอ่านออก (ไทย/จีน/ญี่ปุ่น…) → ไม่ใช่รหัส
+  return /^[\x21-\x7E]+$/.test(s)
+}
+
+/**
+ * ย่อค่ายาวเป็น "หัว…ท้าย"
+ *
+ * ── ทำไมต้องย่อตรงกลาง ไม่ใช่ท้ายอย่างเดียว ────────────────────────────
+ *   ค่าแบบ hash (เช่น `versionId` ยาว 64 ตัว) ขึ้นต้นด้วย `34ad6c80…` ซึ่งเป็นส่วนที่
+ *   **ไม่มีความหมายอะไรกับคนอ่าน** แต่ปลาย ๆ มักบอกว่าเป็นค่าของอะไร
+ *   ถ้าย่อแบบ CSS ปกติ (`text-overflow: ellipsis`) จะตัด**ท้าย**ทิ้ง
+ *   → ผู้ใช้เห็นหัวที่ไม่มีความหมาย 64 ตัวเต็ม ๆ แล้วเข้าใจว่าเป็นค่าเดียวกัน
+ *      กับค่าอื่นในระบบ ซึ่งไม่จริง
+ */
+export function middleTruncate(s: string, head = 10, tail = 8): string {
+  if (!looksLikeToken(s)) return s
+  return `${s.slice(0, head)}…${s.slice(-tail)}`
+}
+
 /**
  * จัดกลุ่มฟิลด์
  *
@@ -137,6 +176,36 @@ export function groupFields(
 
 // ── ตรวจข้อมูล ──────────────────────────────────────────────
 
+/**
+ * ค่านี้ "ยังไม่ได้กรอก" หรือไม่ — ใช้ร่วมกันทั้ง validate และนับความคืบหน้า
+ *
+ * ⚠️ ต้องเป็นนิยามเดียวกันเสมอ
+ *   ถ้า validate นับว่าว่าง แต่ที่อื่นนับว่าไม่ว่าง
+ *   ผู้ใช้จะเห็น "กรอกครบแล้ว" แต่กดสร้างแล้วถูกปฏิเสธ
+ *   และไม่มีใครเข้าใจว่าทำไมสองที่ไม่ตรงกัน
+ */
+export function isBlankField(v: unknown): boolean {
+  return v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)
+}
+
+/**
+ * นับว่ากรอกไปกี่ช่องแล้ว — ใช้บอกผู้ใช้ว่า "พร้อมสร้างเอกสารหรือยัง"
+ *
+ * ⚠️ ต้องเดินด้วย `getPath` เสมอ เพราะ key ของช่องจริง ๆ มีจุดคั่น
+ *   (เช่น `ทดสอบ.ชื่อ30160`) ถ้าอ่านแบบ `data[key]` แบนจะได้ `undefined` ทุกช่อง
+ *   แล้วบอกผู้ใช้ว่า "ยังไม่ได้กรอกเลย" ทั้งที่กรอกครบแล้ว
+ */
+export function countFilled(
+  fields: FieldDef[],
+  data: Record<string, unknown>,
+): { filled: number; total: number } {
+  let filled = 0
+  for (const f of fields) {
+    if (!isBlankField(getPath(data, f.key))) filled++
+  }
+  return { filled, total: fields.length }
+}
+
 function compilePattern(pattern: string | undefined): RegExp | null {
   if (!pattern) return null
   try {
@@ -155,11 +224,7 @@ export function validateFormData(
 
   for (const f of fields) {
     const raw = getPath(data, f.key)
-    const isBlank =
-      raw === undefined ||
-      raw === null ||
-      raw === '' ||
-      (Array.isArray(raw) && raw.length === 0)
+    const isBlank = isBlankField(raw)
 
     if (f.required && isBlank) {
       errors[f.key] = 'ช่องนี้ต้องกรอก'

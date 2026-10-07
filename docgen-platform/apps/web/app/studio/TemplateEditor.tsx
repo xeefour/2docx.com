@@ -28,9 +28,10 @@ import {
   type TemplateTag,
   type Tombstone,
 } from './lib/api'
-import { validateFormData, withDefaults } from './lib/fields'
+import { countFilled, validateFormData, withDefaults } from './lib/fields'
 import Tabs from './Tabs'
 import FormFields from './FormFields'
+import AiInterview from './AiInterview'
 import AiChat from './AiChat'
 import FieldBuilder from './FieldBuilder'
 import SharePanel from './SharePanel'
@@ -39,16 +40,17 @@ import TrashBanner from './TrashBanner'
 import MyHistoryPanel from './MyHistoryPanel'
 import DocumentPreview from './DocumentPreview'
 import DownloadMenu from './DownloadMenu'
+import BookmarkButton, { type BookmarkTeam } from './BookmarkButton'
 import { JsonEditor } from './lib/JsonEditor'
 import { readParam, setUrl, studioPath, PANE_PARAM, TAB_PARAM } from './lib/urlState'
 import { useAppBusy } from '../components/AppStatus'
 import type { LoadedPdf } from './lib/pdf'
 
-/** แท็บฝั่งซ้าย — สิ่งที่กรอกลงเอกสาร + ประวัติของฉันเอง */
-type LeftTabId = 'form' | 'json' | 'history'/** แท็บฝั่งขวา — เรื่องของตัวแม่แบบ (รวม "ใครใช้แม่แบบนี้") */
+/** แท็บฝั่งซ้าย — สิ่งที่กรอกลงเอกสาร + ผู้ช่วย AI + ประวัติของฉันเอง */
+type LeftTabId = 'form' | 'ai' | 'json' | 'history'/** แท็บฝั่งขวา — เรื่องของตัวแม่แบบ (รวม "ใครใช้แม่แบบนี้") */
 type PaneId = 'preview' | 'template' | 'fields' | 'history'
 
-const LEFT_TABS: readonly string[] = ['form', 'json', 'history']
+const LEFT_TABS: readonly string[] = ['form', 'ai', 'json', 'history']
 const PANE_IDS: readonly string[] = ['preview', 'template', 'fields', 'history']
 
 export default function TemplateEditor({
@@ -57,7 +59,10 @@ export default function TemplateEditor({
   onSaved,
   notify,
   bookmarked,
-  onToggleBookmark,
+  bookmarkTeam,
+  teams,
+  onBookmark,
+  onUnbookmark,
 }: {
   template: Template
   onClose: () => void
@@ -65,8 +70,13 @@ export default function TemplateEditor({
   notify: (msg: string) => void
   /** แม่แบบนี้อยู่ในบุ๊กมาร์กอยู่ไหม — สถานะถือที่หน้ารายการ (แหล่งเดียว) */
   bookmarked: boolean
-  /** สลับบุ๊กมาร์ก — คืน promise ที่ reject เมื่อบันทึกไม่สำเร็จ */
-  onToggleBookmark: () => Promise<void>
+  /** ทีมที่เก็บอยู่ — null = ส่วนตัว (ผู้ใช้สั่งเพิ่ม dropdown เลือกที่เก็บ) */
+  bookmarkTeam: string | null
+  /** ตัวเลือกทีม — ว่างเปล่า = ไม่มี dropdown กดสลับได้ตามเดิม */
+  teams: BookmarkTeam[]
+  /** เก็บ/ย้ายที่เก็บ — คืน promise ที่ reject เมื่อบันทึกไม่สำเร็จ */
+  onBookmark: (team: string | null) => Promise<void>
+  onUnbookmark: () => Promise<void>
 }) {
   const templateKey = templateKeyOf(template)
 
@@ -100,22 +110,25 @@ export default function TemplateEditor({
   /** ข้อมูลเวอร์ชันที่ผู้ใช้เลือก "ใช้ผลเดิมต่อไป" — ถ้าแก้เพิ่มจะกลับมาเตือนใหม่ */
   const [staleDismissed, setStaleDismissed] = useState<string | null>(null)
   const [pdf, setPdf] = useState<LoadedPdf | null>(null)
-  const [aiOpen, setAiOpen] = useState(true)
+  /** โหมดในแท็บ AI — สัมภาษณ์ (ถามทีละช่อง) หรือแชทอิสระ (เล่าเองทีเดียว) */
+  const [aiMode, setAiMode] = useState<'interview' | 'chat'>('interview')
   /** กำลังบันทึกบุ๊กมาร์ก — กันกดรัวจนยิง API เป็นสิบครั้ง */
   const [starBusy, setStarBusy] = useState(false)
+  /** คอลัมน์ขวา — ใช้เลื่อนหาผลลัพธ์หลังเรนเดอร์ (ดู `showResult`) */
+  const rightRef = useRef<HTMLDivElement>(null)
 
   /**
-   * กดดาวที่ปลายขวาของแถบแท็บ (ผู้ใช้สั่ง: *"เพิ่มปุ่มสัญาลักษ์ bookmark ขวามือ"*)
+   * เก็บ/ย้ายที่เก็บ/เอาออกบุ๊กมาร์ก จากปุ่มดาวที่ปลายขวาของแถบแท็บ
    *
    * ⚠️ ต้อง `catch` เอง — หน้านี้ `return` ออกจากหน้ารายการไปแล้ว
    *   ป้ายแจ้ง error ของหน้ารายการจึงไม่ถูกเรนเดอร์ตอนนี้
    *   ถ้าไม่จับ error ผู้ใช้จะเห็นดาวไม่เปลี่ยนโดยไม่มีคำอธิบาย
    */
-  async function toggleStar() {
+  async function runStar(fn: () => Promise<void>) {
     if (starBusy) return
     setStarBusy(true)
     try {
-      await onToggleBookmark()
+      await fn()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'บันทึกบุ๊กมาร์กไม่สำเร็จ')
     } finally {
@@ -255,6 +268,15 @@ export default function TemplateEditor({
   const errors = useMemo(() => validateFormData(fields, data), [fields, data])
 
   /**
+   * กรอกไปกี่ช่องแล้ว — ใช้บอกผู้ใช้ในแท็บ AI ว่า "พร้อมสร้างหรือยัง"
+   *
+   * ⚠️ นับจาก `fields` ไม่ใช่จาก `Object.keys(data)`
+   *   เพราะ key มีจุดคั่นแล้วถูกเก็บเป็น object ซ้อน → `Object.keys` ได้แค่ชื่อกลุ่ม
+   *   ผู้ใช้จะเห็นว่ากรอก "2 / 1 ช่อง" ซึ่งเป็นไปได้และทำให้เชื่อว่าระบบเพี้ยน
+   */
+  const filled = useMemo(() => countFilled(fields, data), [fields, data])
+
+  /**
    * ตัวอย่างที่เห็นอยู่เก่ากว่าข้อมูลปัจจุบันไหม
    *
    * ⚠️ ครอบคลุมทั้งแท็บ "ฟอร์ม" และ "JSON" เพราะทั้งคู่แก้ `data` ตัวเดียวกัน
@@ -302,6 +324,28 @@ export default function TemplateEditor({
   )
 
   // ── เรนเดอร์ ─────────────────────────────────────────────
+  /**
+   * พาผู้ใช้ไปเห็นผลลัพธ์จริงหลังเรนเดอร์เสร็จ
+   *
+   * ⚠️ ต้อง**เช็กก่อนว่าอยู่นอกจอไหม** ไม่ใช่เลื่อนทุกครั้ง
+   *   จอกว้าง (≥1080px) สองคอลัมน์อยู่พร้อมกัน ผลลัพธ์เห็นอยู่แล้ว
+   *   ถ้าเลื่อนทุกครั้งหน้าจะกระตุกทั้งที่ผู้ใช้ไม่ได้ขอ
+   *
+   * ⚠️ จอแคบกว่า 1080px สองคอลัมน์ซ้อนเป็นแถวเดียว → ตัวอย่างอยู่**ใต้แชทที่ยาว 620px**
+   *   ผู้ใช้กด "สร้างเอกสาร" แล้วเห็นหน้าจอนิ่งสนิท จึงเข้าใจว่าปุ่มไม่ทำงาน
+   *   (วัดจริงที่ 452px หลังกดปุ่ม เอกสารวาดเสร็จแล้ว แต่ผู้ใช้ยังมองไม่เห็น)
+   */
+  const showResult = useCallback(() => {
+    requestAnimationFrame(() => {
+      const el = rightRef.current
+      if (!el) return
+      // อยู่ต่ำกว่า 40% ของจอ = อยู่นอกสายตาจริง
+      if (el.getBoundingClientRect().top > window.innerHeight * 0.4) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    })
+  }, [])
+
   const render_ = useCallback(async () => {
     if (errorCount > 0) {
       setShowErrors(true)
@@ -331,13 +375,14 @@ export default function TemplateEditor({
       setStaleDismissed(null)
       // พาผู้ใช้ไปดูผลลัพธ์ทันที — ไม่งั้นต้องเดาว่าผลอยู่ฝั่งไหน
       setPane('preview')
+      showResult()
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
       setStatus(null)
     } finally {
       setBusy(false)
     }
-  }, [data, errorCount, template.name, template.versionId])
+  }, [data, errorCount, showResult, template.name, template.versionId])
 
   // ── บันทึกช่องฟอร์ม ───────────────────────────────────────
   const saveFields = useCallback(
@@ -404,6 +449,16 @@ export default function TemplateEditor({
    */
   const leftTabs = [
     { id: 'form', label: 'ฟอร์ม' },
+    /*
+     * แท็บ AI (ผู้ใช้สั่ง 2026-10-06)
+     *   เดิมเป็นกล่องที่ยุบ/ขยายอยู่ในแท็บ "ฟอร์ม" → ซ่อนจนผู้ใช้แทบไม่เจอ
+     *   ย้ายมาเป็นแท็บของตัวเอง เพราะมันเป็นงานคนละอย่างกับ "กรอกเอง"
+     *
+     *   ⚠️ ป้ายสั้นต้องพอดีกับแถบซ้ายที่ตอนจอเล็กอยู่บรรทัดเดียว
+     *     (`ฟอร์ม` `AI` `JSON` `ประวัติ` + ดาว) ถ้าใช้คำเต็ม "AI ช่วยกรอก"
+     *     จะดันแท็บอื่นให้ตัดคำหรือล้นแถบ — ดู `.tabs--compact` ใน globals.css
+     */
+    { id: 'ai', label: 'AI' },
     { id: 'json', label: 'JSON' },
     { id: 'history', label: 'ประวัติ' },
   ]
@@ -514,18 +569,32 @@ export default function TemplateEditor({
             tabs={leftTabs}
             active={tab}
             onChange={(id) => setTab(id as LeftTabId)}
+            /*
+             * บรรทัดเดียวตอนจอเล็ก (ผู้ใช้สั่ง 2026-10-06)
+             * แถบนี้มีแท็บสั้น ๆ 3 ตัว + ปุ่มดาว ถ้าเกาะชิดซ้ายจะดูเหมือนแถบที่โดนตัด
+             * `compact` สั่งให้แท็บ**แบ่งพื้นที่เต็มแถบ**พอดี ไม่ต้องเลื่อน
+             *
+             * ⚠️ ใส่เฉพาะแถบนี้ ห้ามใส่กับ `rightTabs` ด้านล่าง
+             *   ป้ายของฝั่งขวายาวมาก (`ตัวอย่างเอกสาร` · `ข้อมูลแม่แบบ` · `ช่องฟอร์ม` ·
+             *   `การแชร์และสิทธิ์`) ถ้าบีบให้แบ่งพื้นที่แล้วจะได้ข้อความตัดเป็น … ทั้งหมด
+             *   แถบขวาจึงปล่อยให้กว้างตามข้อความ แล้วให้ `.tabs` เลื่อนแทน
+             *   (ทั้งสองแถบอยู่บรรทัดเดียวกันหมด — ผู้ใช้สั่ง 2026-10-06 ครั้งที่สอง)
+             */
+            compact
             trailing={
-              <button
+              <BookmarkButton
+                bookmarked={bookmarked}
+                team={bookmarkTeam}
+                teams={teams}
+                busy={starBusy}
+                onPick={(team) => void runStar(() => onBookmark(team))}
+                onRemove={() => void runStar(() => onUnbookmark())}
                 className="tabs__star"
-                data-testid="bookmark-toggle"
-                aria-pressed={bookmarked}
-                aria-label={bookmarked ? 'เอาออกจากบุ๊กมาร์ก' : 'เก็บไว้ในบุ๊กมาร์ก'}
-                title={bookmarked ? 'เอาออกจากบุ๊กมาร์ก' : 'เก็บไว้ในบุ๊กมาร์ก'}
-                disabled={starBusy}
-                onClick={() => void toggleStar()}
-              >
-                {bookmarked ? '★' : '☆'}
-              </button>
+                testId="bookmark-toggle"
+                templateKey={templateKey}
+                labelOn="เอาออกจากบุ๊กมาร์ก"
+                labelOff="เก็บไว้ในบุ๊กมาร์ก"
+              />
             }
           />
 
@@ -534,13 +603,12 @@ export default function TemplateEditor({
               <div className="card" style={{ padding: 16 }}>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
                   <h2 style={{ margin: 0, fontSize: 15, flex: 1 }}>ข้อมูลสำหรับสร้างเอกสาร</h2>
-                  <button
-                    className="ghost"
-                    style={{ fontSize: 12.5, padding: '5px 10px' }}
-                    onClick={() => setAiOpen((v) => !v)}
-                  >
-                    {aiOpen ? 'ซ่อน AI' : 'AI ช่วยกรอก'}
-                  </button>
+                  {/*
+                    ⚠️ ปุ่ม "AI ช่วยกรอก" เดิมอยู่ตรงนี้ แล้วยุบกล่องแชทไว้ใต้ฟอร์ม
+                    *   ผู้ใช้สั่งย้ายไปเป็นแท็บของตัวเอง (แท็บ `AI` ฝั่งซ้าย)
+                    *   เพราะการยุบ/ขยายทำให้คนมองไม่เห็นว่ามีฟีเจอร์นี้อยู่
+                    *   และมันปนอยู่ในแท็บ "ฟอร์ม" ทั้งที่เป็นคนละงานกับการกรอกเอง
+                    */}
                 </div>
 
                 <FormFields
@@ -565,22 +633,80 @@ export default function TemplateEditor({
                   </button>
                 )}
               </div>
+            </div>
+          )}
 
-              {aiOpen && (
-                <div className="card" style={{ padding: 14, height: 620, display: 'flex' }}>
+          {/* ── แท็บ AI: โมเดลถามทีละช่อง แล้วเอาคำตอบมาเติมฟอร์ม ── */}
+          {tab === 'ai' && (
+            <div className="card" style={{ padding: 16 }}>
+              {/*
+               * สองโหมดในแท็บเดียว เพราะเป็นคนละวิธีแต่ทำงานกับช่องเดียวกัน:
+               *   · สัมภาษณ์ = AI ถามทีละช่อง → ตอบแล้วได้ค่าที่ตรงชนิดชอง (ผู้ใช้สั่งทำเป็นหน้าหลัก)
+               *   · แชทอิสระ = ผู้ใช้เล่าเองทีเดียว (ของเดิมที่ย้ายมาจากใต้แท็บฟอร์ม)
+               * ทิ้งแชทอิสระทิ้งไม่ได้ — คนที่ต้องการไปต่อเร็ว ๆ ยังต้องการมัน
+               */}
+              <div className="iv__bar" style={{ marginBottom: 10 }}>
+                <button
+                  className={aiMode === 'interview' ? '' : 'ghost'}
+                  onClick={() => setAiMode('interview')}
+                >
+                  สัมภาษณ์ (แนะนำ)
+                </button>
+                <button
+                  className={aiMode === 'chat' ? '' : 'ghost'}
+                  onClick={() => setAiMode('chat')}
+                >
+                  แชทอิสระ
+                </button>
+              </div>
+
+              {aiMode === 'interview' ? (
+                <>
+                  <h2 style={{ margin: '0 0 4px', fontSize: 15 }}>AI ช่วยกรอกข้อมูล</h2>
+                  <p className="muted" style={{ margin: '0 0 12px', fontSize: 12.5 }}>
+                    AI จะถามทีละช่อง (หรือทีละชุด) ตามที่ยังว่าง แล้วเอาคำตอบมาเรียบเรียงเป็นค่าที่ตรงกับชนิดของช่อง
+                    — ช่องที่คุณกรอกเองจะไม่ถูกทับ
+                  </p>
+                  <AiInterview
+                    templateKey={templateKey}
+                    templateName={template.name}
+                    fields={fields}
+                    data={data}
+                    onData={(next, changed) => {
+                      setData(next)
+                      if (changed.length > 0) {
+                        const labels = changed.map((k) => fields.find((f) => f.key === k)?.label || k)
+                        notify(`AI เติมข้อมูล ${changed.length} ช่อง: ${labels.join(', ')}`)
+                      }
+                    }}
+                    notify={notify}
+                  />
+                </>
+              ) : (
+                <div style={{ height: 620, display: 'flex' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', width: '100%', minHeight: 0 }}>
-                    <h2 style={{ margin: '0 0 4px', fontSize: 15 }}>AI ช่วยกรอกข้อมูล</h2>
+                    <h2 style={{ margin: '0 0 4px', fontSize: 15 }}>แชทกับ AI</h2>
                     <p className="muted" style={{ margin: '0 0 10px', fontSize: 12 }}>
-                      เล่าความต้องการได้เลย — AI จะเติมเฉพาะช่องที่ยังว่าง
+                      เล่าความต้องการได้เลยทีเดียว — AI จะเติมเฉพาะช่องที่ยังว่าง
                     </p>
                     <AiChat
                       templateKey={templateKey}
                       templateName={template.name}
+                      fields={fields}
                       data={data}
                       onData={(next, changed) => {
                         setData(next)
                         if (changed.length > 0) {
-                          notify(`AI เติมข้อมูล ${changed.length} ช่อง: ${changed.join(', ')}`)
+                          /*
+                           * ⚠️ `changed` เป็น key ดิบที่**มีจุดคั่น** (เช่น `ทดสอบ.ชื่อ30160`)
+                           *   เอามาแสดงตรง ๆ ผู้ใช้จะเห็นอักขระแปลก ๆ ที่หาในแม่แบบไม่เจอ
+                           *   โหมดสัมภาษณ์แปลงเป็นป้ายอยู่แล้ว — ที่นี่ต้องทำให้เหมือนกัน
+                           *   ไม่งั้นสองโหมดบนหน้าเดียวกันจะรายงานผลต่างกัน ทั้งที่ทำงานเหมือนกัน
+                           */
+                          const labels = changed.map(
+                            (k) => fields.find((f) => f.key === k)?.label?.trim() || k,
+                          )
+                          notify(`AI เติมข้อมูล ${changed.length} ช่อง: ${labels.join(', ')}`)
                         }
                       }}
                       notify={notify}
@@ -588,11 +714,58 @@ export default function TemplateEditor({
                   </div>
                 </div>
               )}
+
+              {/*
+                ── ขั้นตอนถัดไป: เอาข้อมูลที่ได้ไปสร้างเอกสาร ──────────────
+                ผู้ใช้สั่ง 2026-10-06: *"แชทอิสระ พูดคุยเสร็จ จนได้ข้อมูลแล้ว
+                ยังขาดขั้นตอนนำข้อมูลไปสร้าง หรือนำไปอัปเดทดาต้า ไม่เห็นมี"*
+
+                เดิมมีแต่ปุ่ม "เรนเดอร์ตัวอย่าง" ที่หัวหน้าเพจ ซึ่งห่างจากแท็บ AI มาก
+                และที่จอแคบปุ่มนั้นถูกย่อจนเหลือจำนวนตัวอักษรเดียว (วัดจริงที่ 452px)
+                → คนที่คุยกับ AI จบแล้วจึงไม่เห็นว่าต้องทำอะไรต่อ แล้วคิดว่าฟีเจอร์จบที่การพูด
+
+                อยู่นอกเงื่อนไขของสองโหมดเพื่อให้เป็นทางเดียวกันเสมอ
+                (ไม่งั้นโหมดไหนไม่มี → ผู้ใช้สังเกตเป็นฟีเจอร์ของโหมดนั้น ไม่ใช่ของระบบ)
+              */}
+              <div className="iv__done" data-testid="ai-next-step">
+                <div className="iv__done__sum">
+                  {/*
+                    นับด้วย getPath เสมอ (key มีจุดคั่น) — `countFilled` จัดการให้
+                  */}
+                  <strong>
+                    กรอกแล้ว {filled.total === 0 ? 0 : filled.filled} / {filled.total} ช่อง
+                  </strong>
+                  <span className="muted">
+                    {errorCount > 0
+                      ? ` · ขาดอีก ${errorCount} ช่องที่ต้องการ (สร้างไม่ได้จนกว่าจะครบ)`
+                      : ' · พร้อมสร้างเอกสารได้เลย'}
+                  </span>
+                </div>
+                <div className="iv__done__acts">
+                  <button
+                    className="ghost"
+                    onClick={() => setTab('form')}
+                    data-testid="ai-goto-form"
+                  >
+                    ดู/แก้ในฟอร์ม
+                  </button>
+                  <button
+                    onClick={() => void render_()}
+                    disabled={busy || !canEdit}
+                    data-testid="ai-create-document"
+                    title={errorCount > 0 ? `ยังขาด ${errorCount} ช่อง` : 'สร้างเอกสารจากข้อมูลที่ได้'}
+                  >
+                    {busy ? (status ?? 'กำลังทำงาน…') : 'สร้างเอกสาร'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
+          {/* `padding: 0` ในการ์ดข้างล่าง — หัวข้อกับตัวแก้ไขจัด padding ตัวเอง
+           *   คอมเมนต์นี้ต้องอยู่**นอก**วงเล็บของ `{cond && ( … )}` ไม่ใช่ข้างใน จึงจะเป็นตำแหน่งลูกที่ถูกต้อง */}
           {tab === 'json' && (
-            <div className="card" style={{ overflow: 'hidden' }}>
+            <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
               <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)' }}>
                 <h2 style={{ margin: 0, fontSize: 15 }}>ข้อมูลดิบ (JSON)</h2>
                 <p className="muted" style={{ margin: '2px 0 0', fontSize: 12 }}>
@@ -630,6 +803,7 @@ export default function TemplateEditor({
          *    ถ้า sticky เฉพาะการ์ด แท็บจะเลื่อนหายไปทั้งที่เนื้อหายังอยู่ → ผู้ใช้สับสน
          */}
         <div
+          ref={rightRef}
           className={`editor-col editor-col--right${pane === 'preview' ? ' editor-col--preview' : ''}`}
         >
           <Tabs tabs={rightTabs} active={pane} onChange={(id) => setPane(id as PaneId)} />
@@ -655,7 +829,7 @@ export default function TemplateEditor({
                     position: 'absolute',
                     inset: 0,
                     zIndex: 6,
-                    background: 'rgba(255, 255, 255, 0.88)',
+                    background: 'color-mix(in srgb, var(--surface) 88%, transparent)',
                     backdropFilter: 'blur(2px)',
                     display: 'flex',
                     alignItems: 'center',
@@ -671,7 +845,7 @@ export default function TemplateEditor({
                       borderRadius: 12,
                       border: '1px solid var(--line)',
                       background: '#fff',
-                      boxShadow: '0 10px 30px rgba(26, 21, 35, 0.18)',
+                      boxShadow: 'var(--shadow-lg)',
                     }}
                   >
                     <strong style={{ fontSize: 14.5 }}>ข้อมูลเปลี่ยนแล้ว</strong>

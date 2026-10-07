@@ -27,6 +27,8 @@ import {
 } from 'react'
 import { usePathname } from 'next/navigation'
 import { copyText } from '../studio/lib/copy'
+import { api } from '../studio/lib/api'
+import ReportIssue from './ReportIssue'
 
 /* ── จังหวะเวลา ────────────────────────────────────────────────
  * SHOW_VEIL_AFTER — เปลี่ยนหน้าเร็วกว่านี้ไม่ต้องกางผ้าคลุม (ไม่กะพริบตามสายตา)
@@ -41,7 +43,7 @@ const WATCHDOG_MS = 15000
 function labelFor(pathname: string): string {
   if (pathname === '/' || pathname === '') return 'หน้าแรก'
   if (pathname.startsWith('/studio')) return 'Studio'
-  if (pathname.startsWith('/docs')) return 'เอกสาร API'
+  if (pathname.startsWith('/apis')) return 'เอกสาร API'
   if (pathname.startsWith('/auth')) return 'เข้าสู่ระบบ'
   return pathname
 }
@@ -68,6 +70,19 @@ export function useAppBusy(): (label: string | null) => void {
   return useContext(BusyContext).set
 }
 
+/*
+ * ── "คนนี้ดูแลรายงานปัญหาไหม" ให้หน้าอื่นถามใช้ ──────────────────────
+ *
+ * ⚠️ ตั้งใจมีจุดเดียวที่ยิง `GET /auth/me` (ตอน mount ของ AppStatus)
+ *   แล้วกระจายค่าให้ทุกหน้า แทนที่จะให้แต่ละส่วนยิงเอง
+ *   เพราะเมนู/ปุ่มรายงานอยู่คนละที่ ถ้าแต่ละที่ยิงเองจะเป็น 2–3 request ต่อหน้า
+ *   และเสี่ยงได้ค่าขัดกันถ้าหนึ่งที่ตอบช้ากว่าอีกที่
+ */
+const CanReceiveContext = createContext(false)
+export function useCanReceiveReports(): boolean {
+  return useContext(CanReceiveContext)
+}
+
 export default function AppStatus({ children }: { children: ReactNode }) {
   const pathname = usePathname()
 
@@ -80,6 +95,18 @@ export default function AppStatus({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState<'url' | 'diag' | null>(null)
   const [errCount, setErrCount] = useState(0)
+  const [reporting, setReporting] = useState(false)
+  /**
+   * คนนี้ได้รับรายงานปัญหาไหม — ถามเซิร์ฟเวอร์ครั้งเดียวตอน mount
+   *
+   * ⚠️ ให้**เซิร์ฟเวอร์**เป็นผู้ตอบ ไม่ใช่อ่าน env จาก client
+   *   (ถ้าอ่านเอง แล้วรายชื่อผู้รับเปลี่ยน ปุ่มจะผิดจนกว่าจะ rebuild หน้าเว็บทั้งหมด)
+   *   และเงื่อนไขว่า "เป็นผู้ดูแลไหม" เป็นเรื่องของสิทธิ์ ต้องให้ฝั่งเซิร์ฟเวอร์เป็นผู้ตัดสิน
+   *
+   *   เริ่มจาก `false` แล้วค่อยเป็น `true` = ปุ่มจะโผล่หลังโหลดเสร็จ
+   *   ซึ่งถือว่าแก้เงื่อนไขได้ เพราะผู้ใช้ที่เจอปัญหาอยู่กับหน้าที่มีอยู่แล้วหลายวินาที
+   */
+  const [canReceive, setCanReceive] = useState(false)
 
   const pendingRef = useRef<{ href: string; since: number } | null>(null)
 
@@ -103,6 +130,18 @@ export default function AppStatus({ children }: { children: ReactNode }) {
   useEffect(() => {
     localStorage.setItem('appstatus.urlbar', open ? 'open' : 'collapsed')
   }, [open])
+
+  /* ── คนนี้เป็นผู้ดูแลรายงานปัญหาไหม → จะโผล่ปุ่ม "รายงานปัญหา" ไหม ── */
+  useEffect(() => {
+    let alive = true
+    api
+      .me()
+      .then((r) => alive && setCanReceive(Boolean(r.canReceiveReports)))
+      // ⚠️ คำขอนี้ล้มได้ (ยังไม่ล็อกอิน, API กำลังรีสตาร์ท) — ต้องกลืน ไม่ใช่โยน
+      //   เพราะมันแค่ควบคุมว่าจะเห็นปุ่มหรือไม่ ทำให้หน้าเว็บพังด้วยเหตุผลนี้ไม่ได้
+      .catch(() => alive && setCanReceive(false))
+    return () => { alive = false }
+  }, [])
 
   const setHrefNow = useCallback(() => setHref(window.location.href), [])
 
@@ -275,6 +314,7 @@ export default function AppStatus({ children }: { children: ReactNode }) {
 
   return (
     <BusyContext.Provider value={busyApi}>
+      <CanReceiveContext.Provider value={canReceive}>
       {/* ผ้าคลุมตอนเปิดหน้าครั้งแรก — server render ไว้ก่อน แล้ว JS ค่อยถอดออก
           ถ้า JS ไม่ทำงาน CSS จะซ่อนมันเองใน 6 วินาที หน้าเว็บจะไม่ถูกบังค้าง */}
       {!mounted && (
@@ -344,6 +384,21 @@ export default function AppStatus({ children }: { children: ReactNode }) {
               <button className="ghost" onClick={() => void doCopy('diag')}>
                 {copied === 'diag' ? 'คัดลอกแล้ว ✓' : 'คัดลอกข้อมูลแก้ปัญหา'}
               </button>
+              {/*
+               * ⚠️ โผล่เฉพาะผู้ดูแลที่อยู่ใน `REPORT_TO_SUBS`
+               *   ปุ่มรายงานปัญหาเป็นทางเข้าของข้อมูล (หน้าจอ + error) ถ้าโผล่ทุกหน้า
+               *   ผู้ใช้ทั่วไปจะเห็นปุ่มที่กดแล้วไม่มีใครอ่าน แล้วเข้าใจว่ารายงานไปแล้วที่ไหน
+               *   (เดี๋ยวไปหาทางอื่นแทน — ซึ่งแย่กว่าไม่มีปุ่ม)
+               */}
+              {canReceive && (
+                <button
+                  className="ghost"
+                  data-testid="report-issue-open"
+                  onClick={() => setReporting(true)}
+                >
+                  รายงานปัญหา
+                </button>
+              )}
               <button className="ghost" onClick={() => setOpen(false)}>
                 ซ่อน
               </button>
@@ -363,6 +418,15 @@ export default function AppStatus({ children }: { children: ReactNode }) {
       </div>
 
       {children}
+
+      {reporting && (
+        <ReportIssue
+          pageUrl={shownPath}
+          diagnostics={buildDiagnostic(shown, shownLabel)}
+          onClose={() => setReporting(false)}
+        />
+      )}
+      </CanReceiveContext.Provider>
     </BusyContext.Provider>
   )
 }

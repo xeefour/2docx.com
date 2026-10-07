@@ -9,8 +9,8 @@
  * ข้อที่ตั้งใจทำ:
  *   · ประวัติแชทเก็บเป็น "ข้อความ" จริง (ฝั่ง server) กลับมาคุยต่อได้
  *   · ค่าที่ผู้ใช้กรอกเองจะไม่ถูก AI ทับ (merge ที่ฝั่ง API)
- *   · เลือก provider ได้ต่อครั้ง โดยไม่ต้องแตะ .env
- *     (ค่าจริงของระบบยังคุมด้วย LLM_PROVIDER ในฝั่ง server)
+ *   · **ไม่มีตัวเลือกผู้ให้บริการ** (ผู้ใช้สั่ง 2026-10-06: ใช้ MiniMax อย่างเดียว)
+ *     ค่าที่ใช้จริงมาจาก `LLM_PROVIDER` ในฝั่ง server — หน้าเว็บไม่ส่งค่านี้ไปเลย
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -18,24 +18,23 @@ import {
   ApiError,
   type ChatMessage,
   type ChatSessionMeta,
+  type FieldDef,
   type LlmStatus,
 } from './lib/api'
-
-const PROVIDERS: Array<{ id: 'minimax' | 'openai' | 'mock'; label: string; hint: string }> = [
-  { id: 'minimax', label: 'MiniMax', hint: 'โมเดลภาษาไทยของ MiniMax (ค่าเริ่มต้นของระบบ)' },
-  { id: 'openai', label: 'OpenAI ที่เข้ากันได้', hint: 'ยิงไปยัง base URL แบบ OpenAI-compatible ที่ตั้งไว้' },
-  { id: 'mock', label: 'ทดสอบ (mock)', hint: 'ไม่เรียก AI จริง — ใช้ทดสอบ flow ตอนยังไม่ได้ตั้ง key' },
-]
+import { fieldLabel, getPath, middleTruncate } from './lib/fields'
 
 export default function AiChat({
   templateKey,
   templateName,
+  fields,
   data,
   onData,
   notify,
 }: {
   templateKey: string
   templateName: string
+  /** ช่องของแม่แบบนี้ — ใช้แสดง**ป้าย**แทน key ดิบ (key มีจุดคั่น อ่านไม่ออก) */
+  fields: FieldDef[]
   /** ข้อมูลที่กรอกไว้แล้ว — ส่งให้ AI รู้ว่าขาดอะไร */
   data: Record<string, unknown>
   /** AI เติมข้อมูลกลับมา → ผู้ใช้เอาไปใช้ต่อในฟอร์ม */
@@ -47,30 +46,19 @@ export default function AiChat({
   const [sessions, setSessions] = useState<ChatSessionMeta[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
-  /**
-   * ⚠️ ค่าเริ่มต้น**ต้องเป็น `mock`** ไม่ใช่ `minimax`
-   *
-   * ค่าจริงมาจาก `llmStatus()` ซึ่งยิงตอน mount (ยังไม่เสร็จเมื่อผู้ใช้กดส่งได้)
-   * ถ้าเริ่มที่ `minimax` แล้วผู้ใช้กดส่งก่อน status จะกลับมา
-   * → ยิง provider ที่ไม่มี key → 503 `LLM_NOT_CONFIGURED`
-   * mock ไม่ต้องใช้ key จึงเป็นค่าเริ่มต้นที่ปลอดภัยที่สุด
-   */
-  const [provider, setProvider] = useState<'minimax' | 'openai' | 'mock'>('mock')
   const [status, setStatus] = useState<LlmStatus | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
+
+  /** key → ป้าย สร้างครั้งเดียวต่อแม่แบบ เพราะค้นทีละข้อคือ O(n²) ตอนมีหลายช่อง */
+  const labelOf = useCallback(
+    (key: string) => fieldLabel(fields.find((f) => f.key === key) ?? { key } as FieldDef),
+    [fields],
+  )
 
   useEffect(() => {
     void api
       .llmStatus()
-      .then((s) => {
-        setStatus(s)
-        /**
-         * ⚠️ provider ที่เลือกในหน้าเว็บจะทับค่าใน .env ของเซิร์ฟเวอร์
-         *    ถ้า default เป็น MiniMax เสมอ ผู้ใช้ที่ยังไม่ได้ตั้ง key
-         *    จะเจอ error 401 ทันทีที่เปิดแท็บ — ต้องเริ่มจากค่าที่เซิร์ฟเวอร์ใช้จริง
-         */
-        setProvider(s.configured ? (s.provider as typeof provider) : 'mock')
-      })
+      .then(setStatus)
       .catch(() => setStatus(null))
   }, [])
 
@@ -117,7 +105,6 @@ export default function AiChat({
         data,
         sessionId,
         templateName,
-        provider,
       })
       setSessionId(r.sessionId)
       setMessages((m) => [
@@ -127,6 +114,11 @@ export default function AiChat({
           role: 'assistant',
           content: r.reply,
           data: r.data,
+          /*
+           * เก็บไว้เฉพาะรอบนี้เพราะฝั่ง server ไม่ได้เก็บ
+           *   ข้อความที่โหลดกลับจากประวัติจึงไม่มีรายการนี้ (ถูกกว่าการโชว์ผิดว่า AI เติมทั้งชุด)
+           */
+          changed: r.changed,
           at: new Date().toISOString(),
         },
       ])
@@ -176,25 +168,30 @@ export default function AiChat({
   }
 
   return (
-    <div style={{ display: 'grid', gap: 10, height: '100%', minHeight: 0 }}>
+    /*
+     * ⚠️ ต้องเป็น **flex column** ไม่ใช่ grid (วัดจริง 2026-10-07)
+     *
+     *   เดิมเป็น `display: grid; height: 100%` ทำให้ทุกแถว (auto) ถูก**ยืดให้เต็มความสูง**
+     *   เพราะ grid ที่ความสูงแน่นอนและ `align-content` ค่าเริ่มต้น จะกระจายที่เหลือให้แถว auto
+     *
+     *   ผลจริงที่จอ 452×539 (วัดได้ ไม่ได้เดา):
+     *     แถวหัว  34px → **88px**
+     *     แถวแท็บประวัติแชท 24px → **80px**  (แท็บ "สวัสดี ×" บวมเป็นก้อนเกือบสี่เหลี่ยม)
+     *     แถวแชท ได้เหลือแค่ 374px
+     *   ที่ `.chat` มี `flex: 1` อยู่แล้ว แต่ **flex ไม่มีผลใน grid** จึงไม่มีอะไรดูดพื้นที่ส่วนเกิน
+     *
+     *   แก้เป็น flex column → `flex: 1` ของ `.chat` ทำงานตามที่ตั้งใจไว้
+     *   แถวบน ๆ คงความสูงตามเนื้อหา และผลคือ**พื้นที่แชทได้มากขึ้น**ไม่ใช่น้อยลง
+     */
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, height: '100%', minHeight: 0 }}>
       {/* ── ค่าตั้ง + ประวัติแชท ── */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <select
-          value={provider}
-          onChange={(e) => setProvider(e.target.value as typeof provider)}
-          style={{ width: 'auto', fontSize: 13 }}
-          title={
-            status && !status.configured
-              ? `เซิร์ฟเวอร์ยังไม่ได้ตั้ง key — ใช้ได้แค่โหมดทดสอบ`
-              : 'เลือกผู้ให้บริการ AI สำหรับคำขอนี้'
-          }
-        >
-          {PROVIDERS.map((p) => (
-            <option key={p.id} value={p.id} title={p.hint}>
-              {p.label}
-            </option>
-          ))}
-        </select>
+        {/*
+          * ⚠️ ถอนตัวเลือกผู้ให้บริการออกแล้ว (ผู้ใช้สั่ง 2026-10-06: *"ไม่ต้องมีตัวเลือกให้ผู้ใช้เห็น อันนี้ minimax อย่างเดียว"*)
+          *   แท็บ AI มีสองโหมด (สัมภาษณ์/แชท) ถ้าถอดแค่โหมดเดียว อีกโหมดยังมีตัวเลือกให้เห็น
+          *   ผู้ใช้จะเห็นสองแบบในหน้าเดียวกัน และคนที่เผลอกดสุ่มจะเสียงันตาย
+          *   ฝั่ง API ตกไปใช้ค่าใน `.env` เองตอนไม่ส่ง `provider` มา
+          */}
         <button className="ghost" onClick={newChat} style={{ fontSize: 12.5, padding: '6px 10px' }}>
           แชทใหม่
         </button>
@@ -202,11 +199,6 @@ export default function AiChat({
         {status && !status.configured && <span className="pill warn">ยังไม่ได้ตั้ง key</span>}
         {status?.configured && status.provider === 'mock' && (
           <span className="pill warn">โหมด mock — ไม่ได้ต่อ AI จริง</span>
-        )}
-        {provider !== 'mock' && status && !status.configured && (
-          <span className="pill err" title="เลือก provider ที่ยังไม่ได้ตั้ง key">
-            {provider} ใช้ไม่ได้ตอนนี้
-          </span>
         )}
       </div>
 
@@ -266,9 +258,45 @@ export default function AiChat({
               }`}
             >
               {m.content}
-              {m.data && Object.keys(m.data).length > 0 && (
-                <div className="chat__keys">เติมข้อมูล: {Object.keys(m.data).join(' · ')}</div>
-              )}
+              {/*
+                ผลลัพธ์ของรอบนี้: AI เติมช่องอะไรบ้าง และเอาไปไว้ที่ไหนแล้ว
+                ⚠️ ต้องบอกทุกครั้ง รวมเวลา**ไม่ได้เติมเลย**
+                  เพราะการเงียบดูเหมือนระบบค้าง แต่จริง ๆ คือ AI ตอบได้แต่ไม่มีช่องที่ตรง
+
+                ⚠️ กรองค่าว่างออกอีกชั้น แม้ฝั่ง server แก้แล้ว
+                  เพราะถ้าวันหนึ่งมีทางอื่นที่ยังส่งค่าว่างมา
+                  การขึ้นว่า "เติมแล้ว" ทั้งที่ช่องยังว่าง ทำลายความเชื่อผู้ใช้ทันที
+              */}
+              {m.changed && (() => {
+                const rows = m.changed
+                  .map((k) => ({ key: k, value: String(getPath(m.data ?? {}, k) ?? '').trim() }))
+                  .filter((r) => r.value !== '')
+                if (rows.length === 0) {
+                  return (
+                    <div className="chat__filled chat__filled--none">
+                      <div className="chat__filled__head">
+                        รอบนี้ยังไม่ได้เติมช่องไหน — ลองบอกรายละเอียดเฉพาะช่องที่ต้องการเพิ่ม
+                      </div>
+                    </div>
+                  )
+                }
+                return (
+                  <div className="chat__filled">
+                    <div className="chat__filled__head">
+                      เติม {rows.length} ช่องแล้ว · ใส่ในช่องของแม่แบบให้แล้ว
+                    </div>
+                    <ul className="chat__filled__list">
+                      {rows.slice(0, 6).map((r) => (
+                        <li key={r.key}>
+                          <span className="chat__filled__k">{labelOf(r.key)}</span>
+                          <span className="chat__filled__v">{middleTruncate(r.value)}</span>
+                        </li>
+                      ))}
+                      {rows.length > 6 && <li className="muted">อีก {rows.length - 6} ช่อง</li>}
+                    </ul>
+                  </div>
+                )
+              })()}
             </div>
           ))}
 

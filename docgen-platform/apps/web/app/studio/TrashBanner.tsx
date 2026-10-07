@@ -71,7 +71,7 @@ export default function TrashBanner({
         padding: 14,
         marginBottom: 16,
         borderRadius: 'var(--radius)',
-        border: '1px solid #f0dcae',
+        border: '1px solid var(--warn-line)',
         background: 'var(--warn-bg)',
         color: 'var(--warn)',
       }}

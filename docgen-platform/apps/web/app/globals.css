@@ -1,26 +1,197 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ *  โทเคนสีของเว็บแอป — สัญญาระหว่างโทเคนในโค้ด กับค่าที่ใช้จริง
+ * ═══════════════════════════════════════════════════════════════════════
+ *
+ *  ชุดนี้**ยึดตาม `manual/STYLE.md`** (ตารางข้อ 3 และข้อ 9) ทุกค่าและทุกโทรน
+ *  ถ้าแก้สีที่นี่ ต้องแก้ตารางใน STYLE.md ด้วย ไม่งั้นเอกสารจะโกหกคนอ่าน
+ *  เทียบกับ STYLE.md: เว็บใช้ชื่อโทเคนของตัวเอง (`--brand` `--ink`) แต่**ค่าและหลักการเดียวกัน**
+ *  คือโทเคนประกาศครั้งเดียวใน `:root` แล้วทับใน `@media (prefers-color-scheme: dark)`
+ *
+ *  ── กติกาที่ห้ามละเมิด (มาจาก STYLE.md ข้อ 8 และข้อ 10) ──────────────────
+ *    1. บล็อกมืดต้องประกาศ**ครบทุกตัว** ถ้าไม่ครบ ตัวที่ลืมจะได้ค่าของโหมดสว่างไปใช้
+ *       เช่น พื้นสว่าง + ตัวอักษรมืด = อ่านไม่ออก **ไม่มี error**
+ *    2. สีที่เป็น"น้ำหนังของการอ่าน" ต้อง**สลับขั้ว**ทุกโหมด ไม่ใช่แค่ลดความอ่อนลง
+ *    3. ห้ามใช้สีเดียวกันทั้งสองโหมดกับพื้น — เช่น `--brand` เขียวเข้มบนพื้นเข้ม = จมหาย
+ *    4. เพิ่มโทเคนใหม่ต้องมี**ทั้งสองโหมด** และเพิ่มลงตารางข้อ 3 พร้อมกัน
+ *    5. เพิ่มสีใหม่ต้อง**วัดคอนทราสต์**ก่อน เกณฑ์ขั้นต่ำ 4.5:1 สำหรับตัวอักษร
+ *    6. ห้ามเขียนสีตรง ๆ ในกฎอื่น — ให้ใช้โทเคนเสมอ (ดูรายการที่ยังฝังตรงท้ายไฟล์)
+ */
+
 :root {
-  /* โทนหลักของ 2docx — ม่วงอมฟ้าเข้มตามธีมเอกสารราชการไทย */
-  --brand: #6d3bbf;
-  --brand-dark: #542a96;
-  --brand-soft: #f3ecfc;
-  --brand-border: #ded0f5;
+  /* ── สีเน้น ────────────────────────────────────────────────────────────
+   * เดิมเป็นม่วง (#6d3bbf) ตอนนี้เปลี่ยนเป็นเขียวตาม STYLE.md ข้อ 2
+   * ในโหมดมืดต้อง**สว่างขึ้น** เพราะพื้นหลังมืดอยู่แล้ว
+   */
+  --brand: #1d6f5c;
+  --brand-dark: #17594a;
+  --brand-soft: #e6f2ee;
+  --brand-border: #bcdcd3;
+  /** ตัวอักษรที่วางบนพื้น `--brand` — ต้องสลับขั้ว ไม่งั้นตอนมืดจะอ่านไม่ออก */
+  --on-brand: #ffffff;
 
-  --ink: #1a1523;
-  --ink-2: #5c5468;
-  --ink-3: #8b8397;
-  --line: #e6e1ee;
-  --bg: #faf8fd;
+  /* ── พื้นผิว ─────────────────────────────────────────────────────────── */
+  --bg: #fbfaf8;
   --surface: #ffffff;
+  --surface-2: #f4f2ee;
+  --line: #e3dfd8;
+  --line-strong: #cdc7bd;
 
-  --ok: #1a7f4b;
-  --ok-bg: #e6f5ec;
-  --warn: #9a6a00;
+  /* ── ตัวอักษร ──────────────────────────────────────────────────────────
+   * ⚠️ `--ink-3` ใช้ค่าที่ผ่านเกณฑ์ AA แล้ว (STYLE.md ข้อ 4.3)
+   *   ค่าเดิม #8b8397 ได้แค่ ~3.2:1 ต่ำกว่า 4.5:1 ที่ต้องใช้กับตัวอักษรเล็ก
+   */
+  --ink: #241f1a;
+  --ink-2: #6b635a;
+  --ink-3: #7b7267;
+
+  /* ── สถานะ ───────────────────────────────────────────────────────────── */
+  --ok: #1d6f5c;
+  --ok-bg: #e6f2ee;
+  --ok-line: #bcdcd3;
+  --ok-hover: #d5ebe4;
+  --warn: #9a6413;
   --warn-bg: #fdf3dd;
-  --err: #c02626;
-  --err-bg: #fdeaea;
+  --warn-line: #f0dcae;
+  --err: #a8342a;
+  --err-bg: #fbeceb;
+  --err-line: #f5c6c6;
+  --err-hover: #c62f24;
 
-  --radius: 10px;
+  /* ── กล่องโค้ด (มืดทั้งสองโหมด เพราะโค้ดคือสิ่งที่ต้องอ่านเป็นสัญลักษณ์) ── */
+  --code-bg: #2b2723;
+  --code-text: #eae5df;
+
+  /* ── เงา ───────────────────────────────────────────────────────────────
+   * เงาไม่ใช่สีที่สื่อความหมาย แต่ต้องเปลี่ยนตามโหมด
+   * โหมดมืดใช้ดำล้วนเพราะเงาสีม่วงจะกลืนกับพื้นมืด
+   */
   --shadow: 0 1px 3px rgb(26 21 35 / 8%), 0 6px 20px rgb(26 21 35 / 5%);
+  --shadow-md: 0 8px 28px rgb(26 21 35 / 16%);
+  --shadow-lg: 0 10px 40px rgb(26 21 35 / 18%);
+  --brand-glow: 0 2px 8px rgb(29 111 92 / 28%);
+
+  /* ── พื้นคลุมทับหน้า ─────────────────────────────────────────────────── */
+  --veil: rgb(251 250 248 / 74%);
+  /** ฉากมืดของ lightbox — มืดทั้งสองโหมด เพราะภาพเอกสารต้องเด่นบนพื้นมืด */
+  --scrim: rgb(26 21 35 / 42%);
+
+  /* ── รูปทรงและตัวอักษร ──────────────────────────────────────────────── */
+  --radius: 10px;
+  --font-th: 'Sarabun', 'Noto Sans Thai', 'IBM Plex Sans Thai', -apple-system,
+    BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'JetBrains Mono', Consolas, 'SF Mono',
+    'Courier New', monospace;
+}
+
+/**
+ * โหมดมืด — ทำตามระบบปฏิบัติของผู้ใช้ ไม่มีปุ่มสลับเอง
+ * ⚠️ ต้อง**ครบทุกตัว** ถ้าไม่ครบ ตัวที่ลืมจะได้ค่าโหมดสว่างไปใช้แบบเงียบ ๆ
+ *   (คำเตือนเดียวกับที่ STYLE.md ข้อ 8 เขียนไว้สำหรับคู่มือ)
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    /* ── สีเน้น: สว่างขึ้น ไม่ใช่มืดลง (STYLE.md ข้อ 2) ────────────── */
+    --brand: #5fbfa2;
+    --brand-dark: #7fd0b5;
+    --brand-soft: #1d3730;
+    --brand-border: #2f5a4e;
+    --on-brand: #0f231d;
+
+    /* ── พื้นผิว ─────────────────────────────────────────────────────── */
+    --bg: #1a1714;
+    --surface: #221e1a;
+    --surface-2: #2b2622;
+    --line: #38322c;
+    --line-strong: #4a423a;
+
+    /* ── ตัวอักษร ────────────────────────────────────────────────────── */
+    --ink: #ece7e1;
+    --ink-2: #a89f95;
+    --ink-3: #8f867d;
+
+    /* ── สถานะ ───────────────────────────────────────────────────────── */
+    --ok: #5fbfa2;
+    --ok-bg: #1d3730;
+    --ok-line: #2f5a4e;
+    --ok-hover: #24443a;
+    --warn: #d4a154;
+    --warn-bg: #3a2f1a;
+    --warn-line: #5a4826;
+    --err: #e8877c;
+    --err-bg: #3a2320;
+    --err-line: #5e322d;
+    --err-hover: #f0a196;
+
+    /* ── กล่องโค้ด ───────────────────────────────────────────────────── */
+    --code-bg: #14110f;
+    --code-text: #e6e0d8;
+
+    /* ── เงา: ดำล้วน สีม่วงจะกลืนกับพื้นมืด ────────────────────────── */
+    --shadow: 0 1px 3px rgb(0 0 0 / 40%), 0 6px 20px rgb(0 0 0 / 28%);
+    --shadow-md: 0 8px 28px rgb(0 0 0 / 44%);
+    --shadow-lg: 0 10px 40px rgb(0 0 0 / 50%);
+    --brand-glow: 0 2px 8px rgb(95 191 162 / 26%);
+
+    /* ── พื้นคลุม ─────────────────────────────────────────────────────── */
+    --veil: rgb(12 10 8 / 76%);
+    --scrim: rgb(10 8 6 / 62%);
+  }
+}
+
+/**
+ * โหมดมืดที่ผู้ใช้เลือกเองจากปุ่มใน sidebar
+ *
+ * ⚠️ ต้อง**ตรงกับบล็อกข้างบนทุกโทเคน**
+ *   ถ้าแก้บล็อกใดบล็อกหนึ่งแล้วลืมอีกบล็อก ผู้ใช้ที่กดสลับเองจะเห็นคนละธีมกับตอนเปิดครั้งแรก
+ *   โดยไม่มี error → เกณฑ์ probe-theme.mjs ตรวจความตรงกันนี้ แก้แล้วตกทันที
+ */
+:root[data-theme='dark'] {
+  /* ── สีเน้น: ต้องเหมือนบล็อก @media ข้างบนทุกตัว ─────────────────── */
+  --brand: #5fbfa2;
+  --brand-dark: #7fd0b5;
+  --brand-soft: #1d3730;
+  --brand-border: #2f5a4e;
+  --on-brand: #0f231d;
+
+  /* ── พื้นผิว ─────────────────────────────────────────────────────── */
+  --bg: #1a1714;
+  --surface: #221e1a;
+  --surface-2: #2b2622;
+  --line: #38322c;
+  --line-strong: #4a423a;
+
+  /* ── ตัวอักษร ────────────────────────────────────────────────────── */
+  --ink: #ece7e1;
+  --ink-2: #a89f95;
+  --ink-3: #8f867d;
+
+  /* ── สถานะ ───────────────────────────────────────────────────────── */
+  --ok: #5fbfa2;
+  --ok-bg: #1d3730;
+  --ok-line: #2f5a4e;
+  --ok-hover: #24443a;
+  --warn: #d4a154;
+  --warn-bg: #3a2f1a;
+  --warn-line: #5a4826;
+  --err: #e8877c;
+  --err-bg: #3a2320;
+  --err-line: #5e322d;
+  --err-hover: #f0a196;
+
+  /* ── กล่องโค้ด ───────────────────────────────────────────────────── */
+  --code-bg: #14110f;
+  --code-text: #e6e0d8;
+
+  /* ── เงา ─────────────────────────────────────────────────────────── */
+  --shadow: 0 1px 3px rgb(0 0 0 / 40%), 0 6px 20px rgb(0 0 0 / 28%);
+  --shadow-md: 0 8px 28px rgb(0 0 0 / 44%);
+  --shadow-lg: 0 10px 40px rgb(0 0 0 / 50%);
+  --brand-glow: 0 2px 8px rgb(95 191 162 / 26%);
+
+  /* ── พื้นคลุม ─────────────────────────────────────────────────────── */
+  --veil: rgb(12 10 8 / 76%);
+  --scrim: rgb(10 8 6 / 62%);
 }
 
 * {
@@ -34,9 +205,7 @@ body {
 }
 
 body {
-  font-family:
-    'Sarabun', 'Noto Sans Thai', 'IBM Plex Sans Thai', -apple-system, BlinkMacSystemFont,
-    'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font-th);
   /*
    * เว้นที่ท้ายหน้าไว้ให้แถบ URL ลอยมุมล่างซ้าย (ตอนย่อ)
    *
@@ -59,7 +228,7 @@ button {
   border-radius: 8px;
   padding: 8px 14px;
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   transition: background 0.15s;
 }
 button:hover:not(:disabled) {
@@ -82,7 +251,7 @@ button.danger {
   background: var(--err);
 }
 button.danger:hover:not(:disabled) {
-  background: #9d1f1f;
+  background: var(--err-hover);
 }
 
 /**
@@ -116,6 +285,15 @@ button.danger:hover:not(:disabled) {
   padding: 5px 8px;
   justify-content: center;
   font-size: 15px;
+}
+/*
+ * ดาวที่เก็บแล้วต้องเป็นสีทอง
+ * เคยเขียนเป็น `style={{ color: starred ? 'var(--warn)' : undefined }}` ใน JSX
+ *   ย้ายมาเป็น CSS ตามกติกา STYLE.md ข้อ 10.1 (ห้ามฝังสีใน `style={{ }}`)
+ *   เพราะตอนเปลี่ยนธีมสีทองของโหมดมืดจะไม่ถูกโทเคนกำกับ
+ */
+.tpllist td.tplrow__acts .tplrow__i-star[aria-pressed='true'] {
+  color: var(--warn);
 }
 .tplrow__i-open::before {
   content: '\1F4C2';
@@ -267,7 +445,7 @@ button.danger:hover:not(:disabled) {
   gap: 10px;
   padding: 10px 14px;
   background: rgb(12 9 18 / 92%);
-  color: #fff;
+  color: var(--on-brand);
   flex: none;
 }
 .lightbox__title {
@@ -292,13 +470,13 @@ button.danger:hover:not(:disabled) {
 }
 /* กฎ button{color:#fff} ของโปรเจกต์ทำให้ปุ่มบนพื้นมืดมองไม่เห็น */
 .lightbox__bar .ghost {
-  color: #fff;
+  color: var(--on-brand);
   background: rgb(255 255 255 / 14%);
   flex: none;
 }
 .lightbox__bar .ghost:hover:not(:disabled) {
   background: rgb(255 255 255 / 24%);
-  color: #fff;
+  color: var(--on-brand);
 }
 
 .lightbox__stage {
@@ -337,11 +515,11 @@ button.danger:hover:not(:disabled) {
   max-height: 100%;
   height: auto;
   border-radius: 4px;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 10px 40px rgb(0 0 0 / 45%);
 }
 .lightbox__msg {
-  color: #fff;
+  color: var(--on-brand);
   font-size: 14px;
   padding: 40px 20px;
 }
@@ -381,7 +559,7 @@ button.danger:hover:not(:disabled) {
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #fff;
+  color: var(--on-brand);
   font-size: 17px;
   line-height: 1;
   cursor: pointer;
@@ -415,7 +593,7 @@ button.danger:hover:not(:disabled) {
   padding: 6px 12px;
   border-radius: 10px;
   /* ลิงก์หลักบนพื้นมืดต้องกำหนดสีเอง กฎ button{color:#fff} ไม่ครอบ a */
-  color: #fff;
+  color: var(--on-brand);
   font-size: 13px;
   text-decoration: none;
   white-space: nowrap;
@@ -513,7 +691,7 @@ button.danger:hover:not(:disabled) {
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
-  background: #fff;
+  background: var(--surface);
 }
 .previews__item img {
   display: block;
@@ -561,12 +739,12 @@ button.danger:hover:not(:disabled) {
   padding: 5px 11px;
   border-radius: 8px;
   background: var(--ink);
-  color: #fff;
+  color: var(--on-brand);
   font-size: 12.5px;
   line-height: 1.5;
   white-space: nowrap;
   pointer-events: none;
-  box-shadow: 0 6px 18px rgb(26 21 35 / 24%);
+  box-shadow: var(--shadow-md);
   animation: copypop-in 140ms ease-out;
 }
 /* หางชี้ปุ่ม
@@ -660,7 +838,7 @@ button.danger:hover:not(:disabled) {
   border: 1px solid var(--line);
   border-radius: 10px;
   overflow: hidden;
-  background: #fff;
+  background: var(--surface);
 }
 /* โหมดชิด: ทุกช่องเป็นบล็อกเต็มความกว้าง ไม่ต้องชิดขวาแบบตาราง */
 .tpllist--grid td {
@@ -742,7 +920,7 @@ button.danger:hover:not(:disabled) {
 }
 .viewtoggle__btn.is-on {
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
 }
 .viewtoggle__i {
   font-size: 16px;
@@ -758,20 +936,20 @@ button.danger:hover:not(:disabled) {
  */
 button.ghost.ok {
   background: var(--ok-bg);
-  border-color: #bfe5cf;
+  border-color: var(--ok-line);
   color: var(--ok);
 }
 button.ghost.ok:hover:not(:disabled) {
-  background: #d5efe0;
+  background: var(--ok-hover);
   color: var(--ok);
 }
 button.ghost.err {
   background: var(--err-bg);
-  border-color: #f5c6c6;
+  border-color: var(--err-line);
   color: var(--err);
 }
 button.ghost.err:hover:not(:disabled) {
-  background: #f8d7d7;
+  background: var(--err-hover);
   color: var(--err);
 }
 
@@ -794,14 +972,14 @@ button.ghost.err:hover:not(:disabled) {
  */
 button.copybtn {
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   border-color: var(--brand);
   font-weight: 600;
   padding: 9px 18px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  box-shadow: 0 2px 8px rgb(109 59 191 / 28%);
+  box-shadow: var(--brand-glow);
 }
 button.copybtn:hover:not(:disabled) {
   background: var(--brand-dark);
@@ -1035,7 +1213,7 @@ tbody tr:hover {
 .pill.ok {
   background: var(--ok-bg);
   color: var(--ok);
-  border-color: #bfe5cf;
+  border-color: var(--ok-line);
 }
 .pill.warn {
   background: var(--warn-bg);
@@ -1045,7 +1223,7 @@ tbody tr:hover {
 .pill.err {
   background: var(--err-bg);
   color: var(--err);
-  border-color: #f5c6c6;
+  border-color: var(--err-line);
 }
 
 /**
@@ -1085,13 +1263,24 @@ tbody tr:hover {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  /*
+   * ⚠️ ต้องมี padding ตั้งต้น — ไม่ใช่ตกแต่ละการ์ดเอง
+   *   เคยเป็นแบบนี้: การ์ดทุกตัวในโปรเจกต์เขียน `padding` ใน `style={{ }}` เองทั้งหมด
+   *   พอมีการ์ดใหม่ที่ลืม → ข้อความไปชนขอบการ์ดทุกด้าน **โดยไม่มี error**
+   *   เจอครั้งแรกที่การ์ดทีมใน `/teams` (ชี้จากคอมเมนต์ผู้ใช้ในภาพหน้าจอ)
+   *
+   * การ์ดที่ต้องการพื้นที่ว่างเป็นศูนย์ (คือการ์ดที่ลูกข้างในจัด padding เองทั้งหมด
+   *   เช่นรายการประวัติ รายการแม่แบบ กล่องจดหมาย) ให้เขียน `padding: 0` ทับ
+   *   เพราะ inline style ชนะ CSS เสมอ → ไม่ต้องแก้กลับทีละชิ้น
+   */
+  padding: 16px;
 }
 
 .muted {
   color: var(--ink-3);
 }
 .mono {
-  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
 }
 
@@ -1286,7 +1475,7 @@ tbody tr:hover {
 .dl__btn[data-open='true'] {
   background: var(--brand);
   border-color: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
 }
 .dl__pop {
   position: absolute;
@@ -1298,7 +1487,7 @@ tbody tr:hover {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-md);
 }
 .dl__title {
   display: flex;
@@ -1342,7 +1531,7 @@ tbody tr:hover {
 .dl__rangeinput {
   padding: 6px 9px;
   font-size: 13px;
-  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  font-family: var(--font-mono);
 }
 .dl__quick {
   display: flex;
@@ -1456,7 +1645,7 @@ tbody tr:hover {
   place-items: center;
   font-size: 9px;
   font-weight: 700;
-  color: #fff;
+  color: var(--on-brand);
   letter-spacing: 0.2px;
 }
 .dl__status {
@@ -1514,6 +1703,101 @@ tbody tr:hover {
 .tabs__star[aria-pressed='true'] {
   color: var(--warn);
 }
+
+/**
+ * ปุ่มบุ๊กมาร์กที่มี dropdown เลือกที่เก็บ (เมื่อผู้ใช้มีทีม)
+ *
+ * ⚠️ `.bmk` ต้องเป็น `inline-block` ที่มี `position: relative`
+ *   เพราะเมนูจะยึดกับกรอบปุ่ม ไม่ใช่กับ `.tabs` หรือ `<td>` ที่บรรทุดอยู่
+ *   ถ้าไม่มี `position: relative` เมนูจะวางผิดมุมและล้นออกนอกจอตอนจอแคบ
+ *
+ * ⚠️ `display: inline-flex` + `vertical-align: top` สำคัญมาก
+ *   เพราะปุ่มเดิมใช้ `margin-left: auto` ในแถบแท็บ ถ้าครอบด้วยกล่องแบบ inline
+ *   ปกติ บรรทัดจะสร้างพื้นที่ว่างใต้ปุ่มดาว (baseline ของ inline box อยู่ที่ขอบล่างข้อความ)
+ *   → แถบแท็บสูงขึ้นเงียบ ๆ โดยไม่มี error (เจอแบบนี้กับปุ่มที่คลิกไม่ได้ในรอบก่อน)
+ */
+.bmk {
+  position: relative;
+  display: inline-flex;
+  vertical-align: top;
+  line-height: 0;
+}
+.bmk__pop {
+  /*
+   * ⚠️ ต้องเป็น `position: fixed` และให้ JS คำนวณ `left/top` เป็นพิกัดจอ
+   *
+   *   ตอนแรกใช้ `position: absolute; right: 0` ซึ่งพังจริงเมื่อปุ่มอยู่ใกล้ขอบซ้ายของเนื้อหา
+   *   เมนูกว้าง 240px เลยยื่นไปทางซ้ายจนไปอยู่ใต้ sidebar (กว้าง 244px)
+   *   → `elementFromPoint` คืน `.rail__gap` → **กดไม่ได้** โดยไม่มี error
+   *   เกิดจริงรอบนี้ (วัดพิกัด: ปุ่มอยู่ที่ x=102 ซึ่งอยู่ใต้ sidebar)
+   *
+   *   แก้ด้วยการคำนวณเอง + จำกัดให้อยู่ในจอ เพราะ:
+   *     · ตำแหน่ง sidebar เปลี่ยนตามจอ (จอแคบ = ลิ้นชักเป็นชั้นทับ)
+   *     · ตารางกว้างไม่เท่ากัน ปุ่มอาจอยู่กลางจอหรือชิดซ้าย
+   *   การเดา CSS เอาทุกกรณีไม่ได้ → ให้โค้ดวัดตำแหน่งจริงก่อนเปิด
+   *
+   * ⚠️ `width` ต้องเป็นค่าคงที่ ไม่ใช่ `min-width`
+   *   เพราะ JS ต้องรู้ความกว้าง**ก่อน**เปิดเพื่อคำนวณ `left` ให้ไม่ล้นจอ
+   */
+  position: fixed;
+  width: 240px;
+  max-width: calc(100vw - 16px);
+  z-index: 60;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  line-height: 1.4;
+}
+.bmk__title {
+  margin: 4px 8px 6px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.bmk__opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.bmk__opt:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.bmk__opt:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+.bmk__opt--danger {
+  color: var(--err);
+}
+.bmk__opt--danger:hover:not(:disabled) {
+  background: var(--err-bg);
+}
+.bmk__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bmk__tick {
+  flex: none;
+  color: var(--brand);
+}
+.bmk__sep {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--line);
+}
 .tabs__tab {
   background: none;
   border: none;
@@ -1548,53 +1832,116 @@ tbody tr:hover {
   text-align: center;
 }
 
-/* ── แท็บบนมือถือ: 2 คอลัมน์ ไม่ต้องเลื่อนแนวนอน ────────────────────── */
+/* ── แท็บบนมือถือ: บรรทัดเดียวเสมอ ──────────────────────────────────────
+ *
+ * ผู้ใช้สั่ง 2026-10-06: *"เมนู tabs นี้แก้ไขด้วย หน้าจอขนาดเล็กให้อยู่ใน tabs เดียวกัน"*
+ *   ภาพที่ผู้ใช้ส่งมา = แถบขวาของหน้าแก้ไข ที่ 570px
+ *   (`ตัวอย่างเอกสาร` · `ข้อมูลแม่แบบ` · `ช่องฟอร์ม` · `การแชร์และสิทธิ์`)
+ *   ซึ่งกฎเดิมจัดเป็นกริด 2 คอลัมน์ → 2 บรรทัด
+ *
+ * ── ทำไมต้องยอมให้เลื่อนแนวนอน แม้ผู้ใช้จะไม่อยากเห็น scrollbar ──────────────
+ *   กฎเดิมเลือกกริด 2 คอลัมน์เพราะแท็บยาวแล้วหลุดออกจอ
+ *   แต่กริดแปลว่า "2 บรรทัด" ซึ่งเป็นสิ่งที่ผู้ใช้สั่งแก้ ไม่ใช่ทางแก้ปัญหา
+ *   วัดจากหน้าเว็บจริง: ป้ายทั้ง 4 อันกว้างรวมกัน ~470px (13px + padding)
+ *   แต่ที่ 390px เหลือพื้นที่ใช้งานราว 358px
+ *   → ถ้าบีบให้พอดีข้อความต้องถูกตัดเป็น … ซึ่งอ่านไม่ออกกว่าเลื่อนดู
+ *   จึงได้ข้อสรุปว่า **ที่ความกว้างมือถือจริง ๆ เลื่อนแนวนอนแหละคำตอบที่ถูก**
+ *   แล้วจึงต้องแก้บั๊ก 3 ข้อของการเลื่อนให้หายไปก่อน (ดูด้านล่าง)
+ */
 @media (max-width: 720px) {
   .tabs {
-    /*
-     * grid แทน flex+overflow-x
-     * เดิมเป็น display:flex + overflow-x:auto แท็บที่ 4 หลุดนอกจอ
-     * และ scrollbar แนวนอนโผล่กินความสูงจอโดยผู้ใช้ไม่ได้กดมัน
-     * กริด 2 คอลัมน์ทำให้แท็บ 3-4 อันเห็นครบโดยไม่ต้องเลื่อนอะไรเลย
-     */
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    /* กริดไม่ต้องมี overflow แล้ว — ถ้ายังเหลือจะกลับไปโผล่ scrollbar */
-    overflow-x: visible;
+    display: flex;
+    /* ⚠️ ต้องเป็น nowrap + auto ไม่ใช่ grid 2 คอลัมน์
+     *   เพราะผู้ใช้สั่งให้อยู่แถวเดียว และ grid จะพังถ้าวันหนึ่งมีแท็บ 5-6 อัน
+     *   (grid 2 คอลัมน์พึ่งว่าจำนวนแท็บเป็นจำนวนคู่เสมอ) */
+    flex-wrap: nowrap;
+    /* auto ไม่ใช่ visible — ถ้าไม่มี overflow ปุ่มดาวจะดันแท็บหลุดออกนอกจอ
+     * (test-editor-bookmark หัวข้อ 8 ตรวจข้อนี้) */
+    overflow-x: auto;
+    /* ไม่ให้ลากนิ้วแนวนอนแล้วหน้าเลื่อนตาม (จอแนวนอนเอียง) */
+    overscroll-behavior-x: contain;
     column-gap: 0;
+    /*
+     * ⚠️ บั๊กข้อ 1 — scrollbar แนวนอนโผล่กินความสูงจอ
+     *   ผู้ใช้เห็นแถบเลื่อนตัวเองเฉย ๆ แต่ไม่รู้ว่าต้องเลื่อน และมือถือหลายเครื่องซ่อนมันอยู่แล้ว
+     *   (บันทึกไว้ที่ test-list-mobile หัวข้อ 9 ตอนที่ยกเลิกการเลื่อนไปใช้กริด)
+     *   → ซ่อนมันทิ้ง เหลือที่เป็นการปัดนิ้ว/ล้อเมอร์ซ์แนวนอน
+     */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+  /*
+   * ⚠️ บั๊กข้อ 2 — เนื้อหาถูกซ่อนนอกจอโดยผู้ใช้ไม่รู้ตัว
+   *   เคยเจอกับ `.inbox__filters` (ปุ่มตัวกรองที่ 5 หายไปเงียบ ๆ)
+   *   → ไล่สีขอบเฉพาะตอนที่แถบ**ล้นจริง** คลาสมาจาก `Tabs.tsx`
+   *     (ถ้าไล่สีตลอด จะเหมือนบอกว่ามีอะไรซ่อนอยู่ตอนที่ไม่มี = หลอกผู้ใช้)
+   */
+  .tabs--fade-right {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+  }
+  .tabs--fade-left {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 20px);
+    mask-image: linear-gradient(to right, transparent, #000 20px);
+  }
+  .tabs--fade-left.tabs--fade-right {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 20px, #000 calc(100% - 20px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 20px, #000 calc(100% - 20px), transparent);
   }
   .tabs__tab {
     justify-content: center;
-    /* min-width: 0 กันข้อความยาวดันกริดให้เกินจอ (รายการยาว ๆ จะถูกตัดเป็น …) */
-    min-width: 0;
-    padding: 10px 8px;
-    font-size: 13.5px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    /* สูงพอแตะนิ้วเท่าปุ่มอื่นบนจอแคบ */
-    min-height: 30px;
+    /*
+     * ⚠️ บั๊กข้อ 3 — ข้อความถูกตัดเป็น …
+     *   กฎเดิมใช้ `min-width: 0` + ellipsis เพื่อกันกริดล้นจอ
+     *   พอเปลี่ยนมาเป็นแถวเดียว การตัดคำกลายเป็นวิธีแก้ปัญหาที่แย่กว่าการเลื่อน
+     *   (ผู้ใช้เห็น "ตัวอย่างเอก…" แล้วไม่รู้ว่ากดได้อะไร)
+     *   → `0 0 auto` = เก็บความกว้างตามข้อความเสมอ ไม่มีทางถูกตัด
+     *   แถบที่ยาวเกินจอให้ `.tabs` เลื่อนแทน (ดูหัวข้อข้างบนว่าทำไมถึงต้องเลื่อน)
+     */
+    flex: 0 0 auto;
+    padding: 10px;
+    font-size: 13px;
+    /* สูงพอแตะนิ้ว — เทสต์กำหนด ≥36px (เดิมกริดได้ 30px ซึ่งเล็กเกินไป) */
+    min-height: 36px;
   }
   .tabs__count {
     flex: none;
   }
   /*
+   * แถบสั้น ๆ → อยู่บรรทัดเดียว**โดยไม่ต้องเลื่อน** (ผู้ใช้สั่ง 2026-10-06)
+   *
+   * ⚠️ ทำไมต้องมีคลาสนี้ ถ้า `.tabs` เป็นแถวเดียวอยู่แล้ว
+   *   เพราะกฎข้างบนใช้ `flex: 0 0 auto` = กว้างตามข้อความ → แถบซ้าย
+   *   (`ฟอร์ม` · `JSON` · `ประวัติ` + ดาว) จะเกาะชิดซ้ายเป็นก้อนเล็ก ๆ
+   *   ไม่เต็มความกว้างจอ ดูเหมือนแถบที่โดนตัด
+   *   `1 1 0` จึงให้แท็บแบ่งพื้นที่ที่เหลือเท่า ๆ กัน พอดีจอโดยไม่ต้องเลื่อน
+   */
+  .tabs--compact .tabs__tab {
+    flex: 1 1 0;
+    /* ลด padding แนวนอนลง เพื่อให้ข้อความไม่ถูกตัดเป็น … (ผู้ใช้สั่ง "ลด padding margin") */
+    padding: 10px 4px;
+  }
+  /*
    * ปุ่มดาวบุ๊กมาร์ก (หน้าแก้ไขแม่แบบ)
-   *   เดิมใช้ margin-left:auto เพื่อดันไปปลายแถว
-   *   ในกริดไม่มีแถวว่างให้ดัน ต้องให้กินช่องของมันเอง
-   *   ไม่งั้นจะไปหนีชิดซ้ายทั้งที่ผู้ใช้สั่งให้อยู่ "ขวามือ"
+   *
+   * ⚠️ ห้ามคืน `margin-left: auto` ในโหมดนี้
+   *   auto คือ "ดันด้วยพื้นที่ว่าง" พอแถบกลายเป็นภาชนะที่เลื่อนได้
+   *   พื้นที่ว่างข้าง ๆ กลายเป็นเนื้อหาที่เลื่อนตาม → auto จะดันดาวออกนอกจอ
+   *   ไปเรื่อย ๆ (ปุ่มบุ๊กมาร์กหาย = ฟีเจอร์ตายแบบไม่มี error)
+   *   ดาวจึงเกาะต่อท้ายแท็บตัวสุดท้ายเสมอ = อยู่ "ขวามือ" ตามที่ผู้ใช้สั่ง
+   *
+   * ⚠️ `justify-self: end` ที่เคยมีต้องหายไป — มีผลกับกริดเท่านั้น
+   *   ตอนนี้แถบเป็น flex ตลอด ค่านี้ไม่มีผล แต่ค้างไว้ทำให้เข้าใจผิดว่าแถบยังเป็นกริด
    */
   .tabs__star {
+    /* เก็บความกว้างตามธรรมชาติ ไม่แย่งพื้นที่กับแท็บ (แท็บใช้ flex:1 แบ่งกัน) */
+    flex: none;
     margin-left: 0;
     justify-content: center;
     min-height: 42px;
-    /*
-     * ⚠️ ต้อง `justify-self: end`
-     *   ในกริด 2 คอลัมน์ ช่องกว้างเต็มคอลัมน์โดยปกติ (stretch)
-     *   ดาวจึงกลายเป็นแถบกว้าง 164px อยู่คนละแถวกับตัวเอง
-     *   ดูเหมือนเบราว์เซอร์เพิ่งโหลดไม่ครบ — ทั้งที่เป็นแค่ปุ่มกดบุ๊กมาร์ก
-     *   ย้ายไปชิดขวาของช่องแล้วกลายเป็นปุ่มเล็ก ๆ ที่ดูตั้งใจ
-     */
-    justify-self: end;
   }
 }
 
@@ -1645,6 +1992,187 @@ tbody tr:hover {
   margin: 0;
 }
 
+/* ── ค่าที่ยาวเกินอ่าน (hash / URL) ─────────────────────────────
+ *
+ * ผู้ใช้สั่ง 2026-10-06: *"แสดง หัว ท้าย พอ ตรงกลาง ... ยาวไป มีปุ่ม copy"*
+ *   ค่าแบบ `versionId` ยาว 64 ตัว ยืดจนล้นช่องและอ่านไม่ออกว่ามีกี่ค่า
+ *
+ * ⚠️ ต้อง wrap ได้ ไม่ใช่ `white-space: nowrap` เหมือนโค้ด/URL ปกติ
+ *   ถ้าไม่ wrap ตอนจอแคบแถวนี้จะล้นออกนอกกรอดฟอร์ม (ผู้ใช้เจอบนจอ 360px)
+ */
+.fieldlong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.fieldlong__val {
+  /* ใช้ชุดเดียวกับ `.mono` ในไฟล์นี้ ไม่ประดิษฐ์ font ใหม่เอง */
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink);
+  word-break: break-all;
+  /* ย่อให้เหลือความยาวเท่ากับช่อง input เดิม ไม่ให้ชั้นกว้างจนบีบปุ่ม */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.fieldlong__len {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.fieldlong__copy,
+.fieldlong__toggle {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+button.fieldlong__copy.ok {
+  color: var(--ok);
+}
+button.fieldlong__copy.err {
+  color: var(--err);
+}
+
+/* ── สัมภาษณ์ AI (แท็บ AI) ─────────────────────────────────────
+ *
+ * ผู้ใช้สั่ง 2026-10-06: ให้เป็นแท็บของตัวเอง และให้ AI ถามทีละข้อ/ทีละชุด
+ *   แล้วเอาคำตอบมาวิเคราะห์เป็นค่าตามชนิดชอง
+ */
+.iv {
+  display: grid;
+  gap: 12px;
+}
+.iv__bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.iv__field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  margin: 0;
+}
+.iv__field select {
+  width: auto;
+  font-size: 13px;
+}
+.iv__note {
+  margin: 0;
+  font-size: 12.5px;
+}
+/* แถบความคืบหน้า: ต้องเห็นตัวเลขด้วยเสมอ บาร์อย่างเดียวอ่านยาก */
+.iv__progress {
+  position: relative;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--surface-2, var(--line));
+  overflow: hidden;
+}
+.iv__barfill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.iv__progresstext {
+  position: relative;
+  display: block;
+  line-height: 22px;
+  text-align: center;
+  font-size: 12px;
+}
+.iv__reply {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.iv__qs {
+  display: grid;
+  gap: 10px;
+}
+.iv__q {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+}
+.iv__qlabel {
+  font-size: 12px;
+  color: var(--ink-2);
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.iv__qkey {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--ink-3, var(--ink-2));
+}
+.iv__qtext {
+  font-size: 14px;
+}
+.iv__qhelp {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.iv__opts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.iv__opt--on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.iv__preview {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+.iv__preview h3 {
+  margin: 0;
+  font-size: 13.5px;
+}
+.iv__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.iv__tk {
+  text-align: left;
+  color: var(--ink-2);
+  padding: 4px 8px 4px 0;
+  vertical-align: top;
+  white-space: nowrap;
+}
+.iv__tv {
+  padding: 4px 0;
+  word-break: break-word;
+}
+.iv__actions {
+  display: flex;
+  gap: 8px;
+}
+.iv__foot {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 /* ── แชท AI ─────────────────────────────────────────────── */
 .chat {
   display: grid;
@@ -1669,7 +2197,7 @@ tbody tr:hover {
 }
 .chat__msg--user {
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   justify-self: end;
 }
 .chat__msg--ai {
@@ -1680,7 +2208,7 @@ tbody tr:hover {
 }
 .chat__msg--err {
   background: var(--err-bg);
-  border: 1px solid #f5c6c6;
+  border: 1px solid var(--err-line);
   color: var(--err);
 }
 .chat__msg--pending {
@@ -1695,7 +2223,107 @@ tbody tr:hover {
   color: var(--ink-3);
 }
 .chat__msg--user .chat__keys {
-  color: rgb(255 255 255 / 80%);
+  /*
+   * ⚠️ ต้องผูกกับ `--on-brand` ไม่ใช่ขาวตายตัว
+   *   ฟองข้อความฝั่งผู้ใช้พาดสี `--brand` และตัวอักษรต้อง**สลับขั้ว**ตามโหมด
+   *   ถ้าเขียนขาวตายตัว ตอนโหมดมืดจะเป็นขาวอ่อนบนพื้นเขียวอ่อน = มองไม่เห็น
+   */
+  color: color-mix(in srgb, var(--on-brand) 80%, transparent);
+}
+
+/**
+ * ผลลัพธ์ที่ AI เติม — รายการช่องพร้อมค่า
+ *
+ * ⚠️ ต้องโชว์ให้ผู้ใช้เห็น ไม่ใช่แค่บอกว่า "เติมข้อมูลแล้ว"
+ *   เพราะการแชทแล้วไม่เห็นว่าอะไรถูกแก้ = ไม่กล้ากดสร้างเอกสาร
+ *   (ผู้ใช้สั่ง 2026-10-06)
+ */
+.chat__filled {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--line);
+  font-size: 12px;
+}
+.chat__filled__head {
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-bottom: 4px;
+}
+.chat__filled--none .chat__filled__head {
+  font-weight: 400;
+  color: var(--ink-3);
+}
+.chat__filled__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+.chat__filled__list li {
+  display: grid;
+  /* ป้ายกว้างคงที่ ค่ายาวได้ — จอแคบจะตัดท้ายค่าแทนที่จะดันป้ายขึ้นบรรทัดใหม่ */
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+  gap: 8px;
+}
+.chat__filled__k {
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat__filled__v {
+  /* key ของช่องจริงมีจุดคั่นและค่าอาจเป็นรหัสยาว → ต้องตัดได้ทุกตำแหน่ง */
+  overflow-wrap: anywhere;
+}
+
+/**
+ * แถบ "ขั้นตอนถัดไป" ในแท็บ AI
+ *
+ * ⚠️ ห้ามใช้ `position: sticky` ที่นี่ (วัดจริง 2026-10-07 ผู้ใช้: *"มันซ่อนกับข้างหลัง"*)
+ *   sticky **ไม่เคยเอาตัวเองออกจาก flow** จึงวางทับเนื้อหาก่อนหน้าได้
+ *   ที่จอ 452×539 วัดได้ว่าทับปุ่ม "วิเคราะห์และเติมข้อมูล" 15px
+ *   และ `elementFromPoint` ที่กลางปุ่มนั้นโดนแถบนี้บัง → **ผู้ใช้กดไม่ได้**
+ *   ความสูง 66px ทำให้ทับชัด และยิ่งเลื่อนยิ่งกดยาก
+ *   ตอนนี้อยู่ใน flow ปกติต่อจากแชท → กดได้เสมอ และยังเห็นในจอโดยไม่ต้องเลื่อน (วัดแล้ว)
+ */
+.iv__done {
+  margin-top: 12px;
+  padding: 10px 12px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  /* ⚠️ ต้องเป็นตัวแปรที่**มีอยู่จริง** — `--panel` ไม่เคยถูกนิยามในไฟล์นี้
+     การอ้างตัวแปรที่ไม่มีทำให้ declaration ทิ้งทั้งบรรทัด → พื้นหลังโปร่งใส
+     แล้วข้อความของปุ่มข้างหลังทะลุขึ้นมาให้เห็น (ตัวแปรที่มี: --bg, --surface, --line …) */
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.iv__done__sum {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.iv__done__acts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/*
+ * ⚠️ จอแคบ **ห้าม** ยืดปุ่มให้เต็มความกว้าง
+ *   เคยใช้ `flex: 1` + `width: 100%` ทำให้สองปุ่มกินครึ่งจอพอดี (วัดได้ 191px ต่อปุ่ม)
+ *   ซึ่งกดยากกว่าปุ่มอื่นในหน้านี้เกือบทั้งหมด (ส่ง 47px · เริ่มถาม 75px · วิเคราะห์ 166px)
+ *   ให้ปุ่มกว้างตามข้อความ แล้วให้ flex-wrap จัดแถวแทน
+ */
+@media (max-width: 560px) {
+  .iv__done__sum {
+    width: 100%;
+  }
 }
 .chat__composer {
   display: flex;
@@ -1790,7 +2418,7 @@ tbody tr:hover {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 12px;
-  box-shadow: 0 8px 28px rgb(26 21 35 / 16%);
+  box-shadow: var(--shadow-md);
   animation: rulpick-in 0.12s ease-out;
 }
 @keyframes rulpick-in {
@@ -1967,7 +2595,7 @@ tbody tr:hover {
 .fieldai__btn[aria-expanded='true'] {
   background: var(--brand);
   border-color: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
 }
 .fieldai__pop {
   position: absolute;
@@ -2035,7 +2663,7 @@ tbody tr:hover {
 }
 .fieldai__msg--user {
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   justify-self: end;
 }
 .fieldai__msg--ai {
@@ -2055,7 +2683,7 @@ tbody tr:hover {
   font-size: 12.5px;
   background: var(--brand);
   border-color: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
 }
 .fieldai__composer {
   display: flex;
@@ -2232,7 +2860,7 @@ label {
   right: 0;
   height: 3px;
   z-index: 2147483000;
-  background: linear-gradient(90deg, var(--brand) 0%, #b48cf2 50%, var(--brand) 100%);
+  background: linear-gradient(90deg, var(--brand) 0%, color-mix(in srgb, var(--brand) 45%, var(--on-brand)) 50%, var(--brand) 100%);
   background-size: 45% 100%;
   background-repeat: no-repeat;
   animation: topbar-slide 1.05s ease-in-out infinite;
@@ -2253,7 +2881,7 @@ label {
   z-index: 2147482000;
   display: grid;
   place-items: center;
-  background: rgb(250 248 253 / 74%);
+  background: var(--veil);
   animation: veil-in 0.14s ease-out;
 }
 @keyframes veil-in {
@@ -2269,7 +2897,7 @@ label {
   border: 1px solid var(--brand-border);
   border-radius: 14px;
   padding: 18px 24px;
-  box-shadow: 0 10px 40px rgb(26 21 35 / 18%);
+  box-shadow: var(--shadow-lg);
   max-width: min(560px, 90vw);
 }
 .veil__text {
@@ -2369,7 +2997,7 @@ label {
   background: var(--surface);
   border: 1px solid var(--brand-border);
   border-radius: 12px;
-  box-shadow: 0 8px 30px rgb(26 21 35 / 16%);
+  box-shadow: var(--shadow-md);
 }
 .urlbar__head {
   display: flex;
@@ -2383,7 +3011,7 @@ label {
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 8px;
-  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.5;
   word-break: break-all;
@@ -2402,7 +3030,7 @@ label {
   gap: 3px;
   padding: 9px 11px;
   background: var(--err-bg);
-  border: 1px solid #f5c6c6;
+  border: 1px solid var(--err-line);
   border-radius: 8px;
   color: var(--err);
   font-size: 12.5px;
@@ -2527,7 +3155,7 @@ label {
 }
 .inbox__filter[aria-pressed='true'] {
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   border-color: var(--brand);
 }
 /** ตัวเลขที่ยังไม่อ่านของแต่ละประเภท — ซ่อนตัวเลข 0 (ไม่มีอะไรต้องทำ) */
@@ -2543,7 +3171,7 @@ label {
 }
 /** ป้ายตัวเลขบนปุ่มที่เลือกอยู่ต้องกลับสี ไม่งั้นตัวเลขจะกลืนกับพื้นม่วง */
 .inbox__filter[aria-pressed='true'] .inbox__n {
-  background: #fff;
+  background: var(--surface);
   color: var(--brand-dark);
 }
 .inbox__acts {
@@ -2574,6 +3202,8 @@ label {
 }
 .inbox__card {
   overflow: hidden;
+  /* `padding: 0` — กล่องจดหมายแต่ละใบจัด padding ตัวเอง ถ้าไม่กำกับจะซ้อนกับค่าตั้งต้นของ `.card` */
+  padding: 0;
 }
 /** กล่องว่าง / กำลังโหลด — จัดกึ่งกลางเพื่อให้กล่องว่างดูตั้งใจ ไม่ใช่หน้าที่โหลดค้าง */
 .inbox__state {
@@ -2745,7 +3375,7 @@ label {
   border: 2px solid var(--bg);
   border-radius: 999px;
   background: var(--err);
-  color: #fff;
+  color: var(--on-brand);
   font-size: 11px;
   font-weight: 600;
   line-height: 19px;
@@ -2767,7 +3397,7 @@ label {
   color: var(--ink);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: 0 8px 30px rgb(26 21 35 / 18%);
+  box-shadow: var(--shadow-md);
 }
 .inbox-bell__head {
   display: flex;
@@ -2930,7 +3560,7 @@ label {
    *   ผลคือแถวกระดิ่ง/ออกจากระบบจะถูกแถบลอยทับพอดี (เจอตอนรัน Next dev)
    */
   padding: 20px 14px 64px;
-  background: #fff;
+  background: var(--surface);
   border-right: 1px solid var(--line);
 }
 .rail__top {
@@ -2944,6 +3574,38 @@ label {
   gap: 10px;
   padding: 0 4px;
 }
+/**
+ * โลโก้ที่กดกลับหน้าแรก
+ *
+ * ── ทำไมต้องกดได้ทั้งแถว ไม่ใช่แค่ตัวเลข "2" ──────────────────────────────────
+ *   เป้าหมายกดของผู้ใช้บนมือถือคือทั้งกล่อง ถ้ากดได้แค่ 34px จะพลาดง่ายมาก
+ *   `flex: 1` ทำให้กินพื้นที่ที่เหลือจนถึงปุ่มสลับโหมด ซึ่งเป็นองค์ประกอบเดียวที่แยกออกไป
+ *
+ * ⚠️ ต้องยกเลิก `padding: 0 4px` ของ `.rail__brand` ด้วย `margin` ติดลบ
+ *   ไม่งั้นพื้นหลังตอนฟองจะเห็นเป็นแถบจางกว้างกว่าสิ่งที่เมาส์ชี้
+ *   ผู้ใช้จะรู้สึกว่ากดแล้วไม่มีอะไรเกิด เพราะขอบไฮไลต์ไม่ตรงกับที่วางเมาส์
+ *   ด้านบน-ล่างไม่มี padding ของแม่อยู่แล้ว การยื่นออกมา 4px จึงเป็นการ**เพิ่ม**เป้าหมายกด
+ */
+.rail__home {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -4px;
+  padding: 4px;
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+.rail__home:hover {
+  background: var(--surface-2);
+}
+/* คีย์บอร์ดต้องเห็นว่าอยู่ตรงไหน — ลิงก์ที่ไม่มีเส้นใต้ต้องมองเห็นตอนฟองด้วยแท็บ */
+.rail__home:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
 .rail__mark {
   flex: none;
   width: 34px;
@@ -2952,10 +3614,10 @@ label {
   place-items: center;
   border-radius: 10px;
   background: linear-gradient(140deg, var(--brand), var(--brand-dark));
-  color: #fff;
+  color: var(--on-brand);
   font-weight: 700;
   font-size: 18px;
-  box-shadow: 0 2px 8px rgb(109 59 191 / 28%);
+  box-shadow: var(--brand-glow);
 }
 .rail__names {
   display: flex;
@@ -2966,6 +3628,39 @@ label {
 .rail__names b {
   font-size: 16px;
   letter-spacing: 0.2px;
+}
+
+/**
+ * ปุ่มสลับโหมดสว่าง/มืด
+ *
+ * ⚠️ กดจากแบรนด์ → ต้อง `margin-left: auto` ไม่ใช่ `gap` ลอย ๆ
+ *   ไม่งั้นปุ่มจะเกาะชื่อแอปแล้วชื่อยาวขึ้นเมื่อเป็นโหมดมืดก็จะดันปุ่ม
+ *
+ * ⚠️ ขนาดต้องเท่ากับปุ่มอื่นในแถบนี้ (30px) ไม่ใช่กดใหญ่แบบปุ่มหลัก
+ *   เป็นการตั้งค่า ไม่ใช่การกระทำหลัก — ขนาดใหญ่จะดึงสายตาทิ้งปุ่มอัปโหลดแม่แบบ
+ */
+.rail__theme {
+  margin-left: auto;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+.rail__theme:hover:not(:disabled) {
+  color: var(--brand);
+  border-color: var(--brand-border);
+  background: var(--brand-soft);
+}
+.rail__theme:disabled {
+  opacity: 0.5;
 }
 /* ⚠️ ต้องกำหนด `color` เอง — กฎ button{color:#fff} ไม่เกี่ยว แต่สีมักถูกกลืน
  *   เว้นวรรคเป็นตัวแปรของธีม ถ้าไม่ตั้งจะได้สีขาวบนพื้นขาว */
@@ -3122,7 +3817,7 @@ label {
     position: fixed;
     inset: 0;
     z-index: 2147482699;
-    background: rgb(26 21 35 / 42%);
+    background: var(--scrim);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
@@ -3142,7 +3837,7 @@ label {
     gap: 6px;
     /* ⚠️ กฎ `button { color:#fff }` ชนะถ้าไม่กำหนดสีเอง */
     color: var(--ink-2);
-    background: #fff;
+    background: var(--surface);
     border-color: var(--line);
     min-height: 36px;
   }
@@ -3321,18 +4016,18 @@ label {
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .pill--btn:hover:not(:disabled) {
-  background: #ece1fb;
+  background: var(--brand-soft);
   border-color: var(--brand);
 }
 /* ตัวที่กดอยู่ = สลับเป็นพื้นเข้ม ให้เห็นชัดว่ากรองอยู่กับอะไร */
 .pill--btn.is-on {
   background: var(--brand);
   border-color: var(--brand-dark);
-  color: #fff;
+  color: var(--on-brand);
 }
 .pill--btn.is-on:hover:not(:disabled) {
   background: var(--brand-dark);
-  color: #fff;
+  color: var(--on-brand);
 }
 /* คีย์บอร์ดต้องเห็นว่าโฟกัสที่ชิปตัวไหน ไม่ใช่มองเห็นแค่ขอบจาง ๆ */
 .pill--btn:focus-visible {
@@ -3373,10 +4068,10 @@ label {
   max-width: 720px;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--surface);
   border-radius: var(--radius);
   border: 1px solid var(--line);
-  box-shadow: 0 18px 48px rgb(12 9 18 / 28%);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 .uguide__head {
@@ -3423,7 +4118,7 @@ label {
 .uguide__steps code,
 .uguide__tip code,
 .uguide__table code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 12.5px;
   background: var(--bg-2);
   border: 1px solid var(--line);
@@ -3541,7 +4236,7 @@ label {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
-  box-shadow: 0 12px 32px rgb(26 21 35 / 18%);
+  box-shadow: var(--shadow-md);
 }
 .ppick__opt {
   display: grid;
@@ -3591,15 +4286,15 @@ label {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
-  box-shadow: 0 12px 32px rgb(26 21 35 / 14%);
+  box-shadow: var(--shadow-md);
 }
 .ppick__warn {
   margin: 8px 0 0;
   font-size: 12px;
   line-height: 1.6;
-  color: #8a5a00;
-  background: #fff8e6;
-  border: 1px solid #f2dda6;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
   border-radius: 8px;
   padding: 7px 10px;
 }
@@ -3629,3 +4324,138 @@ label {
   font-size: 12.5px;
 }
 
+
+/* ── รายงานปัญหา ──────────────────────────────────────────────────
+ * กล่องผ้าคลุมทับทั้งหน้า เพราะเปิดจากแถบ URL ซึ่งอยู่มุมล่าง
+ *   → ถ้ากล่องเล็กแล้วไม่ทับ ผู้ใช้จะเห็นเนื้อหาข้างหลังแล้วสับสนว่ากำลังแก้หน้าไหน
+ * z-index สูงกว่า .veil (2 แล้ว) เพราะแถบ/ผ้าคลุมเปิดอยู่ตอนกดรายงาน
+ */
+.report-issue__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483100;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--veil);
+  animation: veil-in 0.14s ease-out;
+}
+.report-issue {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--brand-border);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: var(--shadow-lg);
+}
+.report-issue__title {
+  margin: 0;
+  font-size: 16px;
+}
+.report-issue__hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.report-issue__label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.report-issue__label input,
+.report-issue__label textarea {
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+.report-issue__label input:focus-visible,
+.report-issue__label textarea:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+.report-issue__drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border: 1.5px dashed var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.report-issue__drop[data-over='true'] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+.report-issue__drophint {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  line-height: 1.7;
+}
+.report-issue__drophint kbd {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+}
+.report-issue__shot {
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  object-fit: contain;
+}
+.report-issue__err,
+.report-issue__ok {
+  margin: 0;
+  font-size: 12.5px;
+}
+.report-issue__err {
+  color: var(--err);
+}
+.report-issue__ok {
+  color: var(--ok);
+}
+.report-issue__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}.report-detail {
+  margin-top: 4px;
+  padding-top: 4px;
+}
+.report-detail__shot {
+  display: block;
+  max-width: 100%;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.report-detail__diag {
+  margin: 8px 0 0;
+  padding: 10px;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}

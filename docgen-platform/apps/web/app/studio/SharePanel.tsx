@@ -6,7 +6,9 @@
  * ซ้าย: metadata ที่แก้ได้ (ชื่อ/หมวด/แท็ก) — ไปที่ Carbone
  * ขวา: ใครมีสิทธิ์ใช้แม่แบบนี้ — เก็บใน Mongo ของเราเอง
  */
+import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+import type { TeamAccess } from '@docgen/shared'
 import { api, ApiError, templateKeyOf, type AccessView, type Template } from './lib/api'
 import { copyText } from './lib/copy'
 import TemplatePreviews from './TemplatePreviews'
@@ -158,13 +160,42 @@ export default function SharePanel({
   const publicUrl = origin ? `${origin}/studio/${templateKeyOfTemplate(template)}` : ''
 
   /**
+   * ทีมของผู้ใช้ — เติมตัวเลือกในกล่อง "ย้ายเข้าทีม"
+   *
+   * โหลดครั้งเดียวตอนเปิดแท็บแชร์ ไม่ต้องยิงซ้ำทุกครั้งที่กด
+   * ถ้ายิงแล้วพัง → เป็น [] (หน้าเว็บยังใช้ได้ จะเห็นแค่ตัวเลือก "ไม่อยู่ในทีม")
+   */
+  const [teams, setTeams] = useState<TeamAccess[]>([])
+  useEffect(() => {
+    let alive = true
+    void api
+      .myTeams()
+      .then((r) => {
+        if (alive) setTeams(r.items ?? [])
+      })
+      .catch(() => {
+        if (alive) setTeams([])
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  /**
    * ยังไม่มีใครตั้งค่าแม่แบบนี้ → คนแรกที่กดกลายเป็นเจ้าของ (ตรงกับฝั่ง API)
    *
    * ⚠️ ต้องแสดงปุ่มด้วยแม้ยังไม่ใช่เจ้าของ
    *    ถ้าไม่แสดง ผู้ใช้จะไม่มีทางขอเป็นเจ้าของผ่านหน้าเว็บเลย
    */
   const noOwnerYet = access?.owner === null || access === null
-  const canManage = isOwner || noOwnerYet
+  /**
+   * ⚠️ ผู้ดูแลทีม (admin/owner) ต้องจัดการแม่แบบของทีมได้ด้วย
+   *   ตรงกับฝั่ง API ที่แก้ `setVisibility` ให้ผ่าน `assertTeamAdmin` แล้ว
+   *   ถ้าไม่เพิ่มตรงนี้ ปุ่มจะหายไปตอนเจ้าของแม่แบบออกจากทีม
+   *   (ทีมเป็นเจ้าของร่วม ไม่ควรผูกชีวิตกับคนเดียว)
+   */
+  const isTeamAdmin = access?.teamRole === 'admin' || access?.teamRole === 'owner'
+  const canManage = isOwner || noOwnerYet || isTeamAdmin
   const canEdit = access?.canEdit ?? true
 
   async function run(fn: () => Promise<void>) {
@@ -218,8 +249,17 @@ export default function SharePanel({
       )
     })
 
+  /*
+ * ⚠️ `min(320px, 100%)` ไม่ใช่ `320px`
+ *   `minmax(320px, 1fr)` มี**ขอบล่างตายตัว**ที่ 320px → ถ้าคอนเทนเนอร์แคบกว่านั้น
+ *   (หรือลูกข้างในมี min-content กว้างกว่า) คอลัมน์จะยืดเกินกรอด
+ *   แล้วลากทั้งหน้าให้เลื่อนแนวนอน (ผู้ใช้เจอ 2026-10-06)
+ *   `min(320px, 100%)` ทำให้ขอบล่างยึดกับความกว้างจริงของคอนเทนเนอร์เสมอ
+ */
+const GRID = 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))'
+
   return (
-    <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
+    <div style={{ display: 'grid', gap: 16, gridTemplateColumns: GRID }}>
       {/* ── metadata ── */}
       {(part === 'all' || part === 'meta') && (
       <div className="card" style={{ padding: 16 }}>
@@ -247,7 +287,18 @@ export default function SharePanel({
           </div>
           <div>
             <label>versionId</label>
-            <div className="mono" style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+            {/**
+             * ⚠️ `overflowWrap: 'anywhere'` จำเป็น — คีย์จาก Carbone คือเลขฐานสิบหก
+             *   64 หลักที่**ไม่มีช่องว่างให้พักบรรทัด** ความกว้างต่ำสิน (min-content)
+             *   จึงยาวราว 450px และ grid จะยอมยืดคอลัมน์ให้เท่านั้น
+             *   → ทั้งหน้าเลื่อนแนวนอน พอจอแคบกว่านั้น (ผู้ใช้เจอ 2026-10-06)
+             *
+             *   ให้ตัดกลางคำได้ ค่ายังอ่านออกครบและเลือกคัดลอกได้เหมือนเดิม
+             */}
+            <div
+              className="mono"
+              style={{ fontSize: 12, color: 'var(--ink-3)', overflowWrap: 'anywhere' }}
+            >
               {template.versionId}
             </div>
           </div>
@@ -612,10 +663,105 @@ export default function SharePanel({
               )}
             </div>
 
+            {/* ── ทีม ───────────────────────────────────────────
+             * ย้ายแม่แบบเข้าทีม = ทุกคนในทีมแก้ได้โดยไม่ต้องแชร์ทีละคน
+             * API จะตั้ง `private` ให้อัตโนมัติ (เพราะ published = ทุกคนแก้ได้
+             * ถ้าคงสาธารณไว้ คนนอกทีมก็ยังแก้ได้ → ทีมไม่มีความหมาย)
+             */}
+            <div
+              style={{
+                border: '1px solid var(--line)',
+                borderRadius: 10,
+                padding: '12px 14px',
+                marginBottom: 16,
+                background: 'var(--bg)',
+              }}
+              data-testid="share-team-box"
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 8,
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  marginBottom: 8,
+                }}
+              >
+                <strong style={{ fontSize: 13 }}>ทีม</strong>
+                {access?.teamName && (
+                  <span className="pill" data-testid="share-team-name">
+                    {access.teamName}
+                  </span>
+                )}
+              </div>
+
+              {access?.team ? (
+                <p style={{ fontSize: 13, color: 'var(--ink-2)', margin: '0 0 10px' }}>
+                  แม่แบบนี้อยู่ในทีม <strong>{access.teamName ?? access.team}</strong> —
+                  สมาชิกที่มีสิทธิ์ “ผู้แก้ไข” ขึ้นไปแก้แม่แบบนี้ได้ คนนอกทีมเข้าไม่ได้
+                </p>
+              ) : (
+                <p style={{ fontSize: 13, color: 'var(--ink-2)', margin: '0 0 10px' }}>
+                  ยังไม่ได้อยู่ในทีม — ย้ายเข้าทีมเพื่อให้หลายคนใช้ร่วมกันได้โดยไม่ต้องแชร์ทีละคน
+                </p>
+              )}
+
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <select
+                  value={access?.team ?? ''}
+                  disabled={busy || teams.length === 0}
+                  data-testid="share-team-select"
+                  onChange={(e) =>
+                    void run(async () => {
+                      const v = e.target.value
+                      const next = await api.setTemplateTeam(
+                        templateKeyOfTemplate(template),
+                        v === '' ? null : v,
+                      )
+                      onAccess(next)
+                      notify(
+                        next.team
+                          ? `ย้ายเข้าทีม ${next.teamName ?? ''} แล้ว`
+                          : 'ถอนออกจากทีมแล้ว',
+                      )
+                    })
+                  }
+                  style={{
+                    padding: '7px 10px',
+                    border: '1px solid var(--line)',
+                    borderRadius: 8,
+                    font: 'inherit',
+                    background: 'var(--surface)',
+                    color: 'var(--ink)',
+                    minWidth: 180,
+                  }}
+                >
+                  <option value="">— ไม่อยู่ในทีม —</option>
+                  {teams.map((t) => (
+                    <option key={t.team} value={t.team}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <a
+                  href="/teams"
+                  className="muted"
+                  style={{ fontSize: 13 }}
+                  data-testid="share-team-manage"
+                >
+                  จัดการทีม
+                </a>
+              </div>
+              {teams.length === 0 && (
+                <p style={{ fontSize: 12, color: 'var(--ink-3)', margin: '8px 0 0' }}>
+                  ยังไม่มีทีม — กด “จัดการทีม” เพื่อสร้างทีมแรก
+                </p>
+              )}
+            </div>
+
             <h3 style={{ fontSize: 13, margin: '0 0 8px' }}>
               อนุญาตให้ใครใช้ได้ ({access?.sharedWith.length ?? 0})
-            </h3>
-            {access?.sharedWith.length === 0 && (
+            </h3>            {access?.sharedWith.length === 0 && (
               <p className="muted" style={{ fontSize: 12.5, margin: '0 0 10px' }}>
                 ยังไม่ได้แชร์ให้ใคร
               </p>

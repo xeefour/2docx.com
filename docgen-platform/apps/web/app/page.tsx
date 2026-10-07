@@ -14,7 +14,7 @@ export default function HomePage() {
             height: 34,
             borderRadius: 9,
             background: 'var(--brand)',
-            color: '#fff',
+            color: 'var(--on-brand)',
             display: 'grid',
             placeItems: 'center',
             fontWeight: 700,
@@ -41,7 +41,7 @@ export default function HomePage() {
           href="/studio"
           style={{
             background: 'var(--brand)',
-            color: '#fff',
+            color: 'var(--on-brand)',
             padding: '12px 22px',
             borderRadius: 8,
             textDecoration: 'none',
@@ -51,7 +51,7 @@ export default function HomePage() {
           เข้าสู่ระบบ
         </Link>
         <Link
-          href="/docs"
+          href="/apis"
           style={{
             border: '1px solid var(--line)',
             padding: '12px 22px',
@@ -61,6 +61,44 @@ export default function HomePage() {
           }}
         >
           เอกสาร API
+        </Link>
+        {/*
+         * คู่มือภาษาไทย
+         *
+         * ⚠️ ต้องใช้ `<a>` ธรรมดา **ไม่ใช่** `next/link`
+         *   เส้นทาง `/docs` ไม่ได้มาจาก Next.js แต่เสิร์ฟโดยตัว gateway (Caddy)
+         *   ถ้าใช้ `<Link>` router ของ Next จะพยายามหา route นี้ในตัวเอง
+         *   แล้วได้หน้า 404 ของ Next — ผู้ใช้กดแล้วไม่ถึงคู่มือ
+         *   `<a>` ธรรมดาเป็นการนำทางเต็มรูปแบบ เบราว์เซอร์จะไปขอ /docs จริง
+         *   ใช้รูปแบบนี้กับทุกเส้นทางที่ไม่ได้มาจาก Next.js
+         */}
+        <a
+          href="/docs"
+          style={{
+            border: '1px solid var(--line)',
+            padding: '12px 22px',
+            borderRadius: 8,
+            textDecoration: 'none',
+            color: 'var(--ink-2)',
+          }}
+        >
+          คู่มือใช้งาน
+        </a>
+        {/*
+         * ลิงก์ไปหน้าบัญชี — ไม่ต้องล็อกอินก่อน
+         * ถ้ายังไม่มี session หน้า `/account` จะพาไป `/auth/login?returnTo=/account` เอง
+         */}
+        <Link
+          href="/account"
+          style={{
+            border: '1px solid var(--line)',
+            padding: '12px 22px',
+            borderRadius: 8,
+            textDecoration: 'none',
+            color: 'var(--ink-2)',
+          }}
+        >
+          บัญชีของฉัน
         </Link>
       </div>
 

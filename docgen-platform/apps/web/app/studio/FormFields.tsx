@@ -12,8 +12,18 @@
  * ค่าที่ไม่มีใน schema แต่มีอยู่ใน `data` (เช่นกรอกจากแท็กเมื่อยังไม่ได้ตั้งฟอร์ม)
  * → แสดงเป็นกลุ่ม "ยังไม่ได้จัดกลุ่ม" เพื่อไม่ให้ข้อมูลหายจากสายตา
  */
-import { useMemo } from 'react'
-import { fieldDomId, fieldLabel, getPath, groupFields, groupKey, setPath } from './lib/fields'
+import { useMemo, useState } from 'react'
+import {
+  fieldDomId,
+  fieldLabel,
+  getPath,
+  groupFields,
+  groupKey,
+  looksLikeToken,
+  middleTruncate,
+  setPath,
+} from './lib/fields'
+import { copyText } from './lib/copy'
 import FieldAi from './FieldAi'
 import type { FieldDef, TemplateTag } from './lib/api'
 
@@ -146,6 +156,19 @@ function Field({
   )
 
   /**
+   * ค่าที่ยาวเกินอ่าน (hash 64 ตัว, URL) ไม่ต้องยัดลงช่องกรอก
+   *
+   * ⚠️ เงื่อนไข: ต้องกลับไปเป็นช่องกรอกปกติได้ ไม่งั้นผู้ใช้แก้ค่าไม่ได้
+   *   เพราะการย่อค่าใน `<input>` จะทำให้**บันทึกค่าที่ย่อแล้ว**ลงไปในเอกสาร
+   *   การย่อจึงทำได้เฉพาะตอน**แสดง** แล้วต้องมีทางกลับเป็นช่องกรอกเต็มเสมอ
+   */
+  const [expandLong, setExpandLong] = useState(false)
+  const textValue = String(value ?? '')
+  const isLong = (f.type === 'text' || f.type === 'email') && looksLikeToken(textValue)
+  // พิมพ์เองได้ = ต้องกลับเป็น input เสมอ (ยกเว้นตอนฟอร์มถูกล็อกอ่านอย่างเดียว)
+  const collapseLong = isLong && !expandLong
+
+  /**
    * ไอคอน AI ขวาสุดของช่อง — แสดงเฉพาะช่องที่พิมพ์ข้อความได้
    * วางเป็นลูกเดียวของ `.fieldbox` ซึ่ง `position: relative` ใน globals.css
    */
@@ -201,7 +224,16 @@ function Field({
           />,
         )}
 
+      {collapseLong && (
+        <LongValue
+          full={textValue}
+          disabled={disabled}
+          onExpand={() => setExpandLong(true)}
+        />
+      )}
+
       {(f.type === 'text' || f.type === 'email' || f.type === 'date') &&
+        !collapseLong &&
         withAi(
           <input
             id={id}
@@ -212,6 +244,14 @@ function Field({
             onChange={(e) => onChange(e.target.value)}
           />,
         )}
+
+      {/* ช่องยาวที่กด "แก้ไข" แล้ว → ต้องมีทางย่อกลับ ไม่งั้นผู้ใช้แก้แล้วออกไม่ได้
+        (ย่อกลับได้เฉพาะตอนยังเป็นค่ายาวอยู่ ถ้าแก้จนสั้นแล้วปุ่มนี้หายเอง) */}
+      {isLong && expandLong && !disabled && (
+        <button type="button" className="ghost fieldlong__toggle" onClick={() => setExpandLong(false)}>
+          ย่อค่าให้สั้น
+        </button>
+      )}
 
       {(f.type === 'number' || f.type === 'integer') &&
         withAi(
@@ -264,6 +304,67 @@ function Field({
 
       {f.help && <span className="field-help">{f.help}</span>}
       {error && <span className="field-error">{error}</span>}
+    </div>
+  )
+}
+
+/**
+ * แถวแสดงค่าที่ยาวเกินอ่าน — หัว…ท้าย + ปุ่มคัดลอก + ปุ่มกลับไปแก้
+ *
+ * ── ทำไมต้องมีปุ่มคัดลอก ────────────────────────────────────────────────
+ *   ย่อให้สั้นแล้วผู้ใช้เอา**ค่าเต็ม**ไปใช้ต่อไม่ได้ และ hash ยาว 64 ตัว
+ *   เลือกเมาส์ด้วยตาแล้วหลุดไปกลางคัน (ไม่มีจุดขัดให้จับ)
+ *   คัดลอกจึงเป็นทางออกที่ผู้ใช้คาดหวังจริง ไม่ใช่ของแถม
+ */
+function LongValue({
+  full,
+  disabled,
+  onExpand,
+}: {
+  full: string
+  disabled?: boolean
+  onExpand: () => void
+}) {
+  const [state, setState] = useState<'idle' | 'ok' | 'err'>('idle')
+  return (
+    <div className="fieldlong">
+      {/*
+        `title` เป็นทางเดียวที่โชว์ค่าเต็มโดยไม่ต้องกลับไปเป็นช่องกรอก
+        ผู้ใช้เอาเมาส์ทับได้เห็นทั้งหมด (คัดลอกให้คนละทาง)
+      */}
+      <code className="fieldlong__val" title={full} data-testid="fieldlong-val">
+        {middleTruncate(full)}
+      </code>
+      <span className="fieldlong__len">{full.length} ตัวอักษร</span>
+      <button
+        type="button"
+        className={'ghost fieldlong__copy' + (state === 'idle' ? '' : ` ${state}`)}
+        data-testid="fieldlong-copy"
+        onClick={() =>
+          void (async () => {
+            const ok = await copyText(full)
+            setState(ok ? 'ok' : 'err')
+            setTimeout(() => setState('idle'), 1600)
+          })()
+        }
+      >
+        {state === 'ok' ? 'คัดลอกแล้ว ✓' : state === 'err' ? 'คัดลอกไม่สำเร็จ' : 'คัดลอก'}
+      </button>
+      {!disabled && (
+        <button
+          type="button"
+          className="ghost fieldlong__toggle"
+          data-testid="fieldlong-expand"
+          onClick={onExpand}
+        >
+          แก้ไข
+        </button>
+      )}
+      {/*
+        ⚠️ ไม่ใส่ live region ซ้ำซ้อนกับป้ายปุ่ม
+          screen reader จะอ่านข้อความเดียวกันสองครั้ง (เหมือนเคยเจอที่ SharePanel)
+          ป้ายปุ่มเปลี่ยนอยู่แล้ว = การยืนยันผลผ่านช่องทางเดียว
+      */}
     </div>
   )
 }

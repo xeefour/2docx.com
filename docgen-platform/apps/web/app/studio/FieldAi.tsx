@@ -21,14 +21,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, type LlmStatus } from './lib/api'
 import type { FieldDef } from './lib/api'
-
-type Provider = 'minimax' | 'openai' | 'mock'
-
-const PROVIDERS: Array<{ id: Provider; label: string }> = [
-  { id: 'minimax', label: 'MiniMax' },
-  { id: 'openai', label: 'OpenAI' },
-  { id: 'mock', label: 'ทดสอบ' },
-]
+import { getPath } from './lib/fields'
 
 /** ปุ่มลัดที่ผู้ใช้กดบ่อย — ส่งตรง ๆ ไม่ต้องพิมพ์เอง */
 const QUICK: Array<{ id: string; label: string; ask: string }> = [
@@ -85,32 +78,20 @@ export default function FieldAi({
   const [turns, setTurns] = useState<Turn[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
-  /**
-   * ⚠️ ค่าเริ่มต้น**ต้องเป็น `mock`** ไม่ใช่ `minimax`
-   *
-   * ค่าจริงมาจาก `llmStatus()` ซึ่งยิงเมื่อเปิด popover เท่านั้น
-   * ถ้าเริ่มที่ `minimax` แล้วผู้ใช้กดส่งก่อน status จะกลับมา
-   * → ยิง provider ที่ไม่มี key → 503 `LLM_NOT_CONFIGURED`
-   *
-   * mock ไม่ต้องใช้ key จึงเป็นค่าเริ่มต้นที่ปลอดภัยที่สุด
-   * (แย่กว่าเดิมแค่ตอนผู้ใช้ยังไม่ได้ตั้ง key — ซึ่งได้คำตอบทดสอบแทนที่จะพัง)
-   */
-  const [provider, setProvider] = useState<Provider>('mock')
   const [status, setStatus] = useState<LlmStatus | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
   const boxRef = useRef<HTMLDivElement>(null)
   const current = String(value ?? '')
 
   // เปิดครั้งแรกค่อยถามสถานะ — ไม่ยิงตอนยังไม่ได้กด ประหยัด request
+  // ⚠️ เก็บแค่ `status` ไว้บอกผู้ใช้ว่า "ยังไม่ได้ตั้ง key" เท่านั้น
+  //   ค่าผู้ให้บริการไม่ต้องเลือกแล้ว (ผู้ใช้สั่ง 2026-10-06) — server เป็นคนเลือกเอง
+  //   ถ้ายังเก็บ state `provider` ไว้ มันจะกลายเป็นตัวหลอกว่ายังสลับได้
   useEffect(() => {
     if (!open || status) return
     void api
       .llmStatus()
-      .then((s) => {
-        setStatus(s)
-        // ค่าเริ่มต้นต้องเป็นตัวที่เซิร์ฟเวอร์ใช้จริง ไม่งั้นผู้ใช้จะเจอ 401 ทันที
-        setProvider(s.configured ? (s.provider as Provider) : 'mock')
-      })
+      .then(setStatus)
       .catch(() => setStatus(null))
   }, [open, status])
 
@@ -148,7 +129,6 @@ export default function FieldAi({
           message: ask,
           data: {},
           templateName,
-          provider,
           field: {
             key: field.key,
             label: field.label || field.key,
@@ -156,7 +136,10 @@ export default function FieldAi({
             value: current.slice(0, 8000),
           },
         })
-        const raw = r.data[field.key]
+        // ⚠️ ต้องใช้ getPath — key ของช่องมีจุดคั่นได้ (เช่น `ผู้สมัคร.ชื่อ`) และ API
+        // คืน data ที่ซ้อนตาม dot path การอ่านแบบแบนจะได้ undefined เสมอ
+        // → ผู้ใช้เห็น "AI ไม่ได้ข้อมูล" ทั้งที่ค่ามีอยู่จริง
+        const raw = getPath(r.data, field.key)
         setTurns((t) => [
           ...t,
           {
@@ -176,7 +159,7 @@ export default function FieldAi({
         setBusy(false)
       }
     },
-    [busy, current, field.key, field.label, field.type, provider, templateKey, templateName],
+    [busy, current, field.key, field.label, field.type, templateKey, templateName],
   )
 
   const apply = (text: string) => {
@@ -226,18 +209,11 @@ export default function FieldAi({
             ))}
           </div>
 
-          <select
-            className="fieldai__prov"
-            value={provider}
-            onChange={(e) => setProvider(e.target.value as Provider)}
-            title="เลือกผู้ให้บริการ AI"
-          >
-            {PROVIDERS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
+          {/*
+            * ⚠️ ถอนตัวเลือกผู้ให้บริการออกแล้ว (ผู้ใช้สั่ง 2026-10-06: ใช้ MiniMax อย่างเดียว)
+            *   ตัวนี้อยู่ในป๊อปอัปของช่อง แต่ผู้ใช้ทั่วไปไม่ควรต้องรู้ว่ามีให้เลือก
+            *   ค่าที่ยิงจริงมาจาก `LLM_PROVIDER` ฝั่ง server เพราะไม่ส่ง `provider` ไป
+            */}
           {status && !status.configured && <span className="pill warn">ยังไม่ได้ตั้ง key</span>}
 
           <div className="fieldai__log" ref={logRef}>

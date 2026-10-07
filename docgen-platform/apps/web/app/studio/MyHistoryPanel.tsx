@@ -192,8 +192,15 @@ export default function MyHistoryPanel({
 
   if (error) return <p className="field-error" style={{ padding: 16 }}>{error}</p>
 
+  /*
+   * `padding: 0` ในการ์ดข้างล่าง — หัวข้อกับแต่ละแถวจัด padding ตัวเอง
+   *   ถ้าไม่กำกับจะซ้อนกับค่าตั้งต้นของ `.card`
+   *
+   * ⚠️ คอมเมนต์นี้ต้องอยู่**นอก** `return ( … )` ไม่ใช่ข้างใน
+   *   เพราะวงเล็บของ return รับได้ element เดียว คอมเมนต์ JSX เพิ่มอีกชิ้นจะเป็น syntax error
+   */
   return (
-    <div className="card" style={{ overflow: 'hidden' }}>
+    <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
       <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line)' }}>
         <h2 style={{ margin: '0 0 2px', fontSize: 15 }}>ประวัติของฉัน</h2>
         <p className="muted" style={{ margin: '0 0 10px', fontSize: 12 }}>

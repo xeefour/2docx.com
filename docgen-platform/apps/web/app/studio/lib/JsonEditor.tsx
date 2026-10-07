@@ -139,7 +139,7 @@ export function JsonEditor({ value, onChange, tags, disabled }: Props) {
             background: 'var(--surface)',
             border: '1px solid var(--brand-border)',
             borderRadius: 8,
-            boxShadow: '0 8px 26px rgb(26 21 35 / 14%)',
+            boxShadow: 'var(--shadow-md)',
             zIndex: 20,
           }}
         >

@@ -17,9 +17,13 @@
  */
 import type {
   InboxList,
+  IssueReport,
+  IssueReportList,
   NotificationKind,
   PendingShare,
   PersonSuggestion,
+  ReportStatus,
+  TeamAccess,
 } from '@docgen/shared'
 
 const BASE = '/api'
@@ -140,9 +144,21 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
    * Fastify ตอบ 500 ทันทีว่า
    *   "Body cannot be empty when content-type is set to 'application/json'"
    * ซึ่งทำให้ DELETE ที่ไม่ส่ง body พังทุกครั้ง
+   *
+   * ⚠️ และ**อย่าตั้ง** content-type ให้ FormData / Blob
+   *   เบราว์เซอร์จะเติม boundary ของ multipart ให้เองถ้าเราไม่ไปตั้ง header
+   *   ถ้าตั้งเป็น `application/json` ต้องๆ จะ**ไม่มี boundary** → Fastify อ่านไฟล์ไม่ออก
+   *     (`req.file()` คืน undefined → 400 NO_FILE) และ content-type ที่ไม่ตรง
+   *     Fastify จะไม่ยอมเข้า content-type parser เลย
+   *   เคยเป็นกับดักที่ต้องเลี่ยงด้วยการเขียน `fetch` ตรง ๆ แยกทุกจุด
+   *   ตอนนี้แก้ที่ตัวช่วยตัวเดียวแทน จะได้ไม่ต้องจำกฎนี้ในทุก endpoint ใหม่
    */
   const hasBody = init?.body !== undefined
-  const headers = hasBody ? { 'content-type': 'application/json', ...init?.headers } : init?.headers
+  const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData
+  const headers =
+    hasBody && !isFormData
+      ? { 'content-type': 'application/json', ...init?.headers }
+      : init?.headers
 
   let attempt = 0
   let lastError: ApiError | null = null
@@ -346,12 +362,22 @@ export type PreviewImage = {
 
 export type AccessView = {
   templateKey: string
-  relation: 'owner' | 'shared' | 'published'
+  /** `team` = เป็นสมาชิกทีมเจ้าของ (เพิ่มจากระบบทีม) */
+  relation: 'owner' | 'team' | 'shared' | 'published'
   role: 'viewer' | 'editor' | null
+  /** สิทธิ์ในทีมเจ้าของ — null = ไม่ได้อยู่ในทีม */
+  teamRole: 'viewer' | 'editor' | 'admin' | 'owner' | null
   canEdit: boolean
   visibility: 'private' | 'published'
   owner: string | null
   ownerName: string | null
+  /** id ของทีมเจ้าของ — null = แม่แบบนี้ไม่ได้อยู่ในทีม */
+  team: string | null
+  teamName: string | null
+  /**
+   * ⚠️ ถ้าผู้เรียกไม่มีสิทธิ์จริงบนแม่แบบ private → array นี้จะ**ว่าง**
+   *   API ตัดให้เพื่อไม่ให้รั่วว่าแม่แบบนี้แชร์ให้ใคร
+   */
   sharedWith: Array<{ sub: string; name: string | null; role: 'viewer' | 'editor'; at: string }>
 }
 
@@ -413,6 +439,15 @@ export type ChatMessage = {
   content: string
   data: Record<string, unknown> | null
   at: string
+  /**
+   * key ของช่องที่ **รอบนี้** AI เติมให้ (ฝั่ง server ไม่ได้เก็บไว้)
+   *
+   * ⚠️ ต้องเป็น optional เพราะข้อความที่โหลดกลับจากประวัติไม่มีค่านี้
+   *   และอย่าเอา `data` มาแทนที่ — `data` คือข้อมูล**ทั้งชุดที่ merge แล้ว**
+   *   ซึ่งรวมทั้งที่ผู้ใช้กรอกเอง → เอามาแสดงเป็น "AI เติม" จะโกหกผู้ใช้
+   *   (ตอนเปิดแชทเก่าจะไม่มีรายการให้ดู ซึ่งถูกกว่าการโชว์ผิด)
+   */
+  changed?: string[]
 }
 
 export type ChatSessionMeta = {
@@ -441,6 +476,43 @@ export type LlmStatus = {
   reason: string | null
 }
 
+/** คำถาม 1 ข้อจากการสัมภาษณ์ */
+export type InterviewQuestion = {
+  key: string
+  question: string
+  /** มีแล้ว = ช่องนี้เป็นตัวเลือก ให้ทำเป็นปุ่มกดแทนช่องพิมพ์ */
+  options?: string[]
+  help?: string
+}
+
+export type InterviewPlanReply = {
+  questions: InterviewQuestion[]
+  /** ช่องที่ยังว่างทั้งหมด — ใช้ทำแถบความคืบหน้า */
+  remaining: string[]
+  reply: string
+  provider: string
+  model: string
+}
+
+export type InterviewComposeReply = {
+  data: Record<string, unknown>
+  changed: string[]
+  /** คีย์ที่โมเดลให้มาไม่ครบ — ต้องเตือนผู้ใช้ ไม่ใช่เงียบทิ้ง */
+  skipped: string[]
+  reply: string
+  provider: string
+  model: string
+}
+
+/**
+ * บุ๊กมาร์กของผู้ใช้คนนี้ — หนึ่งรายการต่อหนึ่งแม่แบบ
+ *
+ * ⚠️ `team` = "เก็บไว้ที่ไหน" ไม่ใช่ "แม่แบบนี้เป็นของทีมไหน"
+ *   (การย้ายแม่แบบเข้าทีมอยู่ที่ `AccessView.team` คนละเรื่องกัน)
+ *
+ * ⚠️ `team`/`teamName` เป็น optional เพราะบุ๊กมาร์กเก่าที่เก็บไว้ก่อนมีฟีเจอร์นี้ไม่มีค่านี้
+ *   ถ้าเปลี่ยนเป็นบังคับ หน้าเว็บที่ยังไม่รีเฟรชจะพังทั้งหน้า
+ */
 export type BookmarkRecord = {
   _id: string
   user: string
@@ -449,6 +521,10 @@ export type BookmarkRecord = {
   templateName: string | null
   note: string | null
   createdAt: string
+  /** ทีมที่เลือกเก็บ — ไม่มี = ส่วนตัว */
+  team?: string | null
+  /** ชื่อทีมที่ API เติมมาให้ตอนอ่าน */
+  teamName?: string | null
 }
 
 export type TemplateHistory = {
@@ -730,6 +806,22 @@ export const api = {
       body: JSON.stringify({ visibility }),
     }),
 
+  /**
+   * ย้ายแม่แบบเข้า/ออกทีม — `team: null` = ถอนกลับเป็นของคน
+   *
+   * ย้ายเข้าทีมแล้ว API จะตั้ง `visibility: 'private'` ให้อัตโนมัติ
+   * (เพราะกติกาเดิม "published = ทุกคนแก้ได้" ทีมจะไม่มีความหมาย)
+   */
+  setTemplateTeam: (templateKey: string, team: string | null) =>
+    call<AccessView>(`/access/${encodeURIComponent(templateKey)}/team`, {
+      method: 'PUT',
+      body: JSON.stringify({ team }),
+    }),
+
+  // ── ระบบทีม ───────────────────────────────────────────────
+  /** ทีมของฉัน — ใช้เติมตัวเลือกตอนย้ายแม่แบบเข้าทีม */
+  myTeams: () => call<{ items: TeamAccess[] }>('/teams'),
+
   clearAccess: (templateKey: string) =>
     call<void>(`/access/${encodeURIComponent(templateKey)}`, { method: 'DELETE' }),
 
@@ -748,7 +840,7 @@ export const api = {
   /**
    * ── สมุดที่อยู่ผู้ใช้ + เชิญด้วยอีเมล ─────────────────────
    *
-   * ช่อง "อนุญาตให้ใครใช้ได้" เดิมรับแต่ `sub` ของ Casdoor
+   * ช่อง "อนุญาตให้ใครใช้ได้" เดิมบังคับให้พิมพ์ `sub` ของ Casdoor
    * ซึ่งเป็น id ยาว ๆ ที่มองไม่ออกว่าเป็นใคร — เปลี่ยนมาให้พิมพ์**อีเมล**แทน
    * แล้วเติมให้อัตโนมัติจากคนที่เคยเข้าระบบ
    */
@@ -828,14 +920,45 @@ export const api = {
 
   chatSession: (id: string) => call<ChatSession>(`/chat/sessions/${encodeURIComponent(id)}`),
 
+  // ── สัมภาษณ์เพื่อกรอกฟอร์ม ────────────────────────────────
+  // โมเดลเป็นคนถามตามช่องที่ยังว่าง แล้วเอาคำตอบมาเรียบเรียงเป็นค่าของช่อง
+  interviewPlan: (body: {
+    templateKey: string
+    templateName?: string
+    mode: 'one' | 'batch'
+    batchSize?: number
+    data: Record<string, unknown>
+    asked?: string[]
+    answers?: Record<string, string>
+    provider?: 'minimax' | 'openai' | 'mock'
+  }) => call<InterviewPlanReply>('/interview/plan', { method: 'POST', body: JSON.stringify(body) }),
+
+  interviewCompose: (body: {
+    templateKey: string
+    templateName?: string
+    answers: Record<string, string>
+    data: Record<string, unknown>
+    provider?: 'minimax' | 'openai' | 'mock'
+  }) => call<InterviewComposeReply>('/interview/compose', { method: 'POST', body: JSON.stringify(body) }),
+
   deleteChatSession: (id: string) =>
     call<void>(`/chat/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   // ── บุ๊กมาร์ก ────────────────────────────────────────────
   bookmarks: () => call<{ items: BookmarkRecord[] }>('/bookmarks'),
 
-  addBookmark: (body: { templateKey: string; versionId: string; templateName?: string }) =>
-    call<BookmarkRecord>('/bookmarks', { method: 'POST', body: JSON.stringify(body) }),
+  /**
+   * เพิ่ม/เปลี่ยนที่เก็บบุ๊กมาร์ก
+   *
+   * ⚠️ เรียกซ้ำ = **เปลี่ยนที่เก็บ** ไม่ใช่สร้างซ้ำ เพราะหนึ่งแม่แบบมีบุ๊กมาร์กได้รายการเดียว
+   *   ดังนั้น `team: null` หมายถึง "ย้ายกลับมาเก็บส่วนตัว" ไม่ใช่ "ไม่ส่งค่า"
+   */
+  addBookmark: (body: {
+    templateKey: string
+    versionId: string
+    templateName?: string
+    team?: string | null
+  }) => call<BookmarkRecord>('/bookmarks', { method: 'POST', body: JSON.stringify(body) }),
 
   removeBookmark: (templateKey: string) =>
     call<void>(`/bookmarks/${encodeURIComponent(templateKey)}`, { method: 'DELETE' }),
@@ -889,6 +1012,46 @@ export const api = {
     )
     return r.deleted
   },
+
+  /* ── รายงานปัญหา ───────────────────────────────────────────────
+   * คนนี้ได้รับรายงานปัญหาไหม — เบาพอที่จะยิงครั้งเดียวตอน mount แล้วใช้ตัดสินทุกที่
+   */
+  me: () => call<{ user: { sub: string; name?: string } | null; canReceiveReports: boolean }>('/session'),
+
+  /**
+   * ส่งรายงานปัญหาพร้อมภาพหน้าจอ
+   *
+   * ⚠️ ใช้ `FormData` และ**ไม่ตั้ง content-type เอง**
+   *   ถ้าตั้งเองจะไม่มี boundary → Fastify อ่านไฟล์ไม่ได้ แล้วจะเห็นแค่ "ส่งไม่สำเร็จ"
+   *   โดยไม่บอกว่าทำไม (เจอแล้วตอนทดสอบ)
+   *
+   *   ส่งเป็น multipart คำเดียว ไม่ใช่ "ส่งข้อความแล้วค่อยอัปโหลดรูป"
+   *   เพราะถ้าสองคำขอแยกกัน อัปโหลดรูปพังเงียบ ๆ แล้วเราจะได้รายงานที่ไม่มีภาพ
+   *   โดยไม่มีอะไรบอกว่าหายไป
+   */
+  reportProblem: (input: {
+    summary: string
+    details?: string
+    pageUrl?: string
+    diagnostics?: string
+    shot?: File | null
+  }) => {
+    const fd = new FormData()
+    fd.set('summary', input.summary)
+    fd.set('details', input.details ?? '')
+    fd.set('pageUrl', input.pageUrl ?? '')
+    fd.set('diagnostics', input.diagnostics ?? '')
+    if (input.shot) fd.set('shot', input.shot, input.shot.name || 'screenshot.png')
+    return call<{ id: string; delivered: number }>('/reports', { method: 'POST', body: fd })
+  },
+
+  listReports: () => call<IssueReportList>('/reports'),
+
+  setReportStatus: (id: string, status: ReportStatus) =>
+    call<IssueReport>(`/reports/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
 }
 
 /** รอจนเอกสารเรนเดอร์เสร็จ — คืน record สุดท้าย */

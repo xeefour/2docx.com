@@ -1,17 +1,96 @@
 # Observability — รวบรวม log ให้ LLM อ่าน
 
-log จากทุก container ถูกเก็บรวมไว้ที่เดียว ค้นหาย้อนหลังได้ 14 วัน
+log จาก **container ของ stack `dokploy-infra` เท่านั้น** ถูกเก็บรวมไว้ที่เดียว ค้นหาย้อนหลังได้ 14 วัน
 **ไม่มีหน้าเว็บสำหรับอ่าน** — อ่านผ่าน LLM เป็นหลัก (เหตุผลการตัด Grafana อยู่ท้ายไฟล์)
 
 ```
-Alloy  ──อ่านผ่าน Docker API──▶ ตัด noise 84% ──▶  Loki
- (ดูด log ทุกตัว)                                  (เก็บ 14 วัน)
+Alloy  ──อ่านผ่าน Docker API──▶ กรองเฉพาะ project นี้ ──▶ ตัด noise 84% ──▶  Loki
+ (ดูดเฉพาะ dokploy-infra)                                       (เก็บ 14 วัน)
 ```
 
 | service | พอร์ต | ทำอะไร |
 |---|---|---|
 | Loki | http://127.0.0.1:3100 | เก็บ log — API เปิดไว้ให้ LLM query (`/ready` เช็คสุขภาพ) |
-| Alloy | http://127.0.0.1:12345 | ดูด log + ตัด noise (พอร์ตนี้คือ UI/debug ของ Alloy เอง ไม่ใช่หน้าอ่าน log) |
+| Alloy | http://127.0.0.1:12345 | ดูด log + กรอง + ตัด noise (พอร์ตนี้คือ UI/debug ของ Alloy เอง ไม่ใช่หน้าอ่าน log) |
+
+---
+
+## เก็บ log เฉพาะโปรเจกต์นี้
+
+เครื่องนี้มีหลาย compose project ปะปนกัน สำรวจเมื่อ 2026-10-06:
+
+| project | จำนวน container | อยู่ที่ |
+|---|---|---|
+| **`dokploy-infra`** | **17** ← เก็บ | `D:\2docx.com\dokploy-infra` |
+| `dockers` | 2 | `D:\npm\table\dockers` (teable-*) |
+| `line-oa` | 1 | (ทดลอง) |
+
+ก่อนหน้านี้ Alloy ดูด **ทุก container บนเครื่อง** ทำให้ log ของโปรเจกต์อื่นปนอยู่ใน Loki
+ตอนนี้กรองที่ `discovery.relabel` ใน `alloy/config.alloy`:
+
+```river
+rule {
+	source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+	regex         = "^dokploy-infra$"
+	action        = "keep"
+}
+```
+
+⚠️ **กฎนี้ต้องอยู่ก่อนกฎแปลง label อื่นทั้งหมด** — เพราะ `keep` ตัด target ทิ้งทันที
+ถ้าไปอยู่ท้าย ๆ จะตัดผิดชั้นแล้ว**เงียบแบบไม่มี error**
+
+### ⚠️ ข้อจำกัดที่ต้องรู้
+
+- **container ที่ไม่มี compose project label จะถูกตัดทิ้งเงียบ ๆ** เช่นที่รันด้วย `docker run` ตรง ๆ
+  ถ้าเคยมี container แบบนั้นใน stack ต้องเพิ่มชื่อเข้า regex
+  ตรวจสอบด้วย `node docgen-platform/logs/inspect-container-projects.mjs`
+- **log เก่าของโปรเจกต์อื่นยังอยู่ใน Loki** จนกว่า retention (14 วัน) จะลบ
+  → หน้า `/analyze` จึง **กรองซ้ำตอนอ่าน** ด้วย `COMPOSE_PROJECT` (ดูหัวข้อถัดไป) ไม่ต้องรอ log เก่าหมดอายุ
+
+### กรองชั้นที่สอง: ตอนอ่าน (หน้า `/analyze`)
+
+Alloy กรองตั้งแต่ต้น แต่มีผลเฉพาะ log ที่เข้ามา**หลัง** restart · log เก่าที่เก็บไว้แล้วยังอยู่ครบ
+เคยเห็น dropdown โผล่ `teable-*` (project `dockers`) และ `docgen-*-1` (project `docgen`) ทั้งที่กรองแล้ว
+
+ตัวแปร `COMPOSE_PROJECT` (ค่าเริ่มต้น `dokploy-infra`) ถูกใช้ใน `tools/log-analyzer/server.mjs` กับ:
+
+| จุดที่ใช้ | ผลของการกรอง |
+|---|---|
+| รายชื่อใน dropdown (`meta.all`) | เหลือเฉพาะ container ของโปรเจกต์นี้ |
+| หัวข้อ 3 (ปริมาณ log) | ไม่รวม log ของโปรเจกต์อื่น |
+| หัวข้อ 4 (เหตุการณ์น่าสงสัย) | ไม่รวม log ของโปรเจกต์อื่น |
+| หัวข้อ 1 (สถานะ container) | `docker ps --filter label=…` (มีผลตอนรันบน host) |
+
+⚠️ **ต้องตรงกับ regex ใน `alloy/config.alloy`** — ถ้าเปลี่ยนฝั่งเดียว อีกฝั่งจะไม่ตรง
+แล้วจะเจออาการแบบหนึ่งในสองแบบ: UI มีชื่อที่ไม่มี log หรือมองของตัวเองไม่เห็น
+
+⚠️ **container ที่เงียบมานานจะไม่อยู่ใน dropdown** — รายชื่อมาจาก
+`count_over_time([24h])` ณ เวลาปัจจุบัน ตัวที่ไม่เขียน log เลยใน 24 ชม. จะหายไป
+(วัดจริง 2026-10-06: `nats`, `rustfs`, `rustfs-ui` ไม่เขียนอะไรเลย) ถือว่าถูกต้อง
+เพราะเลือกไปแล้วรายงานก็ว่างอยู่ดี
+
+### 🚫 ข้อผิดพลาดของ Loki ที่เจอระหว่างทำส่วนนี้
+
+1. **`/loki/api/v1/label/<name>/values` ไม่รับ `match[]` บน Loki 3.7.8**
+   ส่งไปก็ถูกเมิน — ไม่ error แต่ไม่กรอง (ทดสอบด้วย selector แคบที่สุด
+   `{job="dokploy-infra.gateway"}` ก็ยังคืน 25 ตัวเท่าเดิม) อันตรายกว่า error เพราะดูเหมือนทำงาน
+2. **`query_range` จัดตำแหน่งจุดให้ตรงกับหน่วยของ `step`** ไม่ได้เริ่มที่ `start` ที่ส่งไป
+   `step=86400` ทำให้จุดสุดท้ายตกลงมาที่เที่ยงคืน UTC — ถามเวลา 08:21Z ได้จุดสุดท้ายที่ 00:00Z
+   เอามาเทียบกับ `end` ด้วยเกณฑ์แบบ `end - 5 นาที` ของจริงจะโดนตัดทิ้งหมด
+   → **นับรายชื่อที่ "มี log" ต้องใช้ instant query** (`/query` ที่ `time=ตอนนี้`) ไม่ใช่ `query_range`
+   → instant query ใช้ได้เฉพาะ metric query · log query ยังต้องใช้ `query_range` เสมอ
+
+### ตรวจว่าตัวกรองทั้งสองชั้นยังทำงาน
+
+```powershell
+node docgen-platform\logs\show-alloy-targets.mjs            # ดูเป้าหมายที่ Alloy ดูดอยู่
+node docgen-platform\logs\prove-alloy-project-filter.mjs   # พิสูจน์ชั้นที่ 1: ชี้ไป project อื่นแล้วต้องเหลือ 0
+node docgen-platform\logs\prove-project-scope.mjs           # พิสูจน์ชั้นที่ 2: dropdown ต้องสะอาด + ตัวควบคุมลบ
+```
+
+> ดูเป้าหมายต้องอ่านจาก `/api/v0/web/components/loki.source.docker.containers`
+> เพราะ `/metrics` มีแค่ `component_id` ไม่มี label ราย target
+> และแต่ละ target เป็นโครงสร้าง `{ type, value: [{key, value:{type,value}}] }` ไม่ใช่ object ธรรมดา
 
 ---
 
@@ -140,8 +219,23 @@ dokploy-infra/
 
 tools/
 ├── log-report.ps1                  # รายงานสรุปสำหรับ LLM อ่าน ← ใช้บ่อยสุด
-└── docker-logs.ps1                 # ดู log ดิบจาก Docker (ใช้เมื่อ Loki ล่ม)
+├── docker-logs.ps1                 # ดู log ดิบจาก Docker (ใช้เมื่อ Loki ล่ม)
+└── log-analyzer/                   # หน้าเว็บวิเคราะห์ log ด้วย AI → เข้าที่ /analyze
 ```
+
+## ดู log แบบไหนดี
+
+| ต้องการ | ใช้ |
+|---|---|
+| ค้น log เองละเอียด | `http://127.0.0.1:8090/logs/loki/api/v1/...` (Loki API ดิบ) |
+| อ่าน log ตอนเจอปัญหา อยากได้สรุป | `tools\log-report.ps1` |
+| **ไม่อยากอ่าน log เอง** | **`http://127.0.0.1:8090/analyze/`** ← ให้ AI สรุปให้ |
+| Loki ล่ม / อยากดูดิบสุด | `tools\docker-logs.ps1` |
+
+> `/analyze` เป็น service `log-analyzer` ใน stack เดียวกัน (โค้ดอยู่ที่ `../tools/log-analyzer`)
+> ดูรายละเอียด: [`../README.md`](../README.md) → หัวข้อ 5
+> ⚠️ หน้านี้ไม่มี auth — ไม่ publish พอร์ต เข้าได้ทาง gateway ที่ผูก 127.0.0.1 เท่านั้น
+> ⚠️ ไม่ mount docker.sock → digest จะขึ้นว่า "อ่านสถานะ container ไม่ได้" (ตั้งใจ)
 
 ## เปลี่ยนค่าอะไรได้
 

@@ -1,0 +1,158 @@
+{
+    "ts":  "2026-10-07T14:54:12Z",
+    "collectedBy":  "collect-host-state.ps1",
+    "listeners":  [
+                      {
+                          "port":  6379,
+                          "address":  "::1",
+                          "exposed":  false
+                      },
+                      {
+                          "port":  6379,
+                          "address":  "::",
+                          "exposed":  true
+                      },
+                      {
+                          "port":  27017,
+                          "address":  "127.0.0.1",
+                          "exposed":  false
+                      },
+                      {
+                          "port":  16379,
+                          "address":  "127.0.0.1",
+                          "exposed":  false
+                      },
+                      {
+                          "port":  12345,
+                          "address":  "127.0.0.1",
+                          "exposed":  false
+                      },
+                      {
+                          "port":  9000,
+                          "address":  "127.0.0.1",
+                          "exposed":  false
+                      },
+                      {
+                          "port":  8090,
+                          "address":  "127.0.0.1",
+                          "exposed":  false
+                      },
+                      {
+                          "port":  8080,
+                          "address":  "127.0.0.1",
+                          "exposed":  false
+                      },
+                      {
+                          "port":  4222,
+                          "address":  "127.0.0.1",
+                          "exposed":  false
+                      },
+                      {
+                          "port":  4001,
+                          "address":  "127.0.0.1",
+                          "exposed":  false
+                      },
+                      {
+                          "port":  4000,
+                          "address":  "127.0.0.1",
+                          "exposed":  false
+                      },
+                      {
+                          "port":  3100,
+                          "address":  "127.0.0.1",
+                          "exposed":  false
+                      }
+                  ],
+    "containers":  [
+                       {
+                           "name":  "docgen-web",
+                           "ports":  "3000/tcp",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "docgen-api",
+                           "ports":  "127.0.0.1:4001-\u003e4000/tcp",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "docgen-gateway",
+                           "ports":  "127.0.0.1:8090-\u003e80/tcp",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "docserver",
+                           "ports":  "127.0.0.1:4000-\u003e4000/tcp",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "mongo-3",
+                           "ports":  "127.0.0.1:27019-\u003e27017/tcp",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "nats",
+                           "ports":  "127.0.0.1:4222-\u003e4222/tcp, 127.0.0.1:8222-\u003e8222/tcp, 127.0.0.1:8081-\u003e8080/tcp",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "mongo-2",
+                           "ports":  "127.0.0.1:27018-\u003e27017/tcp",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "mongo-1",
+                           "ports":  "127.0.0.1:27017-\u003e27017/tcp",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "rustfs",
+                           "ports":  "127.0.0.1:9000-\u003e9000/tcp",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "valkey",
+                           "ports":  "127.0.0.1:16379-\u003e6379/tcp",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "log-analyzer",
+                           "ports":  "127.0.0.1:3110-\u003e3110/tcp",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "docgen-worker",
+                           "ports":  "",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "log-watch",
+                           "ports":  "",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "alloy",
+                           "ports":  "127.0.0.1:12345-\u003e12345/tcp",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "rustfs-ui",
+                           "ports":  "127.0.0.1:8080-\u003e8080/tcp",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "loki",
+                           "ports":  "127.0.0.1:3100-\u003e3100/tcp",
+                           "exposed":  false
+                       },
+                       {
+                           "name":  "teable-cache",
+                           "ports":  "0.0.0.0:6379-\u003e6379/tcp, [::]:6379-\u003e6379/tcp",
+                           "exposed":  true
+                       },
+                       {
+                           "name":  "teable-postgres",
+                           "ports":  "0.0.0.0:5432-\u003e5432/tcp, [::]:5432-\u003e5432/tcp",
+                           "exposed":  true
+                       }
+                   ]
+}

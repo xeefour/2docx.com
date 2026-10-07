@@ -1,12 +1,16 @@
 // ─────────────────────────────────────────────────────────────
-//  Grafana Alloy — agent ดูด log จากทุก container → Loki
+//  Grafana Alloy — agent ดูด log จาก container ของ stack นี้ → Loki
 //
 //  ทำงาน 3 ขั้น:
-//    1. discovery.docker    หา container ทั้งเครื่อง (ผ่าน Docker API)
-//    2. discovery.relabel   เปลี่ยน meta label เป็น label จริง เพื่อให้ query ได้
+//    1. discovery.docker    เจอ container ทุกตัวบนเครื่อง (ผ่าน Docker API)
+//    2. discovery.relabel   **กรองให้เหลือเฉพาะ project นี้** แล้วแปลงเป็น label จริง
 //    3. loki.process        ตัด noise ที่รู้แล้วออกก่อนส่งเข้า Loki
 //
-//  ทำไมต้องตัด noise: mongo 3 ตัวผลิต log ~99.6% ของทั้งระบบ และเกือบทั้งหมด
+//  ⚠️ เครื่องนี้มีหลาย compose project ปะปนกัน (2026-10-06 สำรวจแล้ว):
+//     dokploy-infra (ของเรา) · dockers (teable-*) · line-oa
+//     จึงกรองที่ขั้น 2 — ดูกฎ `keep` ในบล็อกถัดไป
+//
+//  ทำไมต้องตัด mongo noise: mongo 3 ตัวผลิต log ~99.6% ของทั้งระบบ และเกือบทั้งหมด
 //  เป็น replication noise ที่ไม่มีประโยชน์ (ดูหลักฐานใน tools/docker-logs.ps1)
 //  ถ้าไม่ตัด ดิสก์จะเต็มเร็วและ query จะจมในเสียงรบกวน
 //
@@ -29,6 +33,26 @@ discovery.docker "containers" {
 //    หรือ {compose_project="dokploy-infra", service="mongo-1"}
 discovery.relabel "containers" {
 	targets = discovery.docker.containers.targets
+
+	// ─────────────────────────────────────────────────────────────
+	//  เก็บ log เฉพาะ stack ของโปรเจกต์นี้เท่านั้น
+	//
+	//  วันที่ 2026-10-06: ก่อนใส่บรรทัดนี้ เครื่องนี้มี 3 compose project
+	//    dokploy-infra (17 ตัว — ของเรา) · dockers (teable-*) · line-oa
+	//    → log ของอีก 2 โปรเจกต์ปนอยู่ใน Loki ทั้งที่ไม่เกี่ยวกับเราเลย
+	//
+	//  ⚠️ กฎนี้ต้องอยู่**ก่อน**กฎแปลง label อื่นทั้งหมด
+	//     เพราะ `keep` ตัด target ทิ้งทันทีถ้าไม่ตรง
+	//     ถ้าไปอยู่ท้าย ๆ จะตัดผิดชั้นแล้วเงียบแบบไม่มี error
+	// ⚠️ ทุก container ใน stack นี้ต้องมี label นี้ — ตรวจแล้วครบทั้ง 17 ตัว
+	//     ถ้าวันไหนมี container ที่ไม่มี label (เช่น รันด้วย docker run ตรง ๆ)
+	//     log ของมันจะหายไปเงียบ ๆ — ถ้าเจอว่าขาด ให้เพิ่มชื่อเข้าไปใน regex ด้านล่าง
+	// ─────────────────────────────────────────────────────────────
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+		regex         = "^dokploy-infra$"
+		action        = "keep"
+	}
 
 	// ชื่อ container: Docker ให้มาขึ้นต้นด้วย "/" → ตัดออก
 	rule {

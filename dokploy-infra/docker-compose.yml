@@ -96,6 +96,35 @@ x-app-env: &app-env
   MONGO_DB: ${MONGO_DB:-app}
   OUTPUT_BRAND: ${OUTPUT_BRAND:-2docx.com}
 
+  # ── ผู้ช่วย AI (สัมภาษณ์ผู้ใช้ → เติมค่าในฟอร์ม) ──────────────────────
+  # ⚠️ 2026-10-06 — ค่าชุดนี้**ไม่เคยถูกส่งเข้า container** มาก่อน
+  #   ผลคือ LLM_PROVIDER ตกไปใช้ค่าเริ่มต้น `mock` ตาม schema
+  #   → ฟีเจอร์ AI ทำงานแต่ "เดาจากชื่อฟิลด์" โดยไม่ได้ต่อโมเดลจริง
+  #     และหน้าเว็บขึ้นป้าย "ยังไม่ได้ตั้ง key" ตลอด
+  #   ตอนนี้ผูกกับ MINIMAX_API_KEY ตัวเดียวกับที่หน้า /analyze ใช้
+  #     (ยืนยันแล้วว่าใช้งานได้จริง — ดู logs/check-minimax-key.mjs)
+  #
+  # ⚠️ `mock` คือค่าที่ปลอดภัย: ไม่ยิงเครือข่าย ใช้ได้แม้ไม่มี key
+  #   ถ้าใส่ provider อื่นแต่ลืมใส่ key → API ตอบ 503 พร้อมคำอธิบาย
+  LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+  LLM_API_KEY: ${LLM_API_KEY:-${MINIMAX_API_KEY:-}}
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
+  LLM_MODEL: ${LLM_MODEL:-MiniMax-M3}
+  LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-120000}
+  LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
+  LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-2000}
+  # ปิด thinking เพราะการสัมภาษณ์ถาม-ตอบสั้น ๆ ไม่ต้องคิดยาว (ช้ากว่าหลายเท่า)
+  LLM_THINKING: ${LLM_THINKING:-disabled}
+
+  # ── รายงานปัญหาจากผู้ใช้ ───────────────────────────────────────
+  # ⚠️ ต้องอยู่ในบล็อกนี้ มิฉะนั้นค่าจะ**ไม่เคยเข้า container**
+  #   (แบบเดียวกับที่ LLM_* เคยพลาดไปก่อน — schema ใช้ค่าเริ่มต้น `''`
+  #   ทำให้ฟีเจอร์เงียบ ๆ ไม่มี error บอกว่าขาดค่า)
+  #
+  # เว้นว่าง = ปิดฟีเจอร์รายงานปัญหาทั้งหมด (ปุ่มไม่โผล่, /reports ตอบ 404)
+  # คั่นหลายคนด้วย `,` — ค่าคือ sub จาก Casdoor
+  REPORT_TO_SUBS: "${REPORT_TO_SUBS:-}"
+
 services:
   # ══ Database: MongoDB replica set 3 node ════════════════════
   #  Community Edition แบบ standalone ไม่มี multi-document transaction
@@ -108,10 +137,9 @@ services:
     image: mongo:8
     container_name: mongo-1
     command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
-    ports:
-      # ผูก localhost เหมือน service อื่นทุกตัว — DB ไม่ควรรับจาก LAN
-      # (api/worker ที่รันใน Docker ใช้ชื่อ service บน network infra ไม่ต้องใช้พอร์ตนี้)
-      - "127.0.0.1:27017:27017"
+    # ไม่มี ports: — production ไม่เปิดพอร์ตออกภายนอกเลย (ผู้ใช้สั่ง 2026-10-06)
+    #   เข้าฐานข้อมูลจากภายนอกเครื่อง = เปิดให้ใครก็ได้ต่อได้ (ยังไม่มี --auth ดูหมายเหตุท้ายไฟล์)
+    #   ต้องการพอร์ตตอน dev → docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d
     volumes: [mongo1-data:/data/db]
     networks: [infra]
     healthcheck:
@@ -131,8 +159,7 @@ services:
     image: mongo:8
     container_name: mongo-2
     command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
-    ports:
-      - "127.0.0.1:27018:27017"
+    # ไม่มี ports: — ดู mongo-1
     volumes: [mongo2-data:/data/db]
     networks: [infra]
     healthcheck:
@@ -152,8 +179,7 @@ services:
     image: mongo:8
     container_name: mongo-3
     command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
-    ports:
-      - "127.0.0.1:27019:27017"
+    # ไม่มี ports: — ดู mongo-1
     volumes: [mongo3-data:/data/db]
     networks: [infra]
     healthcheck:
@@ -262,10 +288,8 @@ services:
     volumes:
       - ./nats/nats.conf:/etc/nats/nats.conf:ro
       - nats-data:/data
-    ports:
-      - "127.0.0.1:4222:4222"    # client
-      - "127.0.0.1:8222:8222"    # monitoring
-      - "127.0.0.1:8081:8080"    # websocket (host 8081 เพราะ 8080 ถูก rustfs-ui ใช้แล้ว)
+    # ไม่มี ports: — production ไม่เปิด client/websocket ออกภายนอก
+    #   NATS เปิดให้ใครต่อได้ = ยิงงานแปลงเอกสารของคนอื่นได้ → ต้องอยู่หลัง tunnel + Access
     networks: [infra]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz | grep -q ok"]
@@ -294,9 +318,8 @@ services:
       VALKEY_PASSWORD: ${VALKEY_PASSWORD:?ตั้งค่า VALKEY_PASSWORD ใน .env}
     volumes:
       - ./valkey/valkey.conf:/etc/valkey/valkey.conf:ro
-    ports:
-      # 16379 ไม่ใช่ 6379 — เครื่องนี้มี Redis บน WSL จอง 6379 ไว้แล้ว
-      - "127.0.0.1:16379:6379"
+    # ไม่มี ports: — production ไม่เปิด cache ออกภายนอก
+    #   (มีรหัสผ่านอยู่แล้ว แต่เปิดพอร์ตไว้ = ให้ยิง brute force ได้เรื่อย ๆ)
     networks: [infra]
     healthcheck:
       test: ["CMD-SHELL", "valkey-cli -a \"$$VALKEY_PASSWORD\" ping | grep -q PONG"]
@@ -327,8 +350,7 @@ services:
       RUSTFS_CONSOLE_PBKDF_PASSPHRASE: ${STORAGE_PASSPHRASE:?ตั้งค่า STORAGE_PASSPHRASE ใน .env}
     volumes:
       - rustfs-data:/data
-    ports:
-      - "127.0.0.1:9000:9000"    # ผูกแค่ localhost — ให้รัน dev บน host ได้
+    # ไม่มี ports: — production ไม่เปิด S3 ออกภายนอก (presigned URL ต้องผ่าน gateway)
     networks: [infra]
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:9000/minio/health/live || exit 1"]
@@ -353,8 +375,7 @@ services:
     # ต้อง quote: ไม่งั้น YAML ตีความ s3rust: เป็น mapping
     # ผูก 0.0.0.0 ชัดเจน ไม่งั้น default เป็น [::] (IPv6 อย่างเดียว) แล้วเข้าจาก host ไม่ได้
     command: "serve http s3rust: --addr 0.0.0.0:8080"
-    ports:
-      - "127.0.0.1:8080:8080"    # ผูกแค่ localhost — UI ไม่มี auth
+    # ไม่มี ports: — UI ไม่มี auth จึงห้ามเปิดออกภายนอกเด็ดขาด
     volumes:
       - ./rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
     networks: [infra]
@@ -390,15 +411,15 @@ services:
   #      วัดแล้วว่าปิด Studio แล้วทั้ง 4 ยังทำงานครบ 8/8 (ดู BAND.md หัวข้อ 9)
   #
   # ── ทำไมไม่มี ports: ────────────────────────────────────────
-  #   เดิมเป็น `127.0.0.1:4000:4000` ตอนนี้**ตัดออกแล้ว**
+  #   เดิมเป็น `127.0.0.1:4000:4000` ตอนนี้**ตัดออกแล้ว** (production ไม่เปิดพอร์ตออกนอก)
   #     · ตอนนี้ผู้กับ `172.19.0.0/16` เฉพาะในเครือข่าย Docker
   #     · ทดสอบแล้วว่า host เข้าผ่าน IP ของ container ไม่ได้ (Docker Desktop WSL2)
   #       → ตัดพอร์ตแล้ว = ข้ามจากเครื่องนี้ยิงเข้าไปไม่ได้เลยจริง ๆ
   #     · ระบบที่รันอยู่จริง (api/worker ใน container) ยังใช้ได้ปกติ
   #       เพราะคุยผ่านชื่อ `docserver` บน network `infra`
   #
-  #   ⚠️ dev server ที่รัน**บน host** จะยิงไม่ถึง และแก้แล้วไม่มีช่องพอร์ตให้เปิด
-  #      ดูเหตุผลที่วัดได้ใน `../docgen-platform/README.md` → "docserver เข้าถึงได้ทางเดียว"
+  #   ต้องการยิงตรงจาก host (เช่น สคริปต์ dev ที่รันนอก Docker)
+  #     → สตาร์ตด้วย docker-compose.dev-ports.yml ซึ่งเปิด 127.0.0.1:4000 ให้
   docserver:
     image: xeefour/2docx-docserver:5.15.2
     container_name: docserver
@@ -451,8 +472,9 @@ services:
     container_name: loki
     restart: unless-stopped
     command: ["-config.file=/etc/loki/loki-config.yaml", "-target=all"]
-    ports:
-      - "127.0.0.1:3100:3100"
+    # ไม่มี ports: — เข้าได้ทาง log-analyzer ใน network เท่านั้น
+    #   เดิมผูก 127.0.0.1 เพราะ auth_enabled: false (กลัว Docker ผูก 0.0.0.0 ให้)
+    #   ตอนนี้ไม่มีพอร์ตเลย → ปิดได้จริงโดยไม่ต้องพึ่งการผูก address
     volumes:
       - ./observability/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
       - loki-data:/loki
@@ -482,8 +504,7 @@ services:
       # ⚠️ ให้สิทธิ์อ่าน docker socket = สิทธิ์คุมเครื่องทั้งลำ
       #    (RO กันแก้ config แต่ยังสร้าง/หยุด container ได้)
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    ports:
-      - "127.0.0.1:12345:12345"     # UI/debug ของ Alloy เอง
+    # ไม่มี ports: — UI/debug ของ Alloy เข้าผ่าน network เท่านั้น
     networks: [infra]
     depends_on:
       # service_started ไม่ใช่ service_healthy: Loki เป็น distroless ตั้ง
@@ -494,6 +515,94 @@ services:
       resources:
         limits:
           memory: 512M
+
+  # ── หน้าเว็บวิเคราะห์ log ด้วย AI ─────────────────────────
+  #  เดิมรันด้วย tools\log-analyzer\start.cmd บน host → ไม่มีตอนอยู่ในระบบ
+  #  ตอนนี้เป็น service ใน stack เดียวกัน เข้าผ่าน gateway ที่ `/analyze`
+  #
+  #  ⚠️ ไม่ publish พอร์ต — เข้าได้ทางเดียวคือ gateway ใน Docker network
+  #     เหตุผล: หน้านี้ไม่มี auth เลย ใครเข้ามาก็อ่าน log ทั้งหมด
+  #     และใช้โควตา AI ได้ (ผู้ใช้เลือกไม่เปิด) — debug ด้วยการเพิ่ม
+  #     127.0.0.1:3110 ใน docker-compose.dev-ports.yml
+  #
+  #  ⚠️ ไม่ mount docker.sock — ถ้า mount จะได้สิทธิ์เทียบ root ของ host
+  #     แลกกับข้อมูลสถานะ container ที่อ่านได้จาก digest ของ Loki แทน
+  #     ผลคือ digest หัวข้อ 1 (สถานะ container), 2 (Mongo replica set)
+  #     และ 5 (สถิติ Alloy) จะขึ้นว่าอ่านไม่ได้ — โค้ด degrade ให้เอง ไม่ crash
+  log-analyzer:
+    build:
+      # context ที่ราก repo เพราะต้อง COPY tools/log-analyzer/*
+      context: ..
+      dockerfile: dokploy-infra/log-analyzer/Dockerfile
+    container_name: log-analyzer
+    restart: unless-stopped
+    environment:
+      # ใน container ต้อง 0.0.0.0 ไม่งั้น gateway เรียกเข้าไม่ได้
+      # (ค่านี้มีผลเฉพาะภายใน Docker network — host เข้าโดยตรงยังไม่ได้)
+      LOG_UI_HOST: "0.0.0.0"
+      LOG_UI_PORT: "3110"
+      # เรียก service อื่นด้วยชื่อใน network ไม่ใช่ 127.0.0.1
+      # (127.0.0.1 ใน container คือตัวเอง ไม่ใช่ Loki/Alloy)
+      LOKI_URL: "http://loki:3100"
+      ALLOY_METRICS: "http://alloy:12345/metrics"
+      # รายงานและ dropdown ในหน้า /analyze ดูแค่ stack นี้
+      #   ต้องตรงกับ regex ใน observability/alloy/config.alloy (บล็อก discovery.relabel)
+      #   ตั้งเป็นค่าว่างได้ตอน debug = ดูทุก stream บนเครื่อง
+      #   เหตุผลที่ต้องกรองสองชั้น: Alloy กรองตั้งแต่ต้นอยู่แล้ว แต่ log เก่าที่เก็บไว้
+      #   ยังอยู่ครบ 14 วัน ถ้าไม่กรองตอนอ่านจะเห็นของโปรเจกต์อื่นปนอยู่อีก
+      COMPOSE_PROJECT: "${COMPOSE_PROJECT:-dokploy-infra}"
+      # คีย์มาจาก dokploy-infra/.env เท่านั้น — ไม่มี .env อยู่ใน image
+      MINIMAX_API_KEY: "${MINIMAX_API_KEY:-}"
+      MINIMAX_BASE_URL: "${MINIMAX_BASE_URL:-}"
+    # ไม่มี block ports: — ตั้งใจ ดูคอมเมนต์ข้างบน
+    networks: [infra]
+    depends_on:
+      # service_started ไม่ใช่ service_healthy: Loki เป็น distroless ตั้ง
+      # healthcheck ไม่ได้ และตัวนี้จะแสดง "ไม่พร้อม" ให้ทดลองใหม่เอง
+      loki: { condition: service_started }
+      alloy: { condition: service_started }
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ── ตรวจระบบอัตโนมัติทุกชั่วโมง ───────────────────────────────
+  #  ตรวจ: สุขภาพระบบ · เส้นทางหลัก · พอร์ตที่รั่ว · เหตุการณ์น่าสงสังใน log
+  #  ถ้าพบปัญหา → สรุปด้วย AI แล้วเขียนไฟล์ (ไม่พบปัญหา = ไม่เขียน ประหยัดโควตา)
+  #
+  #  ⚠️ ไม่ publish พอร์ต — เป็นงานเบื้องหลัง ไม่ต้องเข้าใช้
+  #  ⚠️ ไม่ mount docker.sock — สถานะ container อ่านจาก /api/health ของระบบเราแทน
+  #     และการตรวจ "พอร์ตรั่ว" ทำโดยต่อ TCP ไปที่ host.docker.internal:<port>
+  #     (ต่อได้ = ผูกกับ 0.0.0.0 = เข้าจาก LAN ได้) — ไม่ต้องใช้สิทธิ์ docker
+  log-watch:
+    build:
+      context: ..
+      dockerfile: dokploy-infra/log-watch/Dockerfile
+    container_name: log-watch
+    restart: unless-stopped
+    environment:
+      CHECK_INTERVAL_MIN: "60"
+      # เข้าถึง service อื่นด้วยชื่อใน network
+      GATEWAY_URL: "http://docgen-gateway"
+      LOKI_URL: "http://loki:3100"
+      ANALYZER_URL: "http://log-analyzer:3110"
+      ALLOY_METRICS: "http://alloy:12345/metrics"
+      HOST_IP: "host.docker.internal"
+      MINIMAX_API_KEY: "${MINIMAX_API_KEY:-}"
+      MINIMAX_BASE_URL: "${MINIMAX_BASE_URL:-}"
+    volumes:
+      # ผลลัพธ์เขียนลง host — อ่านได้ที่ dokploy-infra/log-watch/findings/
+      - ./log-watch/findings:/findings
+    networks: [infra]
+    depends_on:
+      loki: { condition: service_started }
+      alloy: { condition: service_started }
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   # ══════════════════════════════════════════════════════════════
   #  ตัวแอป 2docx.com — เดิมอยู่ที่ docgen-platform/docker-compose.yml
@@ -590,20 +699,34 @@ services:
   # ── Gateway: ทางเข้าเดียวของทั้งระบบ ─────────────────────────
   #  แยกบริการตาม prefix ของ path — ดูตารางเส้นทางในไฟล์ Caddyfile
   #
-  #  ⚠️ พอร์ต 8090 ผูกแค่ 127.0.0.1 = เข้าถึงจาก LAN ไม่ได้
-  #     มีไว้ให้ debug จากเครื่องนี้ได้ (`curl http://127.0.0.1:8090/healthz`)
-  #     ตอน production ตัดบรรทัดนี้ทิ้งได้เลย ไม่มีผลกับการทำงาน
-  #     เพราะ Dokploy map โดเมนเข้าที่พอร์ต 80 ของ container โดยตรง
+  #  ทางเข้าสู่ระบบ = พอร์ต 80 ของ container นี้ บนเครือข่าย Docker
+#     Dokploy map โดเมนเข้าที่พอร์ตนี้โดยตรง (ไม่ผ่านพอร์ตของ host)
+#  ⚠️ ไม่ publish พอร์ตใน production (ผู้ใช้สั่ง 2026-10-06)
+#     ตอน dev ต้องการเข้าเพื่อ debug ให้สตาร์ตด้วย docker-compose.dev-ports.yml
+#     ซึ่งจะผูก 127.0.0.1:8090 → เครื่องนี้เข้าได้ แต่ LAN เข้าไม่ได้
   gateway:
     image: caddy:2.10-alpine
     container_name: docgen-gateway
+    # entrypoint.sh เป็นตัวแปลง: อ่านรหัสผ่านธรรมดาจาก .env แล้วสร้าง bcrypt hash
+    #   ใส่ Caddyfile ตอน container เริ่ม (Caddy รับเฉพาะ hash)
+    #   ต้อง override entrypoint เพราะ image ตั้งค่า run ตรง ๆ ไว้
+    entrypoint: ["/bin/sh", "/etc/gateway/entrypoint.sh"]
+    command: []
+    environment:
+      # รหัสผ่าน /analyze — เก็บเป็นรหัสธรรมดา อ่านออกได้ ไม่ต้องเดาว่าตั้งอะไรไว้
+      # ⚠️ ถ้าว่าง entrypoint จะหยุด container ไว้เลย ไม่ใช่เปิดหน้านี้ทิ้งแบบไม่มี auth
+      ANALYZE_AUTH_USER: "${ANALYZE_AUTH_USER:-ops}"
+      ANALYZE_AUTH_PASSWORD: "${ANALYZE_AUTH_PASSWORD:-}"
     volumes:
+      - ./gateway/entrypoint.sh:/etc/gateway/entrypoint.sh:ro
       - ../docgen-platform/gateway/Caddyfile:/etc/caddy/Caddyfile:ro
       # cert ของ Let's Encrypt — ถ้าไม่เก็บไว้ ทุกครั้งที่ restart ต้องขอใหม่
       - docgen-gateway-data:/data
       - docgen-gateway-config:/config
-    ports:
-      - "127.0.0.1:8090:80"
+      # คู่มือ Carbone ภาษาไทย (static) เสิร์ฟตรงจาก Caddy ที่ /docs
+      #   อ่านอย่างเดียว (ro) และไม่ต้อง build / ไม่ต้องมี container เพิ่ม
+      - ../docgen-platform/manual:/srv/manual:ro
+    # ไม่มี ports: — ดูหัวข้อ gateway ข้างบน
     networks: [infra]
     depends_on:
       web: { condition: service_started }

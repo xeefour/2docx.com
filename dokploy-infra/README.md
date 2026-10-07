@@ -14,6 +14,8 @@
 | `docserver` | เอกสารราชการไทย (Carbone 5.15.2 + ฟอนต์ SIPA) | ~180 MB | **ไม่มีพอร์ต** — เข้าผ่านชื่อ `docserver` ในเครือข่ายเท่านั้น |
 | `loki` | เก็บ log ทุก container | ~50 MB | `127.0.0.1:3100` |
 | `alloy` | ส่ง log เข้า Loki | ~80 MB | `127.0.0.1:12345` |
+| **`log-analyzer`** | **หน้าเว็บวิเคราะห์ log ด้วย AI** (โค้ดที่ `../tools/log-analyzer`) | ~60 MB | **ไม่มีพอร์ต** — เข้าที่ gateway `/analyze` เท่านั้น |
+| **`log-watch`** | **ตรวจระบบอัตโนมัติทุกชั่วโมง** (หัวข้อ 6) | ~60 MB | **ไม่มีพอร์ต** — เขียนรายงานลง `log-watch/findings/` |
 | **`docgen-api`** | API (Fastify 5 + Zod 4) | ~200 MB | 4000 |
 | **`docgen-worker`** | ดึงงานจาก NATS → เรนเดอร์ → เก็บ S3 | ~150 MB | — |
 | **`docgen-web`** | เว็บ Next.js | ~150 MB | 3000 |
@@ -40,11 +42,42 @@ docker compose ps
 
 | คำสั่ง | ผล |
 |---|---|
-| `docker compose up -d` | ขึ้นทั้งระบบ 14 container (infra 10 + ตัวแอป 4) |
+| `docker compose up -d` | ขึ้นทั้งระบบ 17 container · **ไม่เปิดพอร์ตออกภายนอกเลย** |
 | `docker compose --profile tunnel up -d` | ขึ้นเพิ่ม cloudflared (ต้องใส่ token ก่อน) |
 | `docker compose down` | ปิดทั้งหมด **เก็บข้อมูลไว้** |
 | `docker compose down -v` | ลบ volume ด้วย — **ระวัง ข้อมูลหาย** |
-| `docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d` | debug — publish `127.0.0.1:4001` (api) และ `127.0.0.1:3000` (web) |
+| `docker compose -f docker-compose.yml -f docker-compose.dev-ports.yml up -d` | โหมด dev — publish พอร์ต debug กลับมา (ทั้งหมดผูก `127.0.0.1` เท่านั้น) |
+
+## โหมด production กับ dev — ต่างกันตรงไหน
+
+ผู้ใช้สั่ง 2026-10-06: production Docker **ไม่ map พอร์ตใด ๆ ออกมาภายนอก**
+ค่าที่ชี้ `127.0.0.1:port` จึงใช้ไม่ได้ เพราะใน container `127.0.0.1` คือ "ตัวเอง"
+
+| | production (ค่าเริ่มต้น) | dev |
+|---|---|---|
+| ไฟล์ compose | `docker-compose.yml` | + `docker-compose.dev-ports.yml` |
+| พอร์ตที่ publish | **ไม่มีเลย** | 16 พอร์ต ผูก `127.0.0.1` เท่านั้น |
+| ไฟล์ env | `.env` (compose อ่านไฟล์นี้) | `.env` + `.env.development` |
+| ค่าที่ชี้เครื่อง host | **ห้ามมี** | อยู่ใน `.env.development` |
+| เข้าระบบจากเครื่อง | ผ่าน proxy/tunnel ที่พอร์ต 80 ของ `gateway` | `http://127.0.0.1:8090` |
+
+**ค่าของเครื่องนี้ (127.0.0.1:…) อยู่ที่ `.env.development`** เช่น `VALKEY_URL`,
+`MONGO_URL`, `S3_ENDPOINT`, `DOCSERVER_URL`, `MONGO_PRIMARY_CANDIDATES`
+
+โค้ดที่รัน**บน host** (สคริปต์ตรวจ/วัด, `npm run dev`) ต้องอ่านทั้งสองไฟล์:
+
+```bash
+node --env-file=../dokploy-infra/.env \
+     --env-file=../dokploy-infra/.env.development tools\x.mjs
+# ไฟล์หลังทับไฟล์หน้า — ค่าของเครื่องต้องชนะค่ากลาง
+```
+
+> ⚠️ รหัสผ่าน 3 ตัวถูกคัดลอกไปอยู่ใน URL ของ `.env.development` (Node ไม่ expand `${VAR}`)
+> หมุนรหัสผ่านต้องแก้ทั้งสองไฟล์ — `check-prod-env.mjs` ข้อ 4 ตรวจให้
+
+**ตรวจก่อน deploy** — `node docgen-platform\logs\check-prod-env.mjs`
+อ่านค่าที่ "ถูกประกอบแล้ว" จาก `docker compose config --format json` จึงจับได้แม้กรณีที่
+ค่าชี้เครื่องถูกเขียนในไฟล์ compose เอง (ไม่ได้อยู่ใน `.env`)
 
 > ⚠️ **build context ชี้ไป `../docgen-platform`** — Docker อ่าน path สัมพัทธ์จาก
 > โฟลเดอร์ที่ไฟล์ compose อยู่ ไม่ใช่จาก cwd → สั่งจากที่ไหนก็ได้ผลเหมือนกัน
@@ -63,25 +96,36 @@ docker compose ps
 
 `.env` → `CF_TUNNEL_TOKEN` จาก **Zero Trust → Networks → Tunnels → tunnel ของคุณ → Configure**
 
-### ตอน dev บน host ใช้ env สองไฟล์
+### ค่าทั้งระบบอยู่ไฟล์เดียว — `.env` (ที่นี่)
 
-โค้ดที่ `../docgen-platform` เมื่อรัน dev บน host ต้องการค่าที่**ต่างจาก container**
-(ชี้ `127.0.0.1` แทนชื่อ service) จึงแยกไฟล์ไว้สองฝั่ง:
+รวมไฟล์ env ทั้งหมดของโปรเจกต์ไว้ที่นี่เมื่อ 2026-10-06 ไฟล์เดียวมีทั้ง
+ค่ากลาง (secret, Casdoor, S3, NATS, Valkey, MiniMax) **และ** ค่าที่ต่างตอน dev บน host
 
-| ไฟล์ | มีอะไร | ใครอ่าน |
+| กลุ่ม | ตัวอย่าง | ใครอ่าน |
 |---|---|---|
-| `.env` (ที่นี่) | ค่ากลางทั้งหมด — secret, Casdoor, S3, NATS | `docker compose` + dev (อ่านก่อน) |
-| `../docgen-platform/.env` | เฉพาะค่าที่ต่างตอน dev (URL ที่ชี้ `127.0.0.1`) | dev (อ่านทีหลัง = ทับ) |
+| ค่ากลาง | `MONGO_PASSWORD`, `NATS_PASSWORD`, `MINIMAX_API_KEY`, `CASDOOR_*` | `docker compose` |
+| ค่า dev บน host | `API_HOST`, `MONGO_URL`, `S3_ENDPOINT`, `VALKEY_URL` | `npm run dev` ใน `../docgen-platform` |
+| ค่าของ log analyzer | `MINIMAX_API_KEY`, `COMPOSE_PROJECT` | service `log-analyzer` |
 
-dev อ่านสองไฟล์เรียงกัน และ**ไฟล์หลังทับไฟล์หน้า** (ยืนยันแล้วด้วยการทดสอบสลับลำดับ):
+dev อ่านไฟล์เดียวนี้เลย ไม่ต้องต่อไฟล์ที่สอง:
 
 ```
-node --env-file=../../../dokploy-infra/.env --env-file=../../.env …
+node --env-file=../../../dokploy-infra/.env --env-file=../../../dokploy-infra/.env.development …      (จาก apps/api)
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development …             (จาก docgen-platform/)
 ```
 
-> ระวัง path: npm รัน script ของ workspace ที่ `apps/api` → ต้องขึ้น **3** ชั้น
+> ⚠️ ค่า dev ชี้ `127.0.0.1` ส่วนค่าใน container ชี้ชื่อ service (`mongo-1`, `nats`)
+> `docker-compose.yml` ประกอบ URL เองจากรหัสผ่าน ไม่ได้อ่าน URL จากไฟล์นี้
+> → แก้รหัสผ่านที่เดียว ทั้งสองโหมดจึงตรงกัน
+
+> ⚠️ รหัสผ่านที่ฝังใน URL ฝั่ง dev ต้องตรงกับคีย์รหัสผ่านข้างบนด้วย
+> ไฟล์ `.env` ไม่รองรับการอ้างค่าข้ามตัวแปร จึงต้องแก้สองที่ — แก้ผิดที่เดียวจะพังแบบไม่บอก
+
+> รัวประหว่าง path: npm รัน script ของ workspace ที่ `apps/api` → ต้องขึ้น **3** ชั้น
 > (`../../../dokploy-infra/.env`) ไม่ใช่ 2 ชั้น
 > ใส่ผิดแล้ว Node จะพ่น `not found` แล้ว dev ไม่ขึ้น — จริงแล้วเจอตอนทำจริง
+
+ตรวจว่ายังเป็นไฟล์เดียว: `node docgen-platform\logs\check-env-single-file.mjs`
 
 ---
 
@@ -165,6 +209,114 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\push.ps1
 docker compose pull docserver && docker compose up -d docserver
 ```
+
+---
+
+## 5. Log Analyzer — หน้าเว็บวิเคราะห์ log ด้วย AI
+
+โค้ดอยู่ที่ `../tools/log-analyzer` (Node ไม่มี dependency นอกจากของมาตรฐาน)
+Dockerfile อยู่ที่ `log-analyzer/Dockerfile` ในโฟลเดอร์นี้
+
+```
+ทุก container ──► Alloy ──► Loki ──┬─► /logs/*     (ค้น log ดิบ)
+  (Docker API)                      └─► /analyze/*  (หน้าเว็บ + AI)
+```
+
+| เข้าที่ไหน | ได้อะไร |
+|---|---|
+| `http://127.0.0.1:8090/analyze/` | หน้าเว็บ — สรุปภาพรวม · เหตุการณ์น่าสงสัย · วิเคราะห์ด้วย AI |
+| `http://127.0.0.1:8090/analyze/api/status` | สถานะ Loki / คีย์ / รายชื่อโมเดล |
+| `http://127.0.0.1:8090/analyze/api/digest?since=1h` | digest ล้วน ๆ ไม่ใช้ LLM (เร็ว ~1-3 วิ) |
+| `http://127.0.0.1:8090/logs/loki/api/v1/labels` | Loki API ดิบ |
+
+### คีย์ AI
+
+ใส่ใน `dokploy-infra/.env` (ไม่ใช่ `../tools/log-analyzer/.env` — compose อ่านจากไฟล์กลาง)
+
+```
+MINIMAX_API_KEY=<คีย์ของคุณ>
+MINIMAX_BASE_URL=          # ว่าง = ใช้ endpoint สาธารณะ
+```
+
+ว่างไว้ก็ใช้ได้บางส่วน — ภาพรวม + เหตุการณ์น่าสงสังมาจาก Loki โดยตรง
+ปุ่ม "วิเคราะห์ด้วย AI" จะถูก disable ให้เอง
+
+### ⚠️ ทำไมถึงไม่ publish พอร์ต และไม่ mount docker.sock
+
+| การตัดสินใจ | เหตุผล | ต้นทุน |
+|---|---|---|
+| **ไม่ publish พอร์ต 3110** | หน้านี้**ไม่มี auth** ใครเข้ามาก็อ่าน log ทั้งหมดและใช้คีย์ AI ได้ | เข้าได้ทาง gateway เท่านั้น (ซึ่งผูก 127.0.0.1 อยู่แล้ว) |
+| **ไม่ mount docker.sock** | socket = สิทธิ์เทียบ root ของ host | digest หัวข้อ 1 (สถานะ container) และ 2 (Mongo replica set) ขึ้นว่าอ่านไม่ได้ — โค้ด degrade ให้เอง ไม่ crash |
+
+debug ตอนต้องยิงตรง: เพิ่ม `127.0.0.1:3110` ใน `docker-compose.dev-ports.yml` (มีให้แล้ว แต่ comment ไว้)
+
+ตรวจว่ายังไม่รั่ว:
+
+```powershell
+node ..\docgen-platform\logs\check-log-analyzer.mjs    # 13/13
+```
+
+### ⚠️ ถ้าจะ map โดเมนจริง
+
+ต้องเพิ่ม `basic_auth` ก่อน (วิธีเตรียม hash อยู่ท้าย `../docgen-platform/gateway/Caddyfile`)
+ไม่งั้นใครก็เข้ามาอ่าน log และใช้คีย์ AI ของคุณได้
+
+> ✅ ใส่ `basic_auth` ให้แล้วเมื่อ 2026-10-06 (ผู้ใช้ `ops`)
+> ทดสอบแล้ว: ไม่มีรหัสผ่าน → 401 · มีรหัสผ่าน → 200
+> เส้นทางอื่น (`/healthz` `/api/health` `/logs/ready`) ไม่ถูก auth ตามเดิม
+
+---
+
+## 6. Log Watch — ตรวจระบบอัตโนมัติทุกชั่วโมง
+
+ตรวจสุขภาพระบบทุก 60 นาที แล้ว**เขียนรายงานเฉพาะเมื่อพบความผิดปกติ**
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `log-watch/watcher.mjs` | ตัวตรวจ (Node, ไม่มี dependency) |
+| `log-watch/Dockerfile` | `node:22-alpine` · COPY path เต็มจากราก repo เพราะ `context: ..` |
+| `log-watch/collect-host-state.ps1` | เก็บสถานะพอร์ตฝั่ง host → `findings/host-state.json` |
+| `log-watch/findings/` | ผลลัพธ์ (bind mount เป็น `/findings`) — **ดูคู่มือที่ `findings/README.md`** |
+
+### ตรวจอะไร
+
+| หมวด | แหล่งข้อมูล |
+|---|---|
+| สุขภาพ service ทุกตัว (MongoDB · NATS · RustFS · docserver · worker) | `/api/health` |
+| เส้นทางหลัก 7 เส้น — ตรวจว่าได้**เนื้อหา** ที่คาด ไม่ใช่แค่ 200 | ยิงจริงผ่าน gateway |
+| พอร์ตที่เปิดออก LAN | `host-state.json` (ฝั่ง host) |
+| เหตุการณ์น่าสงสัยใน log แยกราย container | Loki |
+| log-analyzer ยังติดต่อ Loki ได้ไหม | `/api/status` |
+
+### ต้องลงทะเบียนตัวเก็บข้อมูลฝั่ง host 1 ครั้ง
+
+watcher อยู่ใน container จึงตรวจพอร์ตของ host เองไม่ได้
+(`host.docker.internal` ให้ผลลวงบน WSL2 — ดูคำอธิบายท้าย `watcher.mjs`)
+
+```powershell
+schtasks /Create /TN "2docx-log-watch-collect" `
+  /TR 'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "D:\2docx.com\dokploy-infra\log-watch\collect-host-state.ps1"' `
+  /SC MINUTE /MO 10 /F
+```
+
+ถ้าไม่ลงทะเบียน ไฟล์จะเก่ากว่า 2 ชม. แล้ว watcher จะรายงาน "ตรวจพอร์ตไม่ได้" ทุกชั่วโมง
+
+### เกณฑ์ตรวจ
+
+```powershell
+node ..\docgen-platform\logs\check-log-watch.mjs      # 29/29
+```
+
+เกณฑ์นี้พิสูจน์แล้วว่าจับบั๊กได้จริง 5 แบบ (นับซ้ำ · ลบตัวกรอง · ใส่ `\b` ·
+ใช้ `!=` แทน `!~` · ตั้ง step ผิด) และคืนค่าแล้วผ่านกลับมาครบทุกไบต์
+
+```powershell
+node ..\docgen-platform\logs\prove-check-log-watch.mjs   # ฉีดบั๊กแล้วต้องตก
+node ..\docgen-platform\logs\prove-log-watch-cycle.ps1   # พิสูจน์วงจรเต็มบนเครื่องจริง
+```
+
+> ⚠️ สคริปต์ `.ps1` ที่มีภาษาไทย **ต้องมี UTF-8 BOM** ไม่งั้น `powershell.exe -File`
+> จะอ่านเป็น cp1252 แล้ว parse error (`node ..\docgen-platform\logs\add-bom.mjs <ไฟล์>` ช่วยได้)
 
 ---
 
@@ -401,6 +553,32 @@ networks:
 - ✅ docserver: `/status` → 200 version 5.15.2 · ฟอนต์ TH Sarabun ครบ 16 ตัว
 - ✅ docserver: คืนแม่แบบ 11 ไฟล์ + `metadata.db` เข้า volume แล้ว
 - ✅ docserver: เรนเดอร์ PDF ได้จริง 101 KB (`%PDF-`) ข้อความไทย + merge + loop ถูกต้อง
+- ✅ log-analyzer: `/analyze/` ผ่าน gateway → 200 พร้อมหน้าเว็บจริง (ไม่ใช่ catch-all ของ Next)
+- ✅ log-analyzer: ติดต่อ Loki ได้ (`loki: true`) และมี `MINIMAX_API_KEY` จาก `.env` กลาง
+- ✅ log-analyzer: digest ดึงจาก Loki ได้ 6,200 ตัวอักษร · วิเคราะห์ด้วย AI จริง 34 วิ (`effort=low`)
+- ✅ log-analyzer: ไม่มีพอร์ตบน host · เข้าจาก LAN/Tailscale ไม่ได้ · ไม่ mount docker.sock
+- ✅ เกณฑ์ `docgen-platform/logs/check-log-analyzer.mjs` ผ่าน 13/13
+  (พิสูจน์จับบั๊กแล้ว: ใส่ `ports: 0.0.0.0:3110` → ตก 4 ข้อ · ใส่ `docker.sock` → ตก)
+- ✅ log-analyzer: `/analyze/` มี basic auth แล้ว (ผู้ใช้ `ops`) — ไม่มีรหัสผ่าน → 401 · มี → 200
+- ✅ log-watch: ไม่พบปัญหา → **ไม่เขียนไฟล์เลย** (เก็บแค่ `runs.jsonl`) ประหยัดโควตา AI
+- ✅ log-watch: ใส่บั๊กจริง (พอร์ต 4000 ผูก `0.0.0.0`) → เขียน `latest.md` พร้อม AI สรุป
+  และรายงานตรงว่า `พอร์ต 4000 ผูกกับ 0.0.0.0 — เข้าจาก LAN ได้`
+- ✅ log-watch: คืนค่าแล้วพอร์ตหายจากรายงานทันที
+- ✅ เกณฑ์ `docgen-platform/logs/check-log-watch.mjs` ผ่าน 29/29
+  (พิสูจน์จับบั๊กแล้ว 5 แบบ: นับซ้ำ · ลบตัวกรอง loki · ใส่ `\b` · ใช้ `!=` แทน `!~` · ตั้ง step ผิด)
+
+### บั๊กที่เจอระหว่างตั้ง log-watch (2026-10-06)
+
+| อาการ | สาเหตุ | แก้ |
+|---|---|---|
+| นับได้บวม 52 เท่า | `query_range` ประเมินทุก `step` วิ หน้าต่าง `[1h]` จึงซ้อนกัน | ตั้ง `step` = ความกว้างหน้าต่าง แล้วอ่านเฉพาะจุดสุดท้าย |
+| มองไม่เห็น container ที่ไม่ใช่ mongo | LogQL `!=` เทียบแบบตรงตัวอักษร ไม่ใช่ regex | ใช้ `!~` เท่านั้น |
+| เตือน 2,127 ครั้ง/ชม. ทั้งที่ปกติ | mongo เขียน 120,009 บรรทัด/ชม. เกือบทั้งหมดเป็นระดับ Info | นับ mongo เฉพาะระดับ Warn/Error/Fatal |
+| เตือนว่าปัญหาตัวเอง | Loki เขียน log ทุก query ที่เข้ามา (มีคำว่า error ใน query) | ตัด `loki` · `log-watch` · `log-analyzer` ออก (ตัดทิ้ง 780 บรรทัด/ชม.) |
+| เตือนซ้ำ 14 วันหลัง `docker rm` | Loki เก็บ log ค้างไว้ตาม retention | เทียบรายชื่อ container ที่ยังรันอยู่ใน `host-state.json` |
+| รายงานตัวเลข**เก่า 1 ชั่วโมง** | Loki ไม่คืนจุดใหม่ให้ stream ที่หยุดเขียน → จุดสุดท้ายที่ได้อาจเป็นจุดเก่า | ทิ้งจุดที่เก่ากว่าหน้าต่างที่ถามก่อน แล้วค่อยอ่านจุดสุดท้าย |
+| ตัวพิสูจน์ "ผ่านปลอม" | PowerShell 5.1: `-Filter` คู่กับ `-Exclude` ไม่คืนไฟล์เลย | เปลี่ยนไปวัดจากเวลาแก้ไฟล์แทนการนับจำนวน |
+| ชี้ผิดว่า watcher พลาด | `docker compose --log-level` ไม่รองรับ แต่ error ถูกกลืนด้วย `\| Out-Null` | เช็ค `$LASTEXITCODE` ทุกครั้ง |
 
 ![UI](screenshots/02-demo.png)
 

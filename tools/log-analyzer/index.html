@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Log Analyzer — วิเคราะห์ log ด้วย AI</title>
+<style>
+  /* ══════════════════════════════════════════════════════════════════
+     สีทั้งหมดในไฟล์นี้มาจากโทเคนข้างล่างเท่านั้น
+     ห้ามเขียนสีตรง ๆ ในกฎอื่นอีก (STYLE.md ข้อ 10.1-10.2)
+     ถ้าต้องการสีใหม่ ให้ประกาศที่นี่ทั้งสองโหมด แล้วแก้ STYLE.md ข้อ 3
+     ══════════════════════════════════════════════════════════════════ */
+  :root {
+    /* ── สีเน้น ── */
+    --accent: #1d6f5c;
+    --accent-soft: #e6f2ee;
+    --accent-line: #bcdcd3;
+    /** ตัวอักษรที่วางบนพื้น --accent — ต้องสลับขั้วตามโหมด (STYLE.md ข้อ 3.6) */
+    --on-accent: #ffffff;
+
+    /* ── พื้นผิว ── */
+    --bg: #fbfaf8;
+    --surface: #ffffff;
+    --surface-2: #f4f2ee;
+    --line: #e3dfd8;
+    --line-strong: #cdc7bd;
+
+    /* ── ตัวอักษร ── */
+    --text: #241f1a;
+    --text-dim: #6b635a;
+    /* ค่านี้ผ่านเกณฑ์ AA แล้ว (STYLE.md ข้อ 4.3) คู่มือยังใช้ค่าเดิมที่ต่ำกว่า */
+    --text-faint: #7b7267;
+
+    /* ── สถานะ ── */
+    --ok: #1d6f5c;
+    --ok-bg: #e6f2ee;
+    --ok-line: #bcdcd3;
+    --warn: #9a6413;
+    --warn-bg: #fdf3dd;
+    --warn-line: #f0dcae;
+    --danger: #a8342a;
+    --danger-bg: #fbeceb;
+    --danger-line: #f5c6c6;
+
+    /* ── กล่องโค้ด (มืดทั้งสองโหมด) ── */
+    --code-bg: #2b2723;
+    --code-text: #eae5df;
+
+    /* ── รูปร่างและตัวอักษร (STYLE.md ข้อ 7) ── */
+    --radius: 10px;
+    --font-th: "Sarabun", "Noto Sans Thai", "IBM Plex Sans Thai",
+               "Leelawadee UI", "Tahoma", "Krungthep", sans-serif;
+    --font-mono: "Cascadia Code", "JetBrains Mono", Consolas,
+                 "SF Mono", "Courier New", monospace;
+
+    color-scheme: light;
+  }
+
+  /* ── บล็อกมืด 2 บล็อกต้องตรงกันทุกค่า (STYLE.md ข้อ 8.3)
+        รวบเป็นบล็อกเดียวไม่ได้ เพราะ media query ไม่เคยถูกปิด
+        ผู้ใช้ที่อยู่ในระบบมืดจะกดสลับออกมาไม่ได้ ──────────────────── */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --accent: #5fbfa2;
+      --accent-soft: #1d3730;
+      --accent-line: #2f5a4e;
+      --on-accent: #0f231d;
+
+      --bg: #1a1714;
+      --surface: #221e1a;
+      --surface-2: #2b2622;
+      --line: #38322c;
+      --line-strong: #4a423a;
+
+      --text: #ece7e1;
+      --text-dim: #a89f95;
+      --text-faint: #8f867d;
+
+      --ok: #5fbfa2;
+      --ok-bg: #1d3730;
+      --ok-line: #2f5a4e;
+      --warn: #d4a154;
+      --warn-bg: #3a2f1a;
+      --warn-line: #5a4826;
+      --danger: #e8877c;
+      --danger-bg: #3a2320;
+      --danger-line: #5e322d;
+
+      --code-bg: #14110f;
+      --code-text: #e6e0d8;
+
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme='dark'] {
+    --accent: #5fbfa2;
+    --accent-soft: #1d3730;
+    --accent-line: #2f5a4e;
+    --on-accent: #0f231d;
+
+    --bg: #1a1714;
+    --surface: #221e1a;
+    --surface-2: #2b2622;
+    --line: #38322c;
+    --line-strong: #4a423a;
+
+    --text: #ece7e1;
+    --text-dim: #a89f95;
+    --text-faint: #8f867d;
+
+    --ok: #5fbfa2;
+    --ok-bg: #1d3730;
+    --ok-line: #2f5a4e;
+    --warn: #d4a154;
+    --warn-bg: #3a2f1a;
+    --warn-line: #5a4826;
+    --danger: #e8877c;
+    --danger-bg: #3a2320;
+    --danger-line: #5e322d;
+
+    --code-bg: #14110f;
+    --code-text: #e6e0d8;
+
+    color-scheme: dark;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     จากตรงนี้ลงไป ห้ามมีสีตรง ๆ อีก
+     ══════════════════════════════════════════════════════════════════ */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 16px/1.75 var(--font-th);          /* ข้อ 7: 16px / 1.75 ภาษาไทยต้องสูงกว่า */
+    padding: 20px 16px 80px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  /* ── header ── */
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 18px; }
+  h1 { font-size: 1.4rem; margin: 0; font-weight: 650; letter-spacing: .2px; }
+  .sub { color: var(--text-dim); font-size: .9rem; margin-top: 2px; }
+  .pills { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .pill {
+    font-size: .78rem; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--text-dim); white-space: nowrap;
+  }
+  .pill.ok  { color: var(--ok);  border-color: var(--ok-line);  background: var(--ok-bg); }
+  .pill.bad { color: var(--danger); border-color: var(--danger-line); background: var(--danger-bg); }
+
+  /* ปุ่มสลับโหมด — ใช้คีย์ localStorage เดียวกับเว็บแอป (docgen-theme)
+     เพื่อให้สลับที่หน้าไหนก็ตรงกันหมด */
+  #themeBtn {
+    background: var(--surface-2); color: var(--text-dim);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 3px 10px; font-size: .78rem; font-family: inherit;
+    cursor: pointer; line-height: 1.75;
+  }
+  #themeBtn:hover { color: var(--text); border-color: var(--line-strong); }
+
+  /* ── panels ── */
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); margin-bottom: 16px; overflow: hidden;
+  }
+  .card > h2 {
+    font-size: .84rem; margin: 0; padding: 11px 16px;
+    border-bottom: 1px solid var(--line); color: var(--text-dim);
+    font-weight: 600; letter-spacing: .4px; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card > h2 .n { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .body { padding: 16px; }
+
+  /* ── controls ── */
+  .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+  .fld { display: flex; flex-direction: column; gap: 5px; }
+  .fld label { font-size: .82rem; color: var(--text-dim); }
+  select, input[type=text] {
+    background: var(--surface-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 7px; padding: 8px 10px; font-size: .9rem; font-family: inherit; min-width: 150px;
+  }
+  select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    padding: 7px 13px; border-radius: 7px; border: 1px solid var(--line);
+    background: var(--surface-2); color: var(--text-dim); cursor: pointer;
+    font-size: .86rem; font-family: inherit; line-height: 1.75; transition: .12s;
+  }
+  .chip:hover { border-color: var(--line-strong); color: var(--text); }
+  .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 500; }
+
+  /* ปุ่มรอง — พื้นผิวธรรมดา (โหลด digest, ถามต่อ) */
+  button.act {
+    background: var(--surface-2); border: 1px solid var(--line); color: var(--text-dim);
+    padding: 9px 20px; border-radius: 7px; font-size: .9rem; font-weight: 600;
+    cursor: pointer; font-family: inherit; line-height: 1.75; transition: .12s;
+  }
+  button.act:hover:not(:disabled) { border-color: var(--line-strong); color: var(--text); }
+  /* ปุ่มหลัก — พื้นสีเน้น (วิเคราะห์ด้วย AI)
+     ตัวอักษรใช้ --on-accent เพื่อสลับขั้วตามโหมด ถ้าเขียน #fff ตายตัว
+     ตอนโหมดมืดจะเป็นขาวบนเขียวอ่อน = อ่านไม่ออก โดยไม่มี error (STYLE.md ข้อ 3.6) */
+  button.act.act-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  button.act.act-primary:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  button.act:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost {
+    background: var(--surface-2); border: 1px solid var(--line); color: var(--text-dim);
+    padding: 9px 14px; border-radius: 7px; cursor: pointer; font-family: inherit; font-size: .86rem; line-height: 1.75;
+  }
+  button.ghost:hover { color: var(--text); border-color: var(--line-strong); }
+
+  /* ── stats ── */
+  /* การ์ดใช้ --surface ไม่ใช่ --surface-2
+     วัดจริงแล้ว --warn บน --surface-2 ได้ 4.47:1 (ต้อง 4.5) แต่บน --surface ได้ 4.99:1
+     ตัวเลขสีเตือนและจำนวนครั้งสีเตือนวางอยู่ในการ์ดพวกนี้ */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .stat .k { font-size: .78rem; color: var(--text-dim); margin-bottom: 4px; }
+  .stat .v { font-size: 1.4rem; font-weight: 650; font-family: var(--font-mono); }
+  .stat .v small { font-size: .82rem; color: var(--text-dim); font-weight: 400; }
+  .v.ok { color: var(--ok); } .v.warn { color: var(--warn); } .v.bad { color: var(--danger); }
+
+  /* ── bars ── */
+  .bar { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+  .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
+  /* ── tables / lists ── */
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  td { padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { text-align: right; font-family: var(--font-mono); white-space: nowrap; }
+  .name { font-family: var(--font-mono); }
+
+  /* กล่องกลุ่มใช้ --surface ไม่ใช่ --surface-2 เหมือน .stat
+     --warn บน --surface-2 ได้ 4.47:1 (ต้อง 4.5) และ --text-faint บน --surface-2 ได้ 4.22:1 (ต้อง 4.5)
+     ย้ายมาที่ --surface แล้วได้ 4.99:1 และ 4.72:1 ตามลำดับ */
+  .grp { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; background: var(--surface); }
+  .grp .t { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .grp .msg { font-family: var(--font-mono); font-size: .84rem; color: var(--text); flex: 1 1 320px; word-break: break-word; }
+  .grp .cnt { font-family: var(--font-mono); font-size: .86rem; font-weight: 650; color: var(--text-dim); }
+  /* .meta ใช้ --text-dim ไม่ใช่ --text-faint — ตัวอักษรต้อง 4.5:1 เสมอ
+     ไม่ว่าจะเป็นข้อความประกอบ (STYLE.md ข้อ 4.3) */
+  .grp .meta { font-size: .82rem; color: var(--text-dim); margin-top: 4px; }
+  .spread { padding: 1px 7px; border-radius: 999px; font-size: .75rem; border: 1px solid var(--line); }
+  .spread.spread { color: var(--warn); border-color: var(--warn-line); background: var(--warn-bg); }
+  /* .once ไม่มีพื้นของตัวเอง → สีต้องอ่านได้บนพื้นของ .grp ซึ่งเป็น --surface
+     ถ้าใช้ --text-faint จะได้ 4.72:1 (ผ่าน) แต่พื้นถัดเข้าไปของ .grp คือ --surface-2
+     ทำให้เหลือ 4.22:1 ตอนการ์ดอยู่บนพื้นหน้า จึงระบุพื้นให้ชัดเจนแทน */
+  .spread.once { color: var(--text-dim); background: var(--surface); border-color: var(--line); }
+
+  pre.samp {
+    /* ⚠️ ต้องใช้ --code-text ไม่ใช่ --text-dim
+       --code-bg เป็นพื้นเข้มทั้งสองโหมด ถ้าใช้สีข้อความธรรมดะจะอ่านไม่ออก
+       (วัดจริงได้ 2.51:1 ก่อนแก้) */
+    font-family: var(--font-mono); font-size: .82rem; color: var(--code-text);
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+    padding: 7px 9px; margin: 6px 0 0; white-space: pre-wrap; word-break: break-all;
+  }
+
+  /* สีมาจากคลาส .cnt.warn / ค่าเดิม ป้ายกระจายใช้สีเตือน จุดเดียวใช้สีข้อความรอง */
+  .cnt.warn { color: var(--warn); }
+
+  /* ── AI output ── */
+  #ai { font-size: 1.05rem; }
+  #ai h2 { font-size: 1.4rem; margin: 20px 0 8px; padding-bottom: 5px; border-bottom: 1px solid var(--line); }
+  #ai h2:first-child { margin-top: 0; }
+  #ai h3 { font-size: 1.06rem; margin: 14px 0 6px; }
+  #ai p { margin: 7px 0; }
+  #ai ul, #ai ol { margin: 7px 0; padding-left: 22px; }
+  #ai li { margin: 4px 0; }
+  #ai code { font-family: var(--font-mono); font-size: .86rem; background: var(--surface-2); color: var(--accent); padding: 1px 5px; border-radius: 4px; }
+  #ai pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 11px; overflow-x: auto; }
+  #ai pre code { background: none; padding: 0; color: var(--code-text); }
+  #ai blockquote { border-left: 3px solid var(--accent-line); margin: 8px 0; padding-left: 12px; color: var(--text-dim); }
+  #ai strong { color: var(--text); }
+  #ai hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
+  .spin { color: var(--text-dim); font-size: 1rem; padding: 4px 0; }
+  .spin::after { content: '▍'; animation: b 1s steps(2) infinite; }
+  @keyframes b { 50% { opacity: 0; } }
+
+  .chat { display: flex; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .chat input { flex: 1; }
+  .turns { margin-top: 12px; }
+  .turn { margin-bottom: 10px; padding: 9px 12px; border-radius: 8px; font-size: 1rem; }
+  .turn.u { background: var(--accent-soft); border: 1px solid var(--accent-line); }
+  .turn.a { background: var(--surface-2); border: 1px solid var(--line); }
+  .turn .who { font-size: .72rem; color: var(--text-faint); margin-bottom: 3px; text-transform: uppercase; letter-spacing: .5px; }
+
+  details > summary { cursor: pointer; color: var(--text-dim); font-size: .9rem; padding: 6px 0; user-select: none; }
+  details > summary:hover { color: var(--text); }
+  pre.digest {
+    font-family: var(--font-mono); font-size: .84rem; background: var(--code-bg); color: var(--code-text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 12px;
+    max-height: 420px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  .err {
+    color: var(--danger); font-size: .86rem; padding: 10px;
+    background: var(--danger-bg); border: 1px solid var(--danger-line);
+    border-radius: 7px; white-space: pre-wrap;
+  }
+  .foot { color: var(--text-faint); font-size: .82rem; margin-top: 22px; text-align: center; }
+
+  a { color: var(--accent); }
+  code.inline-code {
+    font-family: var(--font-mono); font-size: .86rem;
+    background: var(--surface-2); color: var(--accent);
+    padding: 3px 7px; border-radius: 4px;
+  }
+  /* ── กล่องเตือนเรื่อง API key ──
+     เดิมเขียนสีและขนาดใน style="..." ตามช่องแยกจุด → ตอนนี้เป็นคลาสแล้ว
+     เพราะ inline style ชนะ CSS ทุกชั้น ถ้าทิ้งไว้ แก้ธีมแล้วจะไม่มีผล
+     โดยไม่มี error (STYLE.md ข้อ 10.2) */
+  #keyWarn h2 { color: var(--warn); }
+  #keyWarn .lead { margin: 0 0 10px; }
+  #keyWarn .step { margin: 0 0 6px; color: var(--text-dim); font-size: 13px; }
+  #keyWarn ol { margin: 0 0 10px; padding-left: 22px; font-size: 13.5px; }
+  #keyWarn ol code { display: inline-block; margin-top: 4px; }
+  #keyWarn .note { margin: 0 0 4px; color: var(--text-dim); font-size: 12.5px; }
+  #keyWarn .paths { margin: 0; color: var(--text-faint); font-size: 12px; }
+
+  /* ── หัวตารางย่อยในการ์ด (ปริมาณ · replica · รายการท้าย) ── */
+  .subhead { color: var(--text-dim); font-size: 13px; }
+  .subhead.sm { font-size: 12.5px; }
+  .vrow { margin-bottom: 7px; }
+  .vrow .top { display: flex; justify-content: space-between; font-size: 12.5px; }
+  .vrow .top .num { font-family: var(--font-mono); }
+  .empty-ok { color: var(--ok); font-size: 14px; }
+  /* แถบปริมาณ — สีมาจากโทเคนเสมอ ห้ามส่ง hex เข้ามาใน inline style */
+  .bar > i.warn { background: var(--warn); }
+  .bar > i.ok   { background: var(--accent); }
+
+  ::selection { background: var(--accent-soft); color: var(--text); }
+</style>
+<script>
+// ตั้งธีมก่อนเบราว์เซอร์วาดครั้งแรก — ถ้าทำหลังจากนั้นผู้ใช้จะเห็นกะพริบสีขาว
+// ⚠️ คีย์ docgen-theme ต้องเหมือนกับเว็บแอป เพื่อให้สลับที่หน้าไหนก็ตรงกัน
+(function () {
+  try {
+    var t = localStorage.getItem('docgen-theme');
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  } catch (e) { /* โหมดส่วนตัว — ใช้ค่าของระบบแทน */ }
+})();
+</script>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Log Analyzer</h1>
+      <div class="sub">อ่าน log ทุก container แล้วให้ AI สรุปปัญหา</div>
+    </div>
+    <div class="pills">
+      <span class="pill" id="p-dock">docker: …</span>
+      <span class="pill" id="p-loki">loki: …</span>
+      <span class="pill" id="p-key">key: …</span>
+      <span class="pill" id="p-llm">llm: …</span>
+      <button id="themeBtn" type="button" title="สลับโหมดสว่าง/มืด">โหมด</button>
+    </div>
+  </header>
+
+  <div id="keyWarn" style="display:none" class="card">
+    <h2>⚠ ยังตั้ง MiniMax API key ไม่เรียบร้อย</h2>
+    <div class="body">
+      <p class="lead">ส่วน “ภาพรวม” และ “เหตุการณ์น่าสงสัย” ใช้ได้ตามปกติ แต่ปุ่ม <b>วิเคราะห์ด้วย AI</b> จะยังใช้ไม่ได้ จนกว่าจะใส่คีย์</p>
+      <p class="step">วิธีตั้ง (1 ขั้นตอน):</p>
+      <ol>
+        <li>เปิดไฟล์ <code id="envPath">.env</code> ที่รากโปรเจกต์ แล้วเพิ่มบรรทัดนี้<br />
+          <code>MINIMAX_API_KEY=&lt;คีย์ของคุณ&gt;</code></li>
+        <li>ปิดแล้วเปิด server ใหม่ (Ctrl+C แล้วรัน <code>start.cmd</code> อีกครั้ง)</li>
+      </ol>
+      <p class="note">ไฟล์ <code>.env</code> ถูก <code>.gitignore</code> ไว้แล้ว คีย์จะไม่หลุดเข้า git</p>
+      <p class="paths">server จะอ่านจากไฟล์แรกที่เจอ: <code>tools/log-analyzer/.env</code> → <code>.env</code> รากโปรเจกต์ → <code>dokploy-infra/.env</code></p>
+    </div>
+  </div>
+
+  <!-- ── controls ── -->
+  <div class="card">
+    <h2>ตั้งค่า</h2>
+    <div class="body">
+      <div class="row">
+        <div class="fld">
+          <label>ช่วงเวลา</label>
+          <div class="chips" id="ranges">
+            <button class="chip" data-v="15m">15 นาที</button>
+            <button class="chip on" data-v="1h">1 ชั่วโมง</button>
+            <button class="chip" data-v="6h">6 ชั่วโมง</button>
+            <button class="chip" data-v="24h">24 ชั่วโมง</button>
+            <button class="chip" data-v="7d">7 วัน</button>
+          </div>
+        </div>
+        <div class="fld">
+          <label>container</label>
+          <select id="cFilter"><option value="">ทุกตัว</option></select>
+        </div>
+        <div class="fld">
+          <label>โมเดล</label>
+          <select id="model"></select>
+        </div>
+        <div class="fld">
+          <label>ระดับความคิด</label>
+          <select id="effort" title="M3.1 คิดทุกครั้ง — ยิ่งสูงยิ่งละเอียดแต่ช้าขึ้น">
+            <option value="low">ต่ำ — เร็ว</option>
+            <option value="medium">กลาง</option>
+            <option value="high" selected>สูง — แนะนำ</option>
+            <option value="xhigh">สูงมาก</option>
+            <option value="max">สูงสุด — ช้ามาก</option>
+          </select>
+        </div>
+        <div class="fld" style="flex:1;min-width:240px">
+          <label>คำถามเพิ่มเติม (ถ้าเว้นว่าง = วิเคราะห์รวม)</label>
+          <input type="text" id="question" placeholder="เช่น replica set มีปัญหาอะไรบ้าง?" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="act" id="btnRefresh">โหลด digest</button>
+        <button class="act act-primary" id="btnAnalyze">วิเคราะห์ด้วย AI</button>
+        <button class="ghost" id="btnPattern">ปรับรูปแบบที่จับ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── overview ── -->
+  <div class="card">
+    <h2>ภาพรวม <span class="n" id="ovTime"></span></h2>
+    <div class="body">
+      <div class="stats" id="stats"></div>
+      <div id="volume" style="margin-top:16px"></div>
+      <div id="replica" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- ── suspect events ── -->
+  <div class="card">
+    <h2>เหตุการณ์น่าสงสัย <span class="n" id="evCount"></span></h2>
+    <div class="body" id="events"><div class="spin">กำลังโหลด…</div></div>
+  </div>
+
+  <!-- ── AI ── -->
+  <div class="card">
+    <h2>ผลวิเคราะห์จาก AI <span class="n" id="aiTime"></span></h2>
+    <div class="body">
+      <div id="ai"><div class="spin">กด “วิเคราะห์ด้วย AI” เพื่อเริ่ม</div></div>
+      <div class="chat" id="askBox" style="display:none">
+        <input type="text" id="ask" placeholder="ถามต่อเรื่อง log เช่น “ตัวไหนพุ่งที่สุด” หรือกด Enter" />
+        <button class="ghost" id="btnAsk">ถาม</button>
+      </div>
+      <div class="turns" id="turns"></div>
+      <details style="margin-top:12px">
+        <summary>ดู digest ดิบที่ส่งให้ AI</summary>
+        <pre class="digest" id="digestRaw"></pre>
+      </details>
+    </div>
+  </div>
+
+  <div class="foot">
+    อ่านจาก Loki · เรียก MiniMax โดยตรงจาก server · API key อยู่ใน <code>.env</code> และไม่เคยผ่านหน้าเว็บนี้
+  </div>
+</div>
+
+<script>
+/* ── สลับโหมดสว่าง/มืด ──────────────────────────────────────
+   ใช้ data-theme บน <html> เหมือนเว็บแอป (STYLE.md ข้อ 8.3)
+   คีย์ใน localStorage ต้องเป็น docgen-theme ตัวเดียวกันทุกที่
+   ถ้าไม่ตรงกัน ปุ่มจะจำได้แต่หน้าจะไม่กลับมาเป็นค่าเดิม */
+(function () {
+  var btn = document.getElementById('themeBtn');
+  var root = document.documentElement;
+
+  var systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+
+  function current() {
+    var set = root.getAttribute('data-theme');
+    if (set === 'light' || set === 'dark') return set;
+    return systemDark.matches ? 'dark' : 'light';
+  }
+
+  function paint() {
+    var c = current();
+    btn.textContent = c === 'dark' ? '☾ มืด' : '☀ สว่าง';
+    btn.setAttribute('aria-label', c === 'dark' ? 'เปลี่ยนเป็นโหมดสว่าง' : 'เปลี่ยนเป็นโหมดมืด');
+  }
+
+  btn.addEventListener('click', function () {
+    var next = current() === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('docgen-theme', next); } catch (e) { /* โหมดส่วนตัว */ }
+    paint();
+  });
+
+  // ถ้าผู้ใช้ยังไม่เคยกดสลับ ให้ตามระบบเมื่อระบบเปลี่ยน
+  systemDark.addEventListener('change', function () {
+    if (!root.getAttribute('data-theme')) paint();
+  });
+
+  paint();
+})();
+</script>
+
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+
+const S = { since: '1h', containers: [], model: '', digest: null, meta: null, history: [], busy: false };
+
+/* ── markdown → HTML (แค่พอใช้) ── */
+function esc(s) { return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+
+function md(src) {
+  const blocks = [];
+  // ดึง code block ออกมาก่อน
+  let t = src.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    blocks.push('<pre><code>' + esc(code.replace(/\n$/, '')) + '</code></pre>');
+    return ' ' + (blocks.length - 1) + ' ';
+  });
+
+  t = esc(t);
+
+  t = t.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+       .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+       .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+       .replace(/^---+$/gm, '<hr>')
+       .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+  // inline: code, bold, italic
+  t = t.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+
+  // ul / ol
+  const lines = t.split('\n');
+  const out = [];
+  let mode = null, buf = [];
+  const flush = () => {
+    if (!mode) return;
+    out.push(`<${mode}>` + buf.map(x => `<li>${x}</li>`).join('') + `</${mode}>`);
+    mode = null; buf = [];
+  };
+  for (const ln of lines) {
+    const u = /^\s*[-*]\s+(.*)$/.exec(ln);
+    const o = /^\s*\d+\.\s+(.*)$/.exec(ln);
+    const h = /^<h[23]>/.test(ln) || /^<hr>/.test(ln) || /^<pre>/.test(ln) || ln.trim() === '';
+    if (u) { if (mode !== 'ul') { flush(); mode = 'ul'; } buf.push(u[1]); continue; }
+    if (o) { if (mode !== 'ol') { flush(); mode = 'ol'; } buf.push(o[1]); continue; }
+    if (h && ln.trim() !== '' && !/^<li/.test(ln)) { flush(); out.push(ln); continue; }
+    if (ln.trim() === '') { flush(); continue; }
+    flush();
+    out.push('<p>' + ln + '</p>');
+  }
+  flush();
+
+  return out.join('\n').replace(/ (\d+) /g, (_, i) => blocks[+i]);
+}
+
+/* ── API ── */
+/**
+ * ฐานของ API ต้องคำนวณจาก path ที่หน้านี้ถูกเสิร์ฟ ไม่ใช่เขียน `/api/...` ตายตัว
+ *
+ * เพราะหน้านี้ถูกเสิร์ฟได้ที่สองที่:
+ *   · รันตรงบน host               → http://127.0.0.1:3110/          → base = "/"
+ *   · อยู่ใต้ prefix ของ gateway → http://127.0.0.1:8090/analyze/ → base = "/analyze/"
+ *
+ * ถ้าเขียน `fetch('/api/status')` ตายตัว เมื่ออยู่ใต้ prefix คำขอจะหลุดไปโดน
+ * route `/api/*` ของระบบ (Fastify) แทน log-analyzer → ได้ 404
+ * (เจอจริงตอนย้ายไปเป็น container เมื่อ 2026-10-05)
+ */
+const BASE = (() => {
+  let p = location.pathname.replace(/\/index\.html$/, '/');
+  if (!p.endsWith('/')) p += '/';
+  return p;
+})();
+
+async function api(path, opts) {
+  const r = await fetch(BASE + path.replace(/^\//, ''), opts);
+  const t = await r.text();
+  let d; try { d = JSON.parse(t); } catch { throw new Error(`ตอบกลับไม่ใช่ JSON: ${t.slice(0, 200)}`); }
+  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  return d;
+}
+
+function setBusy(on, msg) {
+  S.busy = on;
+  $('#btnAnalyze').disabled = on;
+  $('#btnRefresh').disabled = on;
+  if (on && msg) $('#ai').innerHTML = '<div class="spin">' + esc(msg) + '</div>';
+}
+
+/* ── status ── */
+async function loadStatus() {
+  try {
+    const s = await api('/api/status');
+    $('#p-dock').textContent = 'docker: ' + (s.docker ? 'ปกติ' : 'ไม่ตอบ');
+    $('#p-dock').className = 'pill ' + (s.docker ? 'ok' : 'bad');
+    $('#p-loki').textContent = 'loki: ' + (s.loki ? 'พร้อม' : 'ไม่พร้อม');
+    $('#p-loki').className = 'pill ' + (s.loki ? 'ok' : 'bad');
+
+    // สถานะ API key
+    const k = s.key || { ok: false };
+    const viaLabel = { dotenv: 'จาก .env', env: 'จาก environment' };
+    $('#p-key').textContent = k.ok ? 'key: พร้อม' : 'key: ไม่ได้ตั้ง';
+    $('#p-key').className = 'pill ' + (k.ok ? 'ok' : 'bad');
+    $('#p-key').title = k.ok ? `อ่าน${viaLabel[k.via] || k.via}` : 'ยังไม่ได้ตั้ง MINIMAX_API_KEY';
+    $('#keyWarn').style.display = k.ok ? 'none' : 'block';
+    if (k.envFile) $('#envPath').textContent = k.envFile;
+    $('#btnAnalyze').disabled = !k.ok || S.busy;
+    $('#btnAsk').disabled = !k.ok;
+
+    const sel = $('#model');
+    if (Array.isArray(s.models) && s.models.length) {
+      sel.innerHTML = s.models.map(m =>
+        `<option value="${esc(m.ref)}">${esc(m.name)}${m.isDefault ? ' (default)' : ''}</option>`).join('');
+      const def = s.models.find(m => m.isDefault) || s.models[0];
+      S.model = def.ref; sel.value = def.ref;
+      $('#p-llm').textContent = s.models.length + ' โมเดล';
+      $('#p-llm').className = 'pill ok';
+    } else {
+      $('#p-llm').textContent = 'llm: ไม่พร้อม';
+      $('#p-llm').className = 'pill bad';
+    }
+  } catch (e) {
+    $('#p-llm').textContent = 'llm: ผิดพลาด';
+    $('#p-llm').className = 'pill bad';
+    $('#p-llm').title = e.message;
+  }
+}
+
+/* ── digest ── */
+async function loadDigest() {
+  if (S.busy) return;
+  setBusy(true);
+  $('#events').innerHTML = '<div class="spin">กำลังดึง…</div>';
+  try {
+    const qs = new URLSearchParams({ since: S.since });
+    if (S.containers.length) qs.set('containers', S.containers.join(','));
+    const d = await api('/api/digest?' + qs);
+    S.digest = d.text; S.meta = d.meta;
+    render(d);
+  } catch (e) {
+    $('#events').innerHTML = '<div class="err">' + esc(e.message) + '</div>';
+  } finally {
+    setBusy(false);
+  }
+}
+
+function render(d) {
+  const m = d.meta || {};
+  $('#ovTime').textContent = 'อัปเดต ' + new Date().toLocaleTimeString('th-TH');
+
+  // ปุ่มเลือก container
+  // ⚠️ ต้องอ่านจาก m.all (รายชื่อที่ Loki มี log จริง) ไม่ใช่ m.status
+  //    m.status มาจาก `docker ps` ซึ่งไม่มีในโหมด container (ไม่ได้ mount docker.sock)
+  //    → ใช้ตัวนั้นแล้ว dropdown จะเหลือแค่ "ทุกตัว" (เจอจริง 2026-10-06)
+  const names = m.all || [];
+  const cur = $('#cFilter').value;
+  $('#cFilter').innerHTML = '<option value="">ทุกตัว</option>' +
+    names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  $('#cFilter').value = cur;
+
+  const bad = (m.status || []).filter(s => !s.ok);
+  const vol = m.totalMb || 0;
+  const perDay = vol / Math.max(1 / 1440, d.since / 1440);
+  const dropPct = m.drop && m.drop.read ? (100 * m.drop.drop) / m.drop.read : 0;
+
+  // การ์ด "container" นับจากรายชื่อที่ Loki มี log จริง
+  // สถานะ healthy/unhealthy อ่านไม่ได้ในโหมด container จึงไม่โชว์ว่า "ปกติทั้งหมด"
+  // (บอกว่าปกติทั้งหมดโดยไม่ได้ตรวจ จะทำให้เข้าใจผิดว่าเช็คแล้ว)
+  const canSeeStatus = (m.status || []).length > 0;
+  const cards = [
+    ['container', names.length + ' ตัว',
+      canSeeStatus ? (bad.length ? bad.length + ' มีปัญหา' : 'ปกติทั้งหมด')
+                   : 'นับจากที่มี log',
+      canSeeStatus && bad.length ? 'bad' : ''],
+    ['log ที่เก็บ', vol.toFixed(1) + ' <small>MB</small>', perDay.toFixed(0) + ' MB/วัน', ''],
+    ['เหตุการณ์น่าสงสัย', (m.totalSuspect || 0).toLocaleString(),
+      (m.groups || []).length + ' ประเภท', m.totalSuspect ? 'warn' : 'ok'],
+    ['noise ที่ตัดทิ้ง', dropPct.toFixed(1) + '<small>%</small>',
+      m.drop ? Math.round(m.drop.drop).toLocaleString() + ' บรรทัด' : '-', ''],
+  ];
+  $('#stats').innerHTML = cards.map(([k, v, s, c]) =>
+    `<div class="stat"><div class="k">${esc(k)}</div><div class="v ${c}">${v}</div><div class="k" style="margin-top:2px">${esc(s)}</div></div>`
+  ).join('');
+
+  // ปริมาณต่อ container
+  const vols = m.volume || [];
+  if (vols.length) {
+    const top = vols.slice(0, 10);
+    const max = Math.max(...top.map(v => v.mb)) || 1;
+    $('#volume').innerHTML = '<div class="subhead sm">ปริมาณต่อ container</div>' +
+      top.map(v => {
+        // สีแถบเป็นคลาส ไม่ใช่ hex ใน inline style (STYLE.md ข้อ 10.1-10.2)
+        const c = v.c === 'mongo-1' || v.c === 'mongo-2' || v.c === 'mongo-3' ? 'warn' : 'ok';
+        return `<div class="vrow">
+          <div class="top">
+            <span class="name">${esc(v.c)}</span><span class="num">${v.mb.toFixed(2)} MB</span>
+          </div>
+          <div class="bar"><i class="${c}" style="width:${(100 * v.mb) / max}%"></i></div>
+        </div>`;
+      }).join('');
+  } else {
+    $('#volume').innerHTML = '<div class="subhead">ไม่มีข้อมูลปริมาณ</div>';
+  }
+
+  // replica set
+  if (m.replica) {
+    const ahead = /AHEAD/.test(m.replica);
+    $('#replica').innerHTML = `<div class="subhead">
+      <span>replica set:</span>
+      <code class="inline-code">${esc(m.replica)}</code>
+      ${ahead ? ' <span class="spread spread">มี node อยู่หน้า primary</span>' : ''}
+    </div>`;
+  }
+
+  // เหตุการณ์
+  const groups = m.groups || [];
+  if (!groups.length) {
+    $('#evCount').textContent = '';
+    $('#events').innerHTML = '<div class="empty-ok">ไม่พบเหตุการณ์ที่เข้าเงื่อนไข ✓</div>';
+  } else {
+    const rep = groups.filter(g => g.n >= 2);
+    const once = groups.filter(g => g.n < 2);
+    $('#evCount').textContent = `เกิดซ้ำ ${rep.length} · ครั้งเดียว ${once.length}`;
+
+    let html = '';
+    if (rep.length) {
+      html += rep.slice(0, 25).map(g => {
+        const spread = g.first !== g.last;
+        const sample = (g.samples && g.samples[0]) || '';
+        return `<div class="grp">
+          <div class="t">
+            <span class="cnt${spread ? ' warn' : ''}">${g.n}×</span>
+            <span class="msg">${esc(g.k)}</span>
+            <span class="spread ${spread ? 'spread' : 'once'}">${spread ? 'กระจาย' : 'จุดเดียว'}</span>
+          </div>
+          <div class="meta">${esc(g.c)} · ${g.first}–${g.last}</div>
+          ${sample ? `<pre class="samp">${esc(sample.replace(/\s+/g, ' ').slice(0, 300))}</pre>` : ''}
+        </div>`;
+      }).join('');
+    }
+    if (once.length) {
+      const cs = [...new Set(once.map(g => g.c))].join(', ');
+      html += `<div class="subhead sm">
+        + เกิดครั้งเดียวอีก ${once.length} ประเภท (จาก ${esc(cs)})</div>`;
+    }
+    $('#events').innerHTML = html;
+  }
+
+  $('#digestRaw').textContent = d.text;
+}
+
+/* ── AI ── */
+/** โชว์ว่าโมเดลกิน token ไปกับการ "คิด" เท่าไหร่ — M3.1 คิดทุกครั้ง */
+function tokNote(info) {
+  if (!info) return '';
+  const bits = [];
+  if (info.effort) bits.push(`คิดระดับ ${info.effort}`);
+  if (info.thinkingTokens) bits.push(`คิดไป ${info.thinkingTokens.toLocaleString()} tok`);
+  if (info.outputTokens) bits.push(`ตอบ ${info.outputTokens.toLocaleString()} tok`);
+  return bits.length ? ' · ' + bits.join(' · ') : '';
+}
+
+async function analyze() {
+  if (S.busy) return;
+  setBusy(true, 'กำลังให้ AI วิเคราะห์… (อาจใช้ 30-90 วินาที)');
+  $('#turns').innerHTML = '';
+  S.history = [];
+  const q = $('#question').value.trim();
+  try {
+    const r = await api('/api/analyze', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        since: S.since, containers: S.containers, model: S.model,
+        question: q, effort: $('#effort').value,
+      })
+    });
+    $('#ai').innerHTML = md(r.analysis);
+    $('#aiTime').textContent = `${r.model.split('/').pop()} · ${(r.elapsedMs / 1000).toFixed(1)}s` + tokNote(r.info);
+    $('#askBox').style.display = 'flex';
+    S.history.push({ role: 'user', content: q || 'วิเคราะห์รวม' }, { role: 'assistant', content: r.analysis });
+  } catch (e) {
+    $('#ai').innerHTML = '<div class="err">' + esc(e.message) + '</div>';
+  } finally { setBusy(false); }
+}
+
+async function ask() {
+  const inp = $('#ask');
+  const q = inp.value.trim();
+  if (!q || S.busy) return;
+  inp.value = '';
+  S.history.push({ role: 'user', content: q });
+  $('#turns').innerHTML = renderTurns();
+  setBusy(true);
+  try {
+    const r = await api('/api/ask', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        since: S.since, containers: S.containers, model: S.model, question: q,
+        effort: $('#effort').value, history: S.history.slice(0, -1),
+      })
+    });
+    S.history.push({ role: 'assistant', content: r.answer });
+    $('#turns').innerHTML = renderTurns();
+    $('#aiTime').textContent = `${(r.elapsedMs / 1000).toFixed(1)}s` + tokNote(r.info);
+  } catch (e) {
+    S.history.push({ role: 'assistant', content: 'ผิดพลาด: ' + e.message });
+    $('#turns').innerHTML = renderTurns();
+  } finally { setBusy(false); }
+}
+
+function renderTurns() {
+  return S.history.map(h =>
+    `<div class="turn ${h.role === 'user' ? 'u' : 'a'}">
+       <div class="who">${h.role === 'user' ? 'คุณถาม' : 'AI ตอบ'}</div>
+       <div>${h.role === 'user' ? esc(h.content) : md(h.content)}</div>
+     </div>`).join('');
+}
+
+/* ── events ── */
+$('#ranges').addEventListener('click', (e) => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  $$('#ranges .chip').forEach(c => c.classList.remove('on'));
+  b.classList.add('on');
+  S.since = b.dataset.v;
+  loadDigest();
+});
+$('#cFilter').addEventListener('change', (e) => {
+  S.containers = e.target.value ? [e.target.value] : [];
+  loadDigest();
+});
+$('#model').addEventListener('change', (e) => { S.model = e.target.value; });
+$('#btnRefresh').addEventListener('click', loadDigest);
+$('#btnAnalyze').addEventListener('click', analyze);
+$('#btnAsk').addEventListener('click', ask);
+$('#ask').addEventListener('keydown', (e) => { if (e.key === 'Enter') ask(); });
+$('#question').addEventListener('keydown', (e) => { if (e.key === 'Enter') analyze(); });
+$('#btnPattern').addEventListener('click', async () => {
+  const cur = prompt('รูปแบบ regex ที่จับเป็น "เหตุการณ์น่าสงสัย" (ใช้ RE2):',
+    'error|fatal|refused|timeout|not primary|heartbeat failed|topology change|Host failed|slow query');
+  if (cur === null) return;
+  try {
+    await api('/api/patterns', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pattern: cur }) });
+    loadDigest();
+  } catch (e) { alert('ใช้รูปแบบไม่ได้: ' + e.message); }
+});
+
+loadStatus().then(loadDigest);
+setInterval(() => { if (!S.busy) loadDigest(); }, 60000);
+</script>
+</body>
+</html>

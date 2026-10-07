@@ -5,8 +5,15 @@
 dokploy-infra/.env
 dokploy-infra/rclone/rclone.conf
 
-# backup ของ docserver (สร้างตอนย้ายเข้า compose — มีแม่แบบ + metadata.db)
-docserver-backup-*/
+# ============================================================
+#  data/ — ข้อมูลรันจริง + สำรอง ไม่ใช่ซอร์สโค้ด (ดู data/README.md)
+#    ตอนนี้มี backup ของ docserver (แม่แบบ + metadata.db) ย้ายเข้าไป
+#
+#    เขียนเป็น data/* ไม่ใช่ data/ เพราะ git ไม่ยอมไล่เข้าโฟลเดอร์ที่ถูก ignore
+#    ทำให้ !data/README.md ใช้ไม่ได้ แล้วเอกสารอธิบายโฟลเดอร์นี้จะหายไปด้วย
+# ============================================================
+data/*
+!data/README.md
 
 # ============================================================
 #  ผลลัพธ์จากการทดสอบ — สร้างใหม่ได้เสมอ ไม่ต้องเก็บ
@@ -14,6 +21,8 @@ docserver-backup-*/
 tests/*/output/
 tests/*/output-*/
 tests/output/
+tools/docserver/output-example/
+tools/fonts/font-compare.png
 *.pdf
 *.docx.tmp
 
@@ -66,9 +75,30 @@ Thumbs.db
 desktop.ini
 
 # ตัวแปรสภาพแวดล้อม
+#
+# 📁 ไฟล์ .env ของโปรเจกต์มีไฟล์เดียว: dokploy-infra/.env (รวมทุกค่าไว้ที่นี่ 2026-10-06)
+#    ไฟล์อื่นที่ชื่อขึ้นด้วย .env ถูกลบ/ทำเป็น stub แล้ว ห้ามสร้างใหม่
+#    เกณฑ์กัน: node docgen-platform\logs\check-env-single-file.mjs
 .env
 .env.local
+# ⚠️ ชื่อที่ลงท้ายด้วย .env เช่น infra.env · app.env — จับด้วยบรรทัด `.env` ไม่ได้
+#   เพราะ gitignore ต้องชื่อตรงทั้งคำ (ทดสอบแล้ว 2026-10-06: ไม่ถูก ignore)
+*.env
 *.key
+
+# ⚠️ สำคัญ — บรรทัด `.env` ข้างบนจับเฉพาะไฟล์ที่ชื่อ "exactly" .env
+#   ไฟล์ที่มี .env อยู่ตรงกลางหรือท้ายชื่อ เช่น .env.bak, infra.env, app.env.copy
+#   จะ**ไม่ถูก ignore** และหลุดเข้า git พร้อมรหัสผ่านทั้งหมด (เจอแล้ว 2026-10-06
+#   ไฟล์แบ็กอัป 3 ไฟล์ที่มีรหัสผ่านจริงค้างอยู่ในโฟลเดอร์ logs)
+.env.bak*
+*.env.bak*
+.dockercfg.bak*
+*.env.old
+*.env.copy
+*.env.*
+# ⚠️ ยกเว้นไฟล์ต้นแบบ — ต้อง track git ไว้ให้คนอื่น copy ไปใช้
+!.env.example
+*.env.example
 
 # Log
 *.log

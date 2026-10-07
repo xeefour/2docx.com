@@ -4,9 +4,12 @@
 เพื่อดูว่าใช้แทนกันได้หรือไม่ (หน้าตาเหมือนกันแค่ไหน)
 """
 import os
+from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
-D = r"D:\2docx.com\tests\lib\fonts"
+# ดู tools/fonts/README.md — path ทั้งหมดคำนวณจากตำแหน่งไฟล์นี้
+REPO = Path(__file__).resolve().parent.parent.parent
+D = str(REPO / "tests" / "lib" / "fonts")
 TEST = "หนังสือรับรอง เลขที่ ๘๕/๒๕๖๙ จังหวัดพิษณุโลก"
 
 fonts = [
@@ -38,6 +41,6 @@ for name, path in fonts:
           f"กว้าง {bb[2]-bb[0]:>4}px")
     y += 120
 
-out = r"D:\2docx.com\tools\font-compare.png"
+out = str(REPO / "tools" / "fonts" / "font-compare.png")
 img.save(out)
 print(f"\nบันทึกภาพเทียบ: {out}")

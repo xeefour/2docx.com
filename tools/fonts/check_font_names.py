@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
 """ตรวจชื่อฟอนต์จริงข้างในไฟล์ .ttf"""
 import os
+from pathlib import Path
 from PIL import ImageFont
 
-D = r"D:\2docx.com\tests\lib\fonts\_จากrar"
+# คำนวณ path จากตำแหน่งไฟล์นี้ ไม่ hardcode D:\2docx.com
+# เพราะเคยพังเงียบ ๆ ตอนย้ายตัวสคริปต์ไปอยู่โฟลเดอร์อื่น
+REPO = Path(__file__).resolve().parent.parent.parent
+D = str(REPO / "tests" / "lib" / "fonts" / "_จากrar")
 n = 0
 for root, dirs, files in os.walk(D):
     for f in sorted(files):

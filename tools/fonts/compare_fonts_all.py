@@ -10,10 +10,14 @@
 ต้องการรู้ว่าตัวที่ 2 กับ 3 ต่างกันแค่ไหน
 """
 import os
+from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
-NEW = r"D:\2docx.com\tests\lib\fonts"
-RAR = r"D:\2docx.com\tests\lib\fonts\_จากrar"
+# path ทั้งหมดคำนวณจากตำแหน่งไฟล์นี้ ไม่ hardcode D:\2docx.com
+REPO = Path(__file__).resolve().parent.parent.parent
+FONTS = REPO / "tests" / "lib" / "fonts"
+NEW = str(FONTS)
+RAR = str(FONTS / "_จากrar")
 
 cands = [
     ("TH Sarabun New (github)",  os.path.join(NEW, "THSarabunNew.ttf")),
@@ -85,6 +89,6 @@ for label, path in rows:
            font=lbl_font, fill=(150, 150, 150))
     y += rowh
 
-out = r"D:\2docx.com\tools\font-compare-3sets.png"
+out = str(REPO / "tools" / "fonts" / "font-compare-3sets.png")
 img.save(out)
 print(f"บันทึกภาพเทียบ: {out}")

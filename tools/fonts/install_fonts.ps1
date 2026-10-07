@@ -5,7 +5,7 @@
 # ใช้วิธี Shell.Application CopyHere ซึ่งเป็นวิธีมาตรฐานของ Windows
 # (ไม่ต้องใช้ AddFontResource + registry เพราะเปราะกว่าและไม่ติดตั้งถาวร)
 
-$src = 'D:\2docx.com\tests\lib\fonts\_จากrar'
+$src = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests\lib\fonts\_จากrar'
 $dst = "$env:WINDIR\Fonts"
 $installed = 0
 $failed = @()

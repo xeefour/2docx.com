@@ -13,8 +13,11 @@ import os
 import sys
 import shutil
 import winreg
+from pathlib import Path
 
-RAR_DIR = r"D:\2docx.com\tests\lib\fonts\_จากrar"
+# path คำนวณจากตำแหน่งไฟล์นี้ ไม่ hardcode D:\2docx.com
+REPO = Path(__file__).resolve().parent.parent.parent
+RAR_DIR = str(REPO / "tests" / "lib" / "fonts" / "_จากrar")
 USER_FONTS = os.path.join(
     os.environ.get("LOCALAPPDATA", ""), r"Microsoft\Windows\Fonts")
 REG_PATH = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"

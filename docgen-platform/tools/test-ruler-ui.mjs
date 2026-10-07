@@ -1,7 +1,7 @@
 /**
  * ตรวจไม้บรรทัด (ruler) บนพรีวิวเอกสาร
  *
- *   node --env-file=.env tools/test-ruler-ui.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-ruler-ui.mjs
  *
  * ── สิ่งที่ต้องผ่าน ────────────────────────────────────────────
  * 1. มีปุ่มสลับไม้บรรทัดในแถบเครื่องมือ

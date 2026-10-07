@@ -1,7 +1,7 @@
 /**
  * ตรวจว่าแท็บของ**หน้ารายการแม่แบบ** ผูกกับ URL เหมือนแท็บของหน้าแก้ไข
  *
- *   node --env-file=.env tools/test-list-tabs-url.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-list-tabs-url.mjs
  *
  * ── ที่ต้องผ่าน ────────────────────────────────────────────────
  * 1. เปิด `/studio` → แท็บแรก active และ URL ไม่มี query (สะอาด)

@@ -1,7 +1,7 @@
 /**
  * วัด sidebar ของทั้ง 3 หน้าเทียบกัน เพื่อหาว่า /studio ต่างจาก /account และ /teams ตรงไหน
  *
- *   node --env-file=.env tools/probe-rail-compare.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/probe-rail-compare.mjs
  *
  * ── ทำไมต้องวัด ไม่ใช่แก้ตามตา ──────────────────────────────────────
  *   ผู้ใช้สั่ง *"ปรับ sidebar ให้เหมือนหน้าอื่น เหมือนกับหน้านี้ /account /teams เป็นต้น"*

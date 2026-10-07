@@ -1,7 +1,7 @@
 /**
  * สิทธิ์เจ้าของแม่แบบ: ผู้อัปโหลด = เจ้าของทันที
  *
- *   node --env-file=.env tools/test-template-owner.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-template-owner.mjs
  *
  * ── กติกาที่ผู้ใช้เลือกเอง ────────────────────────────────────────
  *   *"แก้ฟอร์มได้ทุกคน แต่เปลี่ยนไฟล์แม่แบบต้องเป็นเจ้าของเท่านั้น"*

@@ -1,7 +1,7 @@
 /**
  * วัดสีจริงของเมนูหน่วยไม้บรรทัดตอนเอาเมาส์ไปวาง (hover)
  *
- *   node --env-file=.env tools/inspect-menu-hover.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/inspect-menu-hover.mjs
  *
  * ── ทำไมต้องมีเครื่องมือนี้ ───────────────────────────────────────
  * ผู้ใช้รายงานว่า *"mouse over เป็นสีม่วง มองไม่เห็นตัวอักษร"*

@@ -1,7 +1,7 @@
 /**
  * สร้างไฟล์ตัวอย่างสองฉบับ ให้เปิดเทียบใน Word ว่าเส้นตรวจสะกดหายไปไหม
  *
- *   node --env-file=.env tools/make-spell-demo.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/make-spell-demo.mjs
  *
  *   before.docx = ตัวที่ถอด `w:lang` ที่ระบบใส่ออก (จำลองสถานะเดิม)
  *   after.docx  = ไฟล์จริงที่ระบบส่งออกตอนนี้

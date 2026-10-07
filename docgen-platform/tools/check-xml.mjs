@@ -1,7 +1,7 @@
 /**
  * ตรวจความถูกต้องของไฟล์ .docx ที่ระบบส่งออก หลังแก้ภาษาไทย
  *
- *   node --env-file=.env tools/check-xml.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/check-xml.mjs
  *
  * ตรวจ 4 อย่างต่อหนึ่งแม่แบบ:
  *   1) w:lang อยู่ตำแหน่งถูกตาม schema CT_RPr ไหม

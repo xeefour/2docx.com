@@ -1,7 +1,7 @@
 /**
  * ทดสอบ "สถานะระหว่างเปลี่ยนหน้า + ช่องคัดลอก URL" ในเบราว์เซอร์จริง ผ่าน CDP
  *
- *   node --env-file=.env tools/test-nav-status.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-nav-status.mjs
  *
  * ใช้ CDP เพราะสิ่งที่ต้องพิสูจน์คือ "ตอนช้า ๆ คนใช้เห็นอะไร" ซึ่ง
  * `chrome --dump-dom` จับภาพไม่ได้ — เราต้องคุมความเร็วเครือข่ายแล้วดูสถานะ DOM

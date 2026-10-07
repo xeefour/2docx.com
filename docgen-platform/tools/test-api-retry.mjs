@@ -1,7 +1,7 @@
 /**
  * ทดสอบว่าหน้าเว็บ "ทนทาน" ต่อการที่ API ล่มชั่วคราวหรือไม่
  *
- *   node --env-file=.env tools/test-api-retry.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-api-retry.mjs
  *
  * ── ทำไมต้องเทสต์เรื่องนี้ ──────────────────────────────────────
  * ตอนผู้ใช้เจอ "เชื่อมต่อ API ไม่สำเร็จ — ได้ 500 Internal Server Error แทน JSON"

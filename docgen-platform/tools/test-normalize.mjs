@@ -1,6 +1,6 @@
 ﻿import { normalizeThaiAlignment } from '../packages/shared/src/normalize.ts'
 import { readFileSync } from 'node:fs'
-const dir='D:/2docx.com/docserver-backup-20260930/template'
+const dir='D:/2docx.com/data/docserver-backup-20260930/template'
 const files=[
   ['555288e5fc99572e131039402d4d79c09ee06fedf7d232f0363b4f88439780f8','หนังสือรับรอง เนินมะปราง สำเนา 1'],
   ['9aa9bbcdca69b2a2b7ea28702b9bc4d6f736872f1b0f17f587957ad4e98e8172','หนังสือรับรอง เนินมะปราง สำเนา 2'],

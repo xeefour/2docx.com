@@ -1,7 +1,7 @@
 /**
  * วัดว่าหน้ารายการแม่แบบ (/studio) ล้นจอแนวนอนตอนจอแคบแค่ไหน
  *
- *   node --env-file=.env tools/inspect-list-mobile.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/inspect-list-mobile.mjs
  *
  * ── ทำไมต้องมีเครื่องมือนี้ ───────────────────────────────────────
  * ผู้ใช้ทำเครื่องหมายที่ตารางรายการแม่แบบแล้วบอกว่า

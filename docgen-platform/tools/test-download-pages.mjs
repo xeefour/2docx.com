@@ -1,7 +1,7 @@
 /**
  * ตรวจการเลือกหน้า + ดาวน์โหลดรวม ZIP
  *
- *   node --env-file=.env tools/test-download-pages.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-download-pages.mjs
  *
  * ── สิ่งที่ต้องผ่าน ────────────────────────────────────────────
  * 1. เมนูดาวน์โหลดมีช่องเลือกหน้า และนับหน้ารวมตรงกับตัวอย่างจริง

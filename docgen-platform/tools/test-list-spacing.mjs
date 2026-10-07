@@ -1,7 +1,7 @@
 /**
  * ตรวจช่องว่างระหว่างกล่องบนหน้ารายการ Studio
  *
- *   node --env-file=.env tools/test-list-spacing.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-list-spacing.mjs
  *
  * ── ปัญหาที่ต้องการแก้ ────────────────────────────────────────
  * สลับไปแท็บ "บุ๊กมาร์ก" ตอนที่ยังไม่มีบุ๊กมาร์ก จะขึ้นกล่องสองใบซ้อนกัน

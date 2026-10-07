@@ -1,7 +1,7 @@
 /**
  * ตรวจว่า URL สะท้อนสิ่งที่เปิดอยู่จริง
  *
- *   node --env-file=.env tools/test-studio-url.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-studio-url.mjs
  *
  *   /studio                                          → หน้ารายการ
  *   /studio/<key>?tabs=form&pane=preview               → ซ้าย=ฟอร์ม · ขวา=ตัวอย่างเอกสาร

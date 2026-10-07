@@ -1,7 +1,7 @@
 /**
  * โฟกัสหลุดเวลาพิมพ์ + overlay เตือนเรนเดอร์ใหม่
  *
- *   node --env-file=.env tools/test-focus-and-stale.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-focus-and-stale.mjs
  *
  * ── เรื่องที่ผู้ใช้รายงาน ──────────────────────────────────────
  *  1. *"พิมพ์ 1 ตัวอักษา แล้วหลุด focus ต้องคลิกใหม่ถึงจะพิมพ์ได้"*

@@ -1,7 +1,7 @@
 /**
  * สมุดที่อยู่ผู้ใช้ + เชิญด้วยอีเมล
  *
- *   node --env-file=.env tools/test-share-people.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-share-people.mjs
  *
  * ── ผู้ใช้สั่ง ─────────────────────────────────────────────────────
  * *"ส่วนนี้ ใช้ระบบ email ได้ไหม พิมพ์ซัก 3 ตัวอักษร แล้วจะมีเมล์ที่ผู้ใช้
@@ -241,7 +241,7 @@ const runClaim = () =>
   new Promise((resolve) => {
     const p = spawn(
       process.execPath,
-      ['--env-file=.env', 'node_modules/tsx/dist/cli.mjs', 'logs/claim-probe.ts'],
+      ['--env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development', 'node_modules/tsx/dist/cli.mjs', 'logs/claim-probe.ts'],
       { cwd: new URL('..', import.meta.url).pathname.replace(/^\//, ''), encoding: 'utf8' },
     )
     let out = ''

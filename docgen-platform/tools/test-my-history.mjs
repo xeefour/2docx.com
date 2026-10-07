@@ -1,7 +1,7 @@
 /**
  * ทดสอบประวัติส่วนตัว — เก็บค่า → ค้นหา → กู้ค่า
  *
- *   node --env-file=.env tools/test-my-history.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-my-history.mjs
  *
  * ── สิ่งที่ต้องผ่าน ────────────────────────────────────────────
  * 1. สร้างเอกสารแล้วค่าที่กรอกถูกเก็บ (จุดที่พังบ่อยที่สุด — เดิมไม่เคยเก็บเลย)

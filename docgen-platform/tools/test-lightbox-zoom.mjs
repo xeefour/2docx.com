@@ -1,7 +1,7 @@
 /**
  * ซูมรูปตัวอย่าง + ปุ่มชุดใหม่ต้องใช้ได้จริงทุกขนาดจอ
  *
- *   node --env-file=.env tools/test-lightbox-zoom.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-lightbox-zoom.mjs
  *
  * ── ผู้ใช้สั่ง ────────────────────────────────────────────────────
  * *"เพิ่มปุ่ม zoom in out หน้าถัดไปถ้ามีหลายรูป ปรับข้อความ ไปที่ฟอร์ม

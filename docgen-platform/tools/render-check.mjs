@@ -4,7 +4,7 @@
  *
  * ใช้ยืนยันว่าแม่แบบใน /api/templates ไม่ได้แค่ "ขึ้นชื่อ" แต่เอนเดอร์ได้จริง
  *
- *   node --env-file=.env tools/render-check.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/render-check.mjs
  */
 import { Redis } from 'ioredis'
 

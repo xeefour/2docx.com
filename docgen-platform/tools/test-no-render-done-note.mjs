@@ -1,7 +1,7 @@
 /**
  * เรนเดอร์สำเร็จแล้วต้องไม่มีจดหมายโผล่ในกล่อง
  *
- *   node --env-file=.env tools/test-no-render-done-note.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-no-render-done-note.mjs
  *
  * ── ผู้ใช้สั่ง ──────────────────────────────────────────────────────
  * *"แจ้งเตือนเอกสารเรนเดอร์เสร็จแล้ว แต่เปิดเข้าไปไม่พบ key

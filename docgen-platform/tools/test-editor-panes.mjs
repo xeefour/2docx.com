@@ -1,7 +1,7 @@
 /**
  * ตรวจว่าแท็บในหน้าแก้ไขแบ่งเป็นสองฝั่ง ตรงกับสองคอลัมน์ของจอ
  *
- *   node --env-file=.env tools/test-editor-panes.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-editor-panes.mjs
  *
  *   ซ้าย  ฟอร์ม · JSON · ประวัติ
  *   ขวา   ตัวอย่างเอกสาร · ข้อมูลแม่แบบ · ช่องฟอร์ม · การแชร์และสิทธิ์

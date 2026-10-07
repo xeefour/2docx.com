@@ -1,7 +1,7 @@
 /**
  * ตรวจเลย์เอาต์หน้าแก้แม่แบบ — ตัวอย่างเอกสารต้องอยู่ครึ่งขวาและไม่ต้องเลื่อนหา
  *
- *   node --env-file=.env tools/test-preview-layout.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-preview-layout.mjs
  *
  * ── ปัญหาที่ต้องการแก้ ────────────────────────────────────────
  * เดิมตัวอย่างเอกสารถูกวาง**ใต้**ฟอร์มในคอลัมน์ซ้ายเดียวกัน

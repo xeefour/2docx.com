@@ -1,7 +1,7 @@
 /**
  * ตรวจว่าหน้าเว็บจัดการ 429 (โควตาหมด) ได้ถูกต้อง
  *
- *   node --env-file=.env tools/test-rate-limit-ui.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-rate-limit-ui.mjs
  *
  * ── ปัญหาที่เคยเจอ ────────────────────────────────────────────────
  * ผู้ใช้กดบุ๊กมาร์กแล้วขึ้น "ยิงบ่อยเกินไป" · กดซ้ำก็ไม่ได้ · ไม่บอกว่าต้องรอนานแค่ไหน

@@ -1,7 +1,7 @@
 /**
  * ปุ่มช่องสุดท้ายของแถว — ลบเฉพาะเจ้าของ · คนอื่นได้ปุ่มสำเนา
  *
- *   node --env-file=.env tools/test-row-owner.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-row-owner.mjs
  *
  * ผู้ใช้สั่ง: *"ปุ่มลบแม่แบบ จะแสดงเฉพาะผู้ที่เป็นเจ้าของเท่านั้น
  *   แทนที่ด้วยปุ่มสำเนาแม่แบบ แทน"*

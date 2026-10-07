@@ -28,7 +28,7 @@ const check = (ok, label, extra = '') => {
 console.log('\n=== 1. rewrite: path ที่ Studio ใช้ ===')
 for (const [p, expect] of [
   ['/auth/login', 302],
-  ['/docs', 200],
+  ['/apis', 200],
   ['/api/health', 200],
 ]) {
   const r = await fetch(`${WEB}${p}`, { redirect: 'manual' })

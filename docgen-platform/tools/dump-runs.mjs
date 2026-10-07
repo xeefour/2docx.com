@@ -1,7 +1,7 @@
 /**
  * โยนโครงสร้าง run ในเอกสารที่ระบบสร้างจริง เพื่อดูว่า rPr เขียนแบบไหน
  *
- *   node --env-file=.env tools/dump-runs.mjs [templateId]
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/dump-runs.mjs [templateId]
  *
  * ใช้ตอนแก้ `packages/shared/src/docx-lang.ts` — ต้องรู้ว่าแม่แบบจริง
  * เขียน `<w:rPr>` แบบไหน (มี attribute ไหม, มีลูกอะไรบ้าง, `w:lang` อยู่ตรงไหน)

@@ -12,7 +12,7 @@
  * ถ้า 1 = 2 = 3 → w:jc ไม่มีผล ต้องหาสาเหตุที่อื่น (เช่น ย่อหน้านั้นมี <w:br/> ตายตัว)
  * ถ้า 3 ต่างจาก 1 และ 2 แต่ 1 = 2 → LibreOffice รองรับ thaiDistribute ที่นี่
  *
- *   node --env-file=.env tools/test-jc-effect.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-jc-effect.mjs
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate'

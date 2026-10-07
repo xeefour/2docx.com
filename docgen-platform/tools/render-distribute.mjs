@@ -8,8 +8,8 @@
  * ขอบกระดาษดึงจาก `w:pgMar` ใน docx (หน่วย twips) แล้วแปลงเป็น ซม.
  * ไม่เดาแบบตายตัว เพราะแม่แบบแต่ละฉบับขอบไม่เท่ากัน
  *
- *   node --env-file=.env tools/render-distribute.mjs
- *   node --env-file=.env tools/render-distribute.mjs --baseline
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/render-distribute.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/render-distribute.mjs --baseline
  *
  * `--baseline` = เรนเดอร์ไฟล์**ต้นฉบับจาก backup** (ยังมี thaiDistribute) เพื่อเทียบ
  *   อัปโหลดแบบไม่เปิด versioning ซึ่ง Carbone จะคืน `templateId` = hash ของไฟล์เดิม
@@ -23,7 +23,7 @@ const API = process.env.DOCSERVER_URL
 const H = { Authorization: `Bearer ${process.env.DOCSERVER_API_KEY}`, 'carbone-version': '5' }
 const HJSON = { ...H, 'Content-Type': 'application/json' }
 const OUT = 'D:/2docx.com/tests/part-09-thai-distribute/output-templates'
-const BACKUP = 'D:/2docx.com/docserver-backup-20260930/template'
+const BACKUP = 'D:/2docx.com/data/docserver-backup-20260930/template'
 const BASELINE = process.argv.includes('--baseline')
 
 /** ข้อมูลตัวอย่างให้พอยืดเต็มบรรทัด — วัดการกระจายต้องมีเนื้อหายาวพอ */

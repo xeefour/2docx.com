@@ -1,7 +1,7 @@
 /**
  * ตัวอย่างแม่แบบเป็นรูป — ทดสอบทั้งกระบวนการจริงในเบราว์เซอร์
  *
- *   node --env-file=.env tools/test-preview-ui.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-preview-ui.mjs
  *
  * ── ต้องผ่าน ───────────────────────────────────────────────────
  * · กด "สร้างตัวอย่างอัตโนมัติ" แล้วได้รูปจริง (คนละเรื่องกับแค่ขึ้นชื่อปุ่ม)

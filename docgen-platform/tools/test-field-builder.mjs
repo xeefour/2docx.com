@@ -1,7 +1,7 @@
 /**
  * ตรวจตัวแก้ไขช่องฟอร์ม — โฟกัสต้องไม่หลุด และเพิ่มตัวเลือกเองได้
  *
- *   node --env-file=.env tools/test-field-builder.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-field-builder.mjs
  *
  * ── ปัญหาที่เคยเจอ ────────────────────────────────────────────
  * 1. React `key` ของแถวช่องเป็น `${f.key}-${i}` → พิมพ์ในช่อง key ครั้งเดียว

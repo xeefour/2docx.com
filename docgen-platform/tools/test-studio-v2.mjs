@@ -1,7 +1,7 @@
 /**
  * ทดสอบฟีเจอร์ Studio ชุดใหม่: ฟอร์มที่ออกแบบเอง · การแชร์ · แชท AI · บุ๊กมาร์ก · ประวัติ
  *
- *   node --env-file=.env tools/test-studio-v2.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-studio-v2.mjs
  *
  * ใช้ LLM_PROVIDER=mock ที่ตั้งไว้เป็นค่าเริ่มต้น
  * → ทดสอบ pipeline ทั้งเส้น (merge / ประวัติ / session) โดยไม่ต้องมี API key

@@ -1,7 +1,7 @@
 /**
  * API ของรูปตัวอย่างแม่แบบ — ตรวจฝั่งเซิร์ฟเวอร์ล้วน ไม่ต้องเปิดเบราว์เซอร์
  *
- *   node --env-file=.env tools/test-preview-api.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-preview-api.mjs
  *
  * ── ต้องผ่าน ───────────────────────────────────────────────────
  * · เพิ่มรูปได้ → อ่านไฟล์กลับมาเป็น PNG ชนิดเดียวกันเป๊ะ (byte เดียวกัน)

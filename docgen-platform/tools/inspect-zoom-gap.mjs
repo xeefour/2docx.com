@@ -1,7 +1,7 @@
 /**
  * วัดระยะห่างจริงในแถบซูม (ระหว่างแว่นขยายกับเปอร์เซ็นต์)
  *
- *   node --env-file=.env tools/inspect-zoom-gap.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/inspect-zoom-gap.mjs
  *
  * ── ทำไมต้องมีเครื่องมือนี้ ───────────────────────────────────────
  * ผู้ใช้ทำเครื่องหมายที่ "71%" แล้วบอกว่า

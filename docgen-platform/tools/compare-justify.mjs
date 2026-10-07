@@ -8,7 +8,7 @@
  * รอบนี้ใช้เนื้อหายาว 4+ บรรทัด ซึ่งแยก "กระจาย" กับ "ชิดซ้าย" ออกได้ชัดเจน
  * เพราะบรรทัดกลาง ๆ ต้องยืดเต็มขอบขวาทั้งหมด
  *
- *   node --env-file=.env tools/compare-justify.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/compare-justify.mjs
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'

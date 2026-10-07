@@ -1,6 +1,6 @@
 /**
  * ทดสอบ API "ช่วยช่องเดียว" โดยตรง (ไม่ผ่านหน้าเว็บ)
- *   node --env-file=.env tools/test-field-ai-api.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-field-ai-api.mjs
  */
 import { Redis } from 'ioredis'
 import { keyOf, pickTemplate, TEST_TEMPLATES } from './lib/pick-template.mjs'

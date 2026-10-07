@@ -1,7 +1,7 @@
 /**
  * แถบแบ่งหน้าในแท็บประวัติ — ผู้ใช้สั่ง *"ข้อมูลเยอะมาก แก้ไขให้มี pageination"*
  *
- *   node --env-file=.env tools/test-history-pager.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-history-pager.mjs
  *
  * ── ทำไมต้องมี ─────────────────────────────────────────────────
  * เปิดแม่แบบที่คนใช้เยอะ (เช่นนี้ 350 ฉบับ / 100 คน) แล้วการ์ด "ผู้ใช้แม่แบบนี้"

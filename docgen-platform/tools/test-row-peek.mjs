@@ -4,7 +4,7 @@
  * ผู้ใช้สั่ง:
  *   *"แบบ list มีปุ่ม preview กดแล้ว มีรูปตัวอย่างแสดงเป็น popup"*
  *
- *   node --env-file=.env tools/test-row-peek.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-row-peek.mjs
  *
  * ── ทำไมต้องมีชุดนี้ แม้ `test-thumb-peek` จะพิสูจน์ lightbox อยู่แล้ว ─────
  *   test-thumb-peek กดที่**รูปย่อ** ซึ่งมีอยู่ในโหมดชิด

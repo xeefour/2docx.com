@@ -1,7 +1,7 @@
 /**
  * ทดสอบ /api/templates ทั้งหมด
  * สร้าง session ตรงใน Valkey เพื่อข้ามขั้นตอน login ในเบราว์เซอร์
- * รัน: node --env-file=.env tools/test-templates.mjs
+ * รัน: node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-templates.mjs
  */
 import { Redis } from 'ioredis'
 

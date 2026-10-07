@@ -1,7 +1,7 @@
 /**
  * ถังขยะ: ชื่อแม่แบบยาว (hash) ต้องอยู่ในกล่อง ไม่ล้นและไม่ทับปุ่ม "กู้คืน"
  *
- *   node --env-file=.env tools/test-trash-longname.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-trash-longname.mjs
  *
  * ── ผู้ใช้ชี้ ──────────────────────────────────────────────────────
  * *"ตัวอักษรยาวล้นเกินกล่อง แก้ไขให้ด้วย"* + ภาพหน้าจอ

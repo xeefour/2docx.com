@@ -1,7 +1,7 @@
 /**
  * ตรวจว่าหน้ารายการแม่แบบ (`/studio`) ใช้งานบนมือถือได้จริง
  *
- *   node --env-file=.env tools/test-list-mobile.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-list-mobile.mjs
  *
  * ── ที่ต้องผ่าน ────────────────────────────────────────────────
  * 1. จอ ≤ 720px → หน้าไม่ล้นแนวนอน และ**ปุ่มจัดการทุกปุ่มอยู่ในจอ** ทุกแถว

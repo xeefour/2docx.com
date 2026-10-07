@@ -10,7 +10,7 @@
  * สคริปต์นี้จึงเป็นตัวช่วยตัดสินใจ — แสดงว่ากฎแต่ละแบบจะไปแตะย่อหน้าไหนบ้าง
  * โดยยังไม่แก้อะไรจริง
  *
- *   node --env-file=.env tools/analyze-unset-align.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/analyze-unset-align.mjs
  */
 import { unzipSync, strFromU8 } from 'fflate'
 

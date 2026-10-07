@@ -1,7 +1,7 @@
 /**
  * ตรวจผู้ช่วย AI ประจำช่องกรอก (ไอคอนขวาสุดของ input/textarea)
  *
- *   node --env-file=.env tools/test-field-ai.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-field-ai.mjs
  *
  * ── สิ่งที่ต้องผ่าน ────────────────────────────────────────────
  * 1. ไอคอน AI อยู่ขวาสุดของทุกช่อง input/textarea

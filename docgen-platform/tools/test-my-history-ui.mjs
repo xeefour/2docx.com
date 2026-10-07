@@ -1,7 +1,7 @@
 /**
  * ทดสอบแท็บ "ประวัติ" ฝั่งซ้าย — ค้นหาแล้วกดแก้ไขได้จริง
  *
- *   node --env-file=.env tools/test-my-history-ui.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-my-history-ui.mjs
  *
  * ── สิ่งที่ต้องผ่าน ────────────────────────────────────────────
  * 1. แท็บซ้ายมี "ประวัติ" · แท็บขวาเป็น "การแชร์และสิทธิ์" (ไม่มีชื่อ "ประวัติ" ซ้ำ)

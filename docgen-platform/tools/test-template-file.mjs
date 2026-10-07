@@ -1,7 +1,7 @@
 /**
  * ทดสอบดาวน์โหลดแม่แบบ + อัปโหลดแทน (เป็นเวอร์ชันใหม่)
  *
- *   node --env-file=.env tools/test-template-file.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-template-file.mjs
  *
  * ⚠️ สคริปต์นี้**สร้างแม่แบบชั่วคราวเอง** แล้วลบทิ้งตอนจบ
  *    เคยใช้แม่แบบจริงของผู้ใช้ตอนทดสอบ → เปลี่ยนไฟล์ของคนอื่นโดยไม่ตั้งใจ

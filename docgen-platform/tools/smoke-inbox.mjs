@@ -2,7 +2,7 @@
  * สมัยกรองกล่องจดหมาย — ยิง API จริงด้วย 2 session เพื่อพิสูจน์ว่า
  * "เจ้าของแชร์แม่แบบ → คนอื่นได้รับจดหมาย" เดินทางถึงกล่องจริง
  *
- *   node --env-file=.env tools/smoke-inbox.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/smoke-inbox.mjs
  */
 import { Redis } from 'ioredis'
 import { MongoClient } from 'mongodb'

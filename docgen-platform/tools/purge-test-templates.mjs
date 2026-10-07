@@ -1,7 +1,7 @@
 /**
  * เก็บกวาดแม่แบบที่หลงเหลือจากการทดสอบ (Carbone ลบแบบ soft-delete — รายการยังโชว์)
  *
- *   node --env-file=.env tools/purge-test-templates.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/purge-test-templates.mjs
  *
  * ⚠️ ลบเฉพาะชื่อที่ขึ้นต้นด้วยคำนำหน้าของสคริปต์ทดสอบเท่านั้น เพื่อไม่ไปแตะแม่แบบจริง
  */

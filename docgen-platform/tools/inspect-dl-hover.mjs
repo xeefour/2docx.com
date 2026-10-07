@@ -1,7 +1,7 @@
 /**
  * ไล่อาการ "เมนูดาวน์โหลดกระพริบไม่สิ้นสุด" — เลื่อนเมาส์จากปุ่มไปหาช่อง "หน้าที่ต้องการ"
  *
- *   node --env-file=.env tools/inspect-dl-hover.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/inspect-dl-hover.mjs
  *
  * ── ที่ต้องดู ───────────────────────────────────────────────────
  * ผู้ใช้รายงานว่า *"ถ้า mouse over icon … ช่อง input หน้าที่ต้องการจะหายไป"*

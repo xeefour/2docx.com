@@ -1,7 +1,7 @@
 /**
  * สืบหาข้อผิดพลาดของปุ่ม "สร้างตัวอย่างอัตโนมัติ" แบบเจาะจง
  *
- *   node --env-file=.env tools/probe-preview-gen.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/probe-preview-gen.mjs
  *
  * เปิดหน้าแก้ไข → กดสร้างตัวอย่าง → พิมพ์ข้อความ error ที่การ์ดแสดง
  * พร้อม console ของหน้าเว็บ (React จะโยน error ลง console เวลา render พัง)

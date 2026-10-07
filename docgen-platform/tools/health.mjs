@@ -1,10 +1,10 @@
 /**
  * ดูสถานะทุก service เป็นตารางในเทอร์มินัล
  *
- *   node --env-file=.env tools/health.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/health.mjs
  *
  * ไม่ต้อง login — `/api/health` เปิดสาธารณอยู่แล้ว
- * ข้อมูลเดียวกับที่เห็นใน Swagger UI ที่ /docs
+ * ข้อมูลเดียวกับที่เห็นใน Swagger UI ที่ /apis
  */
 const API = process.env.PUBLIC_API_URL ?? 'http://127.0.0.1:4001'
 

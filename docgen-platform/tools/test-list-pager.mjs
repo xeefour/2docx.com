@@ -1,7 +1,7 @@
 /**
  * รายการแม่แบบหน้าแรก: ต้องแบ่งหน้า
  *
- *   node --env-file=.env tools/test-list-pager.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-list-pager.mjs
  *
  * ── ผู้ใช้ชี้ ──────────────────────────────────────────────────────
  * *"เหมือนหน้านี้ไม่มี pageination นะ"* (http://localhost:3000/studio)

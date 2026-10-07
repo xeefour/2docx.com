@@ -1,7 +1,7 @@
 /**
  * ถ่ายภาพหน้า "แม่แบบ & การแชร์" เพื่อตรวจปุ่มดาวน์โหลด / อัปโหลดแทน
  *
- *   node --env-file=.env tools/shot-template-file.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/shot-template-file.mjs
  */
 import { spawn } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'

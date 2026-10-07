@@ -15,7 +15,7 @@
  * วิธีตรวจ: ส่งงานผ่านสายงานจริง (API → NATS → worker → docserver → S3)
  *            แล้วดาวน์โหลดไฟล์กลับมาตรวจ
  *
- *   node --env-file=.env tools/verify-align.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/verify-align.mjs
  */
 import { Redis } from 'ioredis'
 import { mkdirSync, writeFileSync } from 'node:fs'

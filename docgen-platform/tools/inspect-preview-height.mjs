@@ -1,7 +1,7 @@
 /**
  * วัดความสูงจริงของการ์ดพรีวิว / กล่องรูปเอกสาร / แถบรูปย่อ
  *
- *   node --env-file=.env tools/inspect-preview-height.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/inspect-preview-height.mjs
  *
  * ── ทำไมต้องมีเครื่องมือนี้ ───────────────────────────────────────
  * ผู้ใช้สั่ง "ให้รูป preview สูงเท่าความสูงหน้าจอ แถบรูปย่อต้องเลื่อนลงถึงจะเห็น"

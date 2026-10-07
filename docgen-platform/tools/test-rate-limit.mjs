@@ -1,7 +1,7 @@
 /**
  * ตรวจ rate limit — ต้องเห็นว่าโควตาเพิ่มขึ้น และ /api/health ไม่กินโควตา
  *
- *   node --env-file=.env tools/test-rate-limit.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-rate-limit.mjs
  *
  * เคยเจอ: ค่าเดิม 100/นาที น้อยเกินไปสำหรับ Studio
  * → ระหว่างรันชุดทดสอบ API ตอบ 429 ทำให้เทสต์พังโดยไม่ได้ทำอะไรผิด

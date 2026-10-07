@@ -1,7 +1,7 @@
 /**
  * ถังขยะ: ต้องแบ่งหน้า
  *
- *   node --env-file=.env tools/test-trash-pager.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-trash-pager.mjs
  *
  * ── ผู้ใช้ชี้ ──────────────────────────────────────────────────────
  * *"เหมือนหน้านี้ไม่มี pagination นะ"* (หน้ารายการ → การ์ด 🗑️ ถังขยะ)

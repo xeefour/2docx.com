@@ -1,7 +1,7 @@
 /**
  * เทสต์เฉพาะกิต `setDocxThaiLanguage` — ไม่ต้องผ่าน docserver
  *
- *   node --env-file=.env --import tsx tools/test-thai-lang.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development --import tsx tools/test-thai-lang.mjs
  *
  * ทดสอบกรณีที่ไฟล์จริงจะเจอบ่อย ๆ และกรณีที่จะทำให้ Word บอกว่าไฟล์เสีย
  * (แท็กผิดตำแหน่ง, rPr ซ้อน, แตะ w:eastAsia) — ซึ่งการทดสอบผ่าน API

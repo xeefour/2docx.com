@@ -1,7 +1,7 @@
 /**
  * ตรวจปุ่มพิมพ์รูปเอกสาร
  *
- *   node --env-file=.env tools/test-print-preview.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-print-preview.mjs
  *
  * ── สิ่งที่ต้องผ่าน ────────────────────────────────────────────
  * 1. มีปุ่มพิมพ์ในแถบเครื่องมือ ติดกับแถบซูม และอยู่ทางซ้ายของปุ่มดาวน์โหลด

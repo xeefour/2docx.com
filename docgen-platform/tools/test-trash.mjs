@@ -1,7 +1,7 @@
 /**
  * ถังขยะแม่แบบ: ลบ → รอ 14 วัน → กู้คืน
  *
- *   node --env-file=.env tools/test-trash.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-trash.mjs
  *
  * ── ทำไมต้องมี ─────────────────────────────────────────────────
  * ผู้ใช้สั่ง: *"เพิ่ม การลบแม่แบบ ถ้าผู้ใช้ลบไปแล้ว ให้รอก่อน 14 วัน ค่อยลบ

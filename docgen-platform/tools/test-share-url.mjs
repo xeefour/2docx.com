@@ -1,7 +1,7 @@
 /**
  * ตรวจลิงก์สาธารณในแท็บ "แม่แบบ & การแชร์"
  *
- *   node --env-file=.env tools/test-share-url.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-share-url.mjs
  *
  * ── ทำไมต้องมี ─────────────────────────────────────────────────
  * ผู้ใช้สั่ง: *"เลือกเปิดสาธารณแล้ว ให้แสดง url ด้วย"*

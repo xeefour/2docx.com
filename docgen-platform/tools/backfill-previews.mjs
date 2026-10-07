@@ -1,7 +1,7 @@
 /**
  * สร้างรูปตัวอย่างให้แม่แบบที่มีอยู่แล้ว (backfill)
  *
- *   node --env-file=.env tools/backfill-previews.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/backfill-previews.mjs
  *
  * เดินทางเหมือนผู้ใช้จริงทุกขั้น: เปิดหน้าแก้ไข → กดแท็บ "ข้อมูลแม่แบบ"
  * → กด "สร้างตัวอย่างอัตโนมัติ" → รอรูปจริงปรากฏ

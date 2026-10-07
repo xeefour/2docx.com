@@ -1,7 +1,7 @@
 /**
  * ป็อปอัปอธิบายการอัปโหลดแม่แบบ + ไฟล์ตัวอย่างที่ดาวน์โหลดได้
  *
- *   node --env-file=.env tools/test-upload-guide.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-upload-guide.mjs
  *
  * ── ต้องผ่าน ───────────────────────────────────────────────────
  * · คลิก "อัปโหลดแม่แบบ" แล้ว popup เปิด (ไม่ใช่กระโดดไปเปิด file picker ทันที)

@@ -1,7 +1,7 @@
 /**
  * กดเปลี่ยนหน้าแล้ว React ต้องไม่เตือนเรื่อง style
  *
- *   node --env-file=.env tools/test-pager-style.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-pager-style.mjs
  *
  * ── ผู้ใช้เจอ ────────────────────────────────────────────────────
  * *"Removing a style property during rerender (borderColor) when a

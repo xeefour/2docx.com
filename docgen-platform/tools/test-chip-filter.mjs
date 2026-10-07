@@ -1,7 +1,7 @@
 /**
  * ชิป "หมวด" / "แท็ก" ในรายการแม่แบบ — กดเป็นตัวกรองได้
  *
- *   node --env-file=.env tools/test-chip-filter.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-chip-filter.mjs
  *
  * ── ต้องผ่าน ───────────────────────────────────────────────────
  * · ชิปหมวด/แท็กเป็น `<button>` จริง (ไม่ใช่ span) + มี aria-pressed/title

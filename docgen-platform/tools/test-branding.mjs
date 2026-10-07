@@ -1,7 +1,7 @@
 /**
  * ทดสอบว่า patch metadata หลัง render ทำงานจริง
  *
- *   node --env-file=.env tools/test-branding.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-branding.mjs
  *
  * ยิงผ่านสายงานจริงทั้งหมด (API → NATS → worker → docserver → RustFS)
  * แล้วดาวน์โหลดไฟล์กลับมาแกะ metadata เทียบก่อน/หลัง

@@ -6,7 +6,7 @@
  *   ทำอยู่อีกเธรด → ค้างที่ `getDocument()` ไม่ว่าจะรอนานแค่ไหน
  *   CDP ต่อกับเบราว์เซอร์จริง จึงเป็นวิธีเดียวที่วัด "มันทำงานจริงไหม" ได้
  *
- *   node --env-file=.env tools/test-preview-browser.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-preview-browser.mjs
  */
 import { spawn } from 'node:child_process'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'

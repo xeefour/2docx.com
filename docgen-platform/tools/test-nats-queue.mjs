@@ -1,7 +1,7 @@
 /**
  * คิว NATS ของ worker: งานที่เอกสารถูกลบแล้วต้องไม่วนลมพั่น
  *
- *   node --env-file=.env tools/test-nats-queue.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-nats-queue.mjs
  *
  * ── ทำไมต้องมี ─────────────────────────────────────────────────
  * เคยมี log บวม 22,600 บรรทัด *"ยังไม่เจอเอกสารใน Mongo — ขอ NATS ส่งซ้ำ"*

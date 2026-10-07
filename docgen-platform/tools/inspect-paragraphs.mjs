@@ -5,7 +5,7 @@
  * คำตอบที่เป็นไปได้: ย่อหน้านั้นมีขึ้นบรรทัดแบบตายตัว (`<w:br/>`)
  * → ทุกบรรทัดเป็น "บรรทัดสุดท้าย" ตามหลักการพิมพ์ จึงไม่ถูกยืดไม่ว่าจะตั้งอะไร
  *
- *   node --env-file=.env tools/inspect-paragraphs.mjs "<ชื่อแม่แบบที่มี>"
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/inspect-paragraphs.mjs "<ชื่อแม่แบบที่มี>"
  */
 import { unzipSync, strFromU8 } from 'fflate'
 

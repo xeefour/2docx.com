@@ -1,7 +1,7 @@
 /**
  * sidebar ของ /studio ต้องเหมือน /account และ /teams
  *
- *   node --env-file=.env tools/test-rail-consistency.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-rail-consistency.mjs
  *
  * ── ทำไมต้องมีเทสต์นี้ ─────────────────────────────────────────────
  *   ผู้ใช้สั่ง: *"ปรับ sidebar ให้เหมือนหน้าอื่น เหมือนกับหน้านี้ /account /teams เป็นต้น"*

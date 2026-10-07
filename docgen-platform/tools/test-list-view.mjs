@@ -1,7 +1,7 @@
 /**
  * มุมมีหน้ารายการ รายการ/ชิด + ภาพย่อ
  *
- *   node --env-file=.env tools/test-list-view.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-list-view.mjs
  *
  * ── ต้องผ่าน ───────────────────────────────────────────────────
  * · ค่าเริ่มต้นเป็น "ชิด" (มีรูปให้ดู) และสลับเป็น "รายการ" ได้

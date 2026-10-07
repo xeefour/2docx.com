@@ -1,7 +1,7 @@
 /**
  * เก็บภาพหน้าจอของแถบสถานะ เพื่อดูด้วยตา — ไม่ต้องเดาว่าหน้าตาเป็นยังไง
  *
- *   node --env-file=.env tools/shot-nav-status.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/shot-nav-status.mjs
  *
  * จำลองเครือข่ายช้าผ่าน CDP เพื่อถ่าย "ระหว่างเปลี่ยนหน้า" และ "หน้าค้างเกิน 15 วินาที"
  * (สองช่วงนี้เกิดขึ้นในชีวิตจริงเฉพาะตอนเน็ตช้า ถ้าไม่จำลองจะถ่ายไม่ทัน)

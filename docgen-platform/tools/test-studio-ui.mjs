@@ -1,7 +1,7 @@
 /**
  * ทดสอบหน้า Studio แบบมีแท็บในเบราว์เซอร์จริง (Chrome DevTools Protocol)
  *
- *   node --env-file=.env tools/test-studio-ui.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-studio-ui.mjs
  *
  * ทดสอบ 7 ข้อ
  *   1. หน้ารายการมีแท็บ 4 อัน (ทั้งหมด / ที่ฉันเป็นเจ้าของ / แชร์กับฉัน / บุ๊กมาร์ก)

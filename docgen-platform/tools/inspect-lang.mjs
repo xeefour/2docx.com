@@ -1,7 +1,7 @@
 /**
  * ตรวจว่าภาษาของข้อความในไฟล์ .docx ที่ระบบสร้างถูกตั้งไว้ยังไง
  *
- *   node --env-file=.env tools/inspect-lang.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/inspect-lang.mjs
  *
  * ข้อความไทยที่ขีดเส้นแดงใน Word/LibreOffice แปลว่า run นั้นถูกตั้ง `w:lang`
  * เป็นภาษาอื่น (ปกติ en-US) → โปรแกรมเลยเอาไปตรวจสะกดแบบอังกฤษ

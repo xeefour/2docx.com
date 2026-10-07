@@ -1,14 +1,14 @@
 /**
- * หน้า /docs ต้องโหลด Swagger UI ได้จริง ไม่ใช่แค่ HTML ตอบ 200
+ * หน้า /apis ต้องโหลด Swagger UI ได้จริง ไม่ใช่แค่ HTML ตอบ 200
  *
- *   node --env-file=.env tools/test-docs-assets.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-docs-assets.mjs
  *
  * ── ทำไมต้องตรวจ "แสดงผล" ไม่ใช่แค่ status ───────────────────────────
- *   ผู้ใช้เจอ: เปิด localhost:3000/docs แล้วเห็น error 404 หลายบรรทัด
- *   ต้นเหตุ: rewrite ใน `next.config.mjs` match แค่ `/docs`
- *   แต่หน้า Swagger UI ดึงอีก 7 ไฟล์จาก `/docs/static/…`
+ *   ผู้ใช้เจอ: เปิด localhost:3000/apis แล้วเห็น error 404 หลายบรรทัด
+ *   ต้นเหตุ: rewrite ใน `next.config.mjs` match แค่ `/apis`
+ *   แต่หน้า Swagger UI ดึงอีก 7 ไฟล์จาก `/apis/static/…`
  *   → HTML ได้ 200 ส่วนไฟล์ชั้นในได้ 404 ทั้งหมด
- *   ถ้าเทสต์เช็กแค่ "GET /docs ได้ 200" ก็ผ่านทั้งที่หน้าเสีย
+ *   ถ้าเทสต์เช็กแค่ "GET /apis ได้ 200" ก็ผ่านทั้งที่หน้าเสีย
  *   ตรงนี้คือ reverse proxy ที่พังง่ายที่สุด: ได้ 200 แต่ได้หน้าที่ใช้ไม่ได้
  *
  *   เกณฑ์จึงเป็นสามชั้น:
@@ -141,19 +141,19 @@ for (const t of TARGETS) {
   securityLog.length = 0
 
   // อุ่น: Next dev คอมไพล์ route ครั้งแรกช้า
-  await send('Page.navigate', { url: `${t.base}/docs` })
+  await send('Page.navigate', { url: `${t.base}/apis` })
   await waitFor(`document.querySelector('#swagger-ui')`, 90000)
   await sleep(1500)
 
   /**
-   * ⚠️ ห้ามใส่ query string ที่ /docs เด็ดขาด
+   * ⚠️ ห้ามใส่ query string ที่ /apis เด็ดขาด
    *   `swagger-initializer.js` คำนวณ URL สเปกด้วย `resolveUrl('./json')`
    *   ซึ่งเอา `location.href` มาเติม `/` ท้าย ๆ แล้วต่อ `json`
-   *   → ถ้า URL มี `?_=…` ผลจะเป็น `/docs?_=…/json` แล้วไปโดนหน้า HTML แทน JSON
+   *   → ถ้า URL มี `?_=…` ผลจะเป็น `/apis?_=…/json` แล้วไปโดนหน้า HTML แทน JSON
    *   → Swagger ขึ้น "does not specify a valid version field"
    *   ใช้ `Network.setCacheDisabled` ที่เปิดไว้แทน ซึ่งถูกต้องกว่าเอาส่วนนี้มาแก้โค้ดผลิตภัณฑ์
    */
-  await send('Page.navigate', { url: `${t.base}/docs` })
+  await send('Page.navigate', { url: `${t.base}/apis` })
 
   // รอจน Swagger วาดรายการ endpoint จริงเสร็จ
   const rendered = await waitFor(
@@ -207,8 +207,8 @@ for (const t of TARGETS) {
   check('endpoint มีคำอธิบาย (ไม่ใช่แค่ path เปล่า)', (content?.summaries ?? 0) > 0, `${content?.summaries ?? 0}/${content?.ops ?? 0} รายการมีคำอธิบาย`)
 
   // ── ไฟล์ชั้นในต้องโหลดได้จริง (ไม่ใช่แค่ไม่มี error) ──────────
-  const assets = responses.filter((r) => r.url.includes('/docs/static/'))
-  check('ไฟล์ชั้นในของ Swagger โหลดครบ (css/js/favicon)', assets.length >= 7, `${assets.length} ไฟล์จาก /docs/static/`)
+  const assets = responses.filter((r) => r.url.includes('/apis/static/'))
+  check('ไฟล์ชั้นในของ Swagger โหลดครบ (css/js/favicon)', assets.length >= 7, `${assets.length} ไฟล์จาก /apis/static/`)
   const cssOk = assets.some((r) => r.url.endsWith('swagger-ui.css') && r.status === 200)
   const jsOk = assets.some((r) => r.url.includes('swagger-ui-bundle.js') && r.status === 200)
   check('ไฟล์ CSS และ JS ตัวหลักโหลดได้', cssOk && jsOk, `css=${cssOk} js=${jsOk}`)
@@ -239,7 +239,7 @@ for (const t of TARGETS) {
   check('ไม่มีการละเมิด CSP ตอนเปิดหน้า', securityLog.length === 0, securityLog.length ? securityLog.slice(0, 2).map((s) => s.text.slice(0, 110)).join(' | ') : 'console สะอาด')
 
   // ตรวจ header จริงด้วย fetch — ยืนยันว่าผ่อนแค่ style-src และที่อื่นยังเข้ม
-  const csp = await fetch(`${t.base}/docs`, { redirect: 'manual' }).then((r) => r.headers.get('content-security-policy') ?? '')
+  const csp = await fetch(`${t.base}/apis`, { redirect: 'manual' }).then((r) => r.headers.get('content-security-policy') ?? '')
   const styleSrc = (csp.match(/style-src([^;]*)/)?.[1] ?? '').trim()
   check('CSP ให้ inline style ได้ (Swagger inject style ตอนรัน)', styleSrc.includes("'unsafe-inline'"), styleSrc || 'ไม่มี directive style-src')
   check('CSP ยังบังคับ script-src เข้มอยู่', /script-src\s+'self'\s*(;|$)/.test(csp) && !/script-src[^;]*unsafe-inline/.test(csp), (csp.match(/script-src[^;]*/)?.[0] ?? 'ไม่มี').trim())

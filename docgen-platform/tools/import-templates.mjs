@@ -12,10 +12,10 @@
  *   สคริปต์นี้จึง "ไม่ลบอะไรเด็ดขาด" และข้ามไฟล์ที่คำนวณ sha256 แล้วไม่ตรงกับชื่อ
  *
  * วิธีใช้:
- *   node --env-file=.env tools/import-templates.mjs
- *   node --env-file=.env tools/import-templates.mjs --dry-run
- *   node --env-file=.env tools/import-templates.mjs --force
- *   node --env-file=.env tools/import-templates.mjs --from D:\backup\template
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/import-templates.mjs
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/import-templates.mjs --dry-run
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/import-templates.mjs --force
+ *   node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/import-templates.mjs --from D:\backup\template
  *
  * ── ตัวเลือก ────────────────────────────────────────────────────
  *   --from <โฟลเดอร์>  อ่านไฟล์แม่แบบจากโฟลเดอร์ในเครื่อง แทนการดึงจาก container

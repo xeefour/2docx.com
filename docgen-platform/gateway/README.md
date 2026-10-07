@@ -20,10 +20,39 @@
 | `/` `/studio` `/account` `/teams` | `web:3000` | เว็บ Next.js |
 | `/api/*` | `api:4000` | path เต็ม เพราะ Fastify mount ใต้ `/api` |
 | `/auth/*` | `api:4000` | Casdoor callback ไม่ได้อยู่ใต้ `/api` |
-| `/docs` `/openapi.json` | `api:4000` | เอกสาร API |
+| `/apis` `/openapi.json` | `api:4000` | เอกสาร API (Swagger UI) |
+| `/docs` `/docs/*` | ตัว gateway เอง | คู่มือสร้างแม่แบบ .docx (static จาก `docgen-platform/manual`) |
 | `/files/*` | `rustfs-ui:8080` | หน้าไฟล์ใน S3 |
 | `/logs/*` | `loki:3100` | ค้น log |
 | `/healthz` | ตัว gateway เอง | ใช้ตรวจว่ายังรอด |
+
+### `/docs` เป็นคู่มือ ไม่ใช่ Swagger
+
+เคยสลับกันมาแล้ว เล่าไว้กันลืม:
+
+- เอกสาร API อยู่ที่ **`/apis`** (`routePrefix` ใน `apps/api/src/app.ts`)
+- **`/docs`** คือคู่มือสร้างแม่แบบ .docx เสิร์ฟตรงจาก Caddy (`file_server`)
+  ไม่ต้อง build ไม่ต้องมี container เพิ่ม
+
+ตอนแก้ `Caddyfile` อย่าลืม mount โฟลเดอร์คู่มือเข้า container ด้วย
+(`../docgen-platform/manual:/srv/manual:ro` ใน `docker-compose.yml`)
+ถ้าไม่ mount จะได้ 404 ทั้งเว็บโดยไม่มี error ที่ไหนเลย
+
+### ตัวอย่างในคู่มือต้องผ่านการรันจริง
+
+คู่มืออ้างผลลัพธ์ของ tag จำนวนมาก ถ้าเขียนจากการเดา ผู้ใช้จะเสียเอกสารจริง
+จึงมีสคริปต์ฝังไว้ใน `docgen-platform/tools/` สามตัวที่ต้องรันทุกครั้งที่แก้คู่มือ:
+
+| สคริปต์ | ตรวจอะไร |
+|---|---|
+| `docx-lab.mjs` | ตัวเครื่องมือสร้าง `.docx` ยิงเข้า docserver และอ่านข้อความกลับ |
+| `verify-manual-examples.mjs` | ทุกตัวอย่างในคู่มือยังให้ผลตามที่เขียนไว้ `--prove` ฉีดบั๊กเพื่อพิสูจน์ว่าตัวตรวจจับผิดได้ |
+| `check-manual-tags.mjs` | ทุก tag ในคู่มือต้องมีที่มาจากชุดที่พิสูจน์แล้ว กันตัวอย่างหลุดเข้ามาโดยไม่ได้ทดสอบ |
+
+ข้อสำคัญ: ระบบเรนเดอร์เรียก docserver โดยส่งแค่ `data` กับ `convertTo`
+ดู `apps/worker/src/docserver.ts` ฟังก์ชัน `renderDocument`
+จึง**ไม่ได้**ส่ง `lang` หรือ `timezone` → ค่าที่ผู้ใช้เห็นคือค่าเริ่มต้นของ docserver
+(ชื่อเดือนอังกฤษ สกุลเงินยูโร เขตเวลายุโรป) คู่มือจึงต้องเขียนตามความจริงข้อนี้
 
 ### ทำไม `/files` ทำงานได้ แต่ Alloy UI ไม่ได้
 

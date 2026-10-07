@@ -4,7 +4,7 @@
  * เปิดสาธารณ (ไม่ต้อง login) โดยเจตนา เพราะ:
  * · เป็น endpoint ที่ load balancer / Docker healthcheck เรียก
  *   ถ้าบังคับ login ระบบจะตัดสินว่า unhealthy ทันทีที่ session หมดอายุ
- * · เปิดไว้ที่ `/docs` ให้กด "Try it out" ดูสถานะสดได้เลย
+ * · เปิดไว้ที่ `/apis` ให้กด "Try it out" ดูสถานะสดได้เลย
  *
  * เปิดเผยแค่ชื่อ service + up/down + latency ไม่มี credential หรือข้อมูลเอกสาร
  */

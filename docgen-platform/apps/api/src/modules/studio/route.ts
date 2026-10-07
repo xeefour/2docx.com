@@ -5,6 +5,10 @@ import {
   SetAccessBody,
   ShareBody,
   ChatBody,
+  InterviewPlanBody,
+  InterviewPlanReply,
+  InterviewComposeBody,
+  InterviewComposeReply,
   CreateBookmarkBody,
   LlmStatus,
   AccessView,
@@ -20,6 +24,7 @@ import {
 import type { App } from '../../types.js'
 import { readTemplateTags } from '../templates/tags.js'
 import { llmStatus } from './llm.js'
+import { planInterview, composeInterview } from './interview.js'
 import {
   getFormSchema,
   saveFormSchema,
@@ -27,6 +32,7 @@ import {
   deleteFormSchema,
   getAccessView,
   setVisibility,
+  setTemplateTeam,
   addShare,
   removeShare,
   deleteAccess,
@@ -217,6 +223,35 @@ export async function studioRoutes(app: App) {
     async (req) => setVisibility(app, { templateKey: req.params.key, visibility: req.body.visibility }, req),
   )
 
+  /**
+   * ย้ายแม่แบบเข้า/ออกทีม
+   *
+   * `team: null` = ถอนออกจากทีม กลับเป็นของคนเดิม
+   *
+   * ⚠️ ย้าย**เข้า**ทีมจะบังคับเป็น private เสมอ
+   *   เพราะกติกาเดิม "published = ทุกคนแก้ได้" ถ้าคงสาธารณไว้
+   *   แม่แบบของทีมจะยังถูกแก้โดยคนนอกทีมได้ → ทีมไม่มีความหมาย
+   */
+  app.put(
+    '/access/:key/team',
+    {
+      schema: {
+        tags,
+        summary: 'ย้ายแม่แบบเข้า/ออกทีม',
+        description: [
+          '**เข้าทีม** — เจ้าของแม่แบบ หรือผู้ดูแลทีมปลายทาง (กรณีแม่แบบยังไม่มีเจ้าของ)',
+          '**ออกจากทีม** — เจ้าของแม่แบบ หรือผู้ดูแลทีมเดิม',
+          '',
+          'ย้ายเข้าทีมแล้ว `visibility` จะเป็น `private` โดยอัตโนมัติ',
+        ].join('\n'),
+        params: z.object({ key: z.string().min(1).max(200) }),
+        body: z.object({ team: z.string().min(1).max(120).nullable() }),
+        response: { 200: AccessView, 401: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse },
+      },
+    },
+    async (req) => setTemplateTeam(app, { templateKey: req.params.key, team: req.body.team }, req),
+  )
+
   app.post(
     '/access/:key/share',
     {
@@ -353,6 +388,45 @@ export async function studioRoutes(app: App) {
       },
     },
     async (req) => chat(app, req.body, req),
+  )
+
+  // ── สัมภาษณ์ผู้ใช้เพื่อกรอกฟอร์ม ─────────────────────────────────
+  // ต่างจาก /chat ตรงที่**โมเดลเป็นคนถาม** ตามช่องที่ยังขาด
+  //   แล้วเอาคำตอบมาเรียบเรียงเป็นค่าที่ช่องรับได้ (ตาม input property)
+  app.post(
+    '/interview/plan',
+    {
+      schema: {
+        tags,
+        summary: 'ขอคำถามชุดถัดไปจาก AI (สัมภาษณ์เพื่อกรอกฟอร์ม)',
+        description: [
+          'คืนคำถามเป็นช่อง ๆ ตามช่องที่ยังไม่มีค่า',
+          'mode = one ถามทีละข้อ · batch ถามหลายข้อพร้อมกัน (ไม่เกิน batchSize)',
+          'ส่ง answers ที่ผู้ใช้ตอบแล้วกลับไป เพื่อให้ AI ถามต่อโดยไม่ถามซ้ำ',
+        ].join('\n'),
+        body: InterviewPlanBody,
+        response: { 200: InterviewPlanReply, 502: ErrorResponse, 503: ErrorResponse },
+      },
+    },
+    async (req) => planInterview(app, req.body),
+  )
+
+  app.post(
+    '/interview/compose',
+    {
+      schema: {
+        tags,
+        summary: 'เอาคำตอบของผู้ใช้มาเรียบเรียงเป็นค่าของแต่ละช่อง',
+        description: [
+          'แปลงคำตอบให้ตรงกับชนิดชอง (ตัวเลข/วันที่/ตัวเลือก/อีเมล) ฝั่งเซิร์ฟเวอร์',
+          'ค่าที่ผู้ใช้กรอกเองจะไม่ถูกทับ (merge แบบเดียวกับ /chat)',
+          'ข้อมูลที่โมเดลให้มาไม่ครบจะอยู่ใน skipped เพื่อให้ UI เตือนได้',
+        ].join('\n'),
+        body: InterviewComposeBody,
+        response: { 200: InterviewComposeReply, 502: ErrorResponse, 503: ErrorResponse },
+      },
+    },
+    async (req) => composeInterview(app, req.body),
   )
 
   app.get(

@@ -1,6 +1,7 @@
 import type { App } from '../../types.js'
 import { AppError, newId, now } from '@docgen/shared'
-import type { InboxList, Notification, NotificationKind } from '@docgen/shared'
+import type { InboxList, Notification, NotificationKind, UserSettings } from '@docgen/shared'
+import { isNotifyEnabled } from '../account/service.js'
 
 /**
  * ── กล่องจดหมาย (inbox) ───────────────────────────────────────────
@@ -46,6 +47,19 @@ function who(req: Req): { sub: string; name: string | null } {
 const NOTIFICATIONS = 'notifications'
 
 /**
+ * ประเภทที่ผู้ใช้ปิดได้จากหน้า `/account` — map ประเภทจดหมาย → ฟิลด์ที่ตั้งค่า
+ *
+ * ⚠️ `access` / `system` **ไม่อยู่ในตารางนี้** และตั้งใจให้ปิดไม่ได้
+ *   · `access`  = สิทธิ์เปลี่ยน/ถูกถอน → ผู้ใช้ต้องรู้ ไม่งั้นเปิดแม่แบบแล้วเจอ 403
+ *     โดยไม่มีคำอธิบาย (ดูเหตุผลที่ `service.ts` ตอนถอนสิทธิ์)
+ *   · `system`  = เปิด/ปิดสาธารณเอง → สถานะของสิ่งที่ผู้ใช้เพิ่งกด ต้องเห็นทันที
+ */
+const MUTEABLE: Partial<Record<NotificationKind, keyof UserSettings>> = {
+  share: 'notifyOnShare',
+  document: 'notifyOnDocument',
+}
+
+/**
  * เก็บจดหมายไว้นานสุดกี่วัน
  *
  * 90 วัน = ยาวพอที่คนที่เพิ่งเริ่มใช้ย้อนดูย้อนหลังได้
@@ -72,6 +86,25 @@ export interface NotifyInput {
  *   คืน `true` เมื่อเขียนสำเร็จ, `false` เมื่อไม่สำเร็จ (เพื่อให้ผู้เรียก log ได้ถ้าอยาก)
  */
 export async function notify(app: App, input: NotifyInput): Promise<boolean> {
+  /**
+   * ผู้ใช้ปิดการแจ้งเตือนประเภทนี้ไว้ไหม
+   *
+   * ⚠️ อ่านค่าตั้งค่าไม่สำเร็จ = **ส่งต่อ** ไม่ใช่ข้าม
+   *   การแจ้งเตือนเป็นเรื่องเสริม ถ้ามันล้มทิ้งผู้ใช้ควรได้รับ (หลักการข้อ 1)
+   *   ถ้ากลัวส่งผิว่า "ปิดอยู่" ให้ดูค่าตั้งค่อยเป็นเจ้าของความเงียบ
+   */
+  const pref = MUTEABLE[input.kind]
+  if (pref) {
+    try {
+      if (!(await isNotifyEnabled(app, input.user, pref))) {
+        app.log.info({ user: input.user, kind: input.kind }, 'ผู้ใช้ปิดการแจ้งเตือนประเภทนี้ไว้ — ไม่ส่ง')
+        return true
+      }
+    } catch (err) {
+      app.log.warn({ err, user: input.user }, 'อ่านค่าตั้งค่าไม่สำเร็จ — ส่งจดหมายต่อ')
+    }
+  }
+
   const doc: Notification = {
     _id: newId('ntf'),
     user: input.user,

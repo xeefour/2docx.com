@@ -4,6 +4,7 @@ import {
   AppError,
   NotFoundError,
   mergeAiData,
+  roleAtLeast,
   sampleValueFor,
   type FieldDef,
   type FormSchema,
@@ -11,6 +12,7 @@ import {
   type AccessView,
   type Visibility,
   type AccessRole,
+  type TeamRole,
   type ChatSession,
   type ChatMessage,
   type BookmarkRecord,
@@ -23,6 +25,7 @@ import * as carbone from '../templates/carbone.js'
 import { readTemplateTags } from '../templates/tags.js'
 import { askLlm, type ChatTurn } from './llm.js'
 import { notify, notifyMany } from './notifications.js'
+import * as teams from '../teams/service.js'
 
 
 /**
@@ -186,42 +189,137 @@ async function loadAccess(app: App, templateKey: string): Promise<AccessDoc | nu
   return { ...(raw as AccessDoc), _id: String((raw as { _id: unknown })._id) }
 }
 
-/** แปลงเอกสารสิทธิ์เป็นมุมมองของผู้ใช้คนนี้ */
-function toView(doc: AccessDoc | null, templateKey: string, sub: string): AccessView {
+/**
+ * แปลงเอกสารสิทธิ์เป็นมุมมองของผู้ใช้คนนี้
+ *
+ * ⚠️ ลำดับความสำคัญ (อ่านตามลำดับนี้ ไม่งั้นสิทธิ์จะซ้อนกัน):
+ *   1. **เจ้าของส่วนตัว** — เจ้าของจริงเสมอ ไม่ว่าจะอยู่ทีมหรือไม่
+ *   2. **สมาชิกทีม** — ได้สิทธิ์ตาม role ในทีม (editor ขึ้นไปแก้ได้)
+ *   3. **ถูกแชร์รายคน** — สิทธิ์ที่เจ้าของให้เฉพาะราย
+ *   4. **เปิดสาธารณ** — ตามกติกาเดิม ทุกคนแก้ได้
+ *
+ *   สมาชิกทีมมาก่อนการแชร์รายคน เพราะแม่แบบของทีมควรให้สิทธิ์ตามทีม
+ *   ไม่ใช่ตามรายคนที่ถูกแชร์ (ถ้าสลับ สมาชิกทีมที่ถูกลดเป็น viewer
+ *   ส่วนตัวจะกลับมาได้สิทธิ์เต็มเพราะเคยถูกแชร์ role editor ค้างไว้)
+ */
+function toView(
+  doc: AccessDoc | null,
+  templateKey: string,
+  sub: string,
+  teamRole: TeamRole | null = null,
+  teamName: string | null = null,
+): AccessView {
   if (!doc) {
     // ยังไม่มีใครตั้งค่าการแชร์ → เปิดสาธารณ แก้ได้ทุกคน (พฤติกรรมเดิมของระบบ)
     return {
       templateKey,
       relation: 'published',
       role: null,
+      teamRole: null,
       canEdit: true,
       visibility: 'published',
       owner: null,
       ownerName: null,
+      team: null,
+      teamName: null,
       sharedWith: [],
     }
   }
 
   const isOwner = doc.owner === sub
+  // สมาชิกทีม = แม่แบบนี้มีทีม **และ** ผู้เรียกอยู่ในทีมนั้น (ขาดอย่างใดอย่างหนึ่ง = ไม่ใช่)
+  const isTeamMember = Boolean(doc.team && teamRole)
   const shared = doc.sharedWith.find((s) => s.sub === sub) ?? null
 
   let relation: AccessView['relation'] = 'published'
   if (isOwner) relation = 'owner'
+  else if (isTeamMember) relation = 'team'
   else if (shared) relation = 'shared'
+
+  /**
+   * สมาชิกทีมแก้ได้ตั้งแต่ `editor` ขึ้นไป
+   * `admin`/`owner` ก็แก้ได้อยู่แล้ว (สูงกว่า editor)
+   */
+  const teamCanEdit = roleAtLeast(teamRole, 'editor')
+
+  /**
+   * ⚠️ ซ่อนรายชื่อผู้ถูกแชร์เมื่อผู้เรียกไม่มีสิทธิ์จริง
+   *
+   *   เคยส่ง `sharedWith` ให้ทุกคนที่ยิง `GET /api/access/:key`
+   *   แม้แม่แบบเป็น private → ใครก็รู้ว่าแม่แบบนี้ของใคร แชร์ให้ใครบ้าง
+   *   (เป็นของเดิมตั้งแต่ก่อนมีระบบทีม แต่ทีมทำให้ร้ายขึ้น
+   *   เพราะจะเห็นทั้งรายชื่อสมาชิกทีมด้วย)
+   *
+   *   คง `200` + `canEdit: false` ไว้ เพราะหน้าเว็บใช้บอกว่า "คุณแก้ไม่ได้"
+   *   ถ้าตอบ 403 หน้าแก้ไขจะพัง (เคยคิดจะเปลี่ยน แล้วพังกว่าที่คาด)
+   */
+  const hasRelation = isOwner || isTeamMember || Boolean(shared)
+  const redact = doc.visibility === 'private' && !hasRelation
 
   return {
     templateKey,
     relation,
     role: isOwner ? 'editor' : (shared?.role ?? null),
+    teamRole: isTeamMember ? teamRole : null,
     // ⚠️ เปิดสาธารณ = แก้ได้ทุกคน (หน้าเว็บเขียนไว้ตรงนี้ตั้งแต่แรก)
     //   เคยคิดว่า published แค่ "ดูได้" → พอมีเอกสารสิทธิ์ปุ๊บ แม่แบบที่เปิดสาธารณ
     //   กลับกลายเป็น "แก้ได้คนเดียว" ทั้งที่ข้อความบนหน้าจอยังบอกว่าทุกคนแก้ได้
-    canEdit: isOwner || shared?.role === 'editor' || doc.visibility === 'published',
+    canEdit: isOwner || teamCanEdit || shared?.role === 'editor' || doc.visibility === 'published',
     visibility: doc.visibility,
     owner: doc.owner,
     ownerName: doc.ownerName,
-    sharedWith: doc.sharedWith,
+    team: redact ? null : (doc.team ?? null),
+    teamName: isTeamMember ? teamName : null,
+    sharedWith: redact ? [] : doc.sharedWith,
   }
+}
+
+/**
+ * แม่แบบนี้เป็นของทีม และผู้เรียกเป็น admin ของทีมนั้นไหม
+ *
+ * ใช้กับการกระทำ**ระดับการจัดการ** (เปลี่ยน visibility · เพิ่มคนแชร์ · ถอนสิทธิ์ · ล้างการตั้งค่า)
+ * ซึ่งเดิมอนุญาตแค่เจ้าของส่วนตัว — ทีมต้องทำแทนได้ ไม่งั้นผู้ที่อัปโหลด
+ * จะเป็นคนเดียวที่คุมแม่แบบของทีมตลอดชีวิต
+ *
+ * @param team  ทีมของแม่แบบ — null/ไม่มี = ไม่ใช่แม่แบบของทีม → false
+ */
+async function isTeamAdmin(app: App, team: string | null | undefined, sub: string): Promise<boolean> {
+  if (!team) return false
+  return roleAtLeast(await teams.roleIn(app, team, sub), 'admin')
+}
+
+/** บังคับให้เป็น admin ของทีม — ใช้เมื่อผู้เรียกไม่ใช่เจ้าของส่วนตัว */
+async function assertTeamAdmin(
+  app: App,
+  team: string | null | undefined,
+  sub: string,
+  message: string,
+): Promise<void> {
+  if (await isTeamAdmin(app, team, sub)) return
+  throw new AppError('FORBIDDEN', message, 403)
+}
+
+/**
+ * โหลด AccessDoc + role ของผู้เรียกในทีมเจ้าของ มาพร้อมกัน
+ *
+ * ⚠️ `toView` เดิมรับแค่ AccessDoc ซึ่ง**ไม่พอ**เมื่อมีทีม
+ *   เพราะต้องรู้ว่าผู้เรียกเป็นสมาชิกทีมนั้นหรือไม่ ถึงจะตัดสินใจเรื่องสิทธิ์ได้
+ *   ถ้าเดาเองว่า "มี field team = คนนี้มีสิทธิ์" จะเปิดแม่แบบทีมให้คนนอกทีม
+ */
+async function loadView(
+  app: App,
+  templateKey: string,
+  sub: string,
+): Promise<AccessView> {
+  const doc = await loadAccess(app, templateKey)
+  const team = doc?.team ?? null
+  if (!team) return toView(doc, templateKey, sub)
+
+  const [role, teamDoc] = await Promise.all([
+    teams.roleIn(app, team, sub),
+    app.mongo.collection<{ _id: string; name: string }>('teams').findOne({ _id: team } as never),
+  ])
+  return toView(doc, templateKey, sub, role, teamDoc?.name ?? null)
 }
 
 export async function getAccessView(
@@ -230,7 +328,7 @@ export async function getAccessView(
   req: Req,
 ): Promise<AccessView> {
   const { sub } = who(req)
-  return toView(await loadAccess(app, templateKey), templateKey, sub)
+  return loadView(app, templateKey, sub)
 }
 
 /**
@@ -240,7 +338,7 @@ export async function getAccessView(
  * (การเขียนทับแม่แบบกระทบคนทุกคน จึงต้องเข้มกว่าแก้ metadata)
  */
 export async function assertCanEdit(app: App, templateKey: string, sub: string): Promise<void> {
-  const view = toView(await loadAccess(app, templateKey), templateKey, sub)
+  const view = await loadView(app, templateKey, sub)
   if (!view.canEdit) {
     throw new AppError(
       'FORBIDDEN',
@@ -311,14 +409,14 @@ export async function claimOwner(
  *   ไม่งั้นแม่แบบเก่าทั้งหมดจะกลายเป็น "แก้ไขไม่ได้เลย" ใครก็ทำอะไรไม่ได้
  */
 export async function assertCanReplace(app: App, templateKey: string, sub: string): Promise<void> {
-  const view = toView(await loadAccess(app, templateKey), templateKey, sub)
+  const view = await loadView(app, templateKey, sub)
   if (view.owner && view.relation !== 'owner') {
     throw new AppError('FORBIDDEN', 'เปลี่ยนไฟล์แม่แบบได้เฉพาะเจ้าของเท่านั้น', 403)
   }
 }
 
 export async function assertCanView(app: App, templateKey: string, sub: string): Promise<void> {
-  const view = toView(await loadAccess(app, templateKey), templateKey, sub)
+  const view = await loadView(app, templateKey, sub)
   if (view.visibility === 'private' && view.relation !== 'owner' && view.relation !== 'shared') {
     throw new AppError('FORBIDDEN', 'แม่แบบนี้เป็นแบบส่วนตัว — ขอสิทธิ์จากเจ้าของก่อน', 403)
   }
@@ -343,8 +441,12 @@ export async function setVisibility(
   //   เพราะ `canEdit` บอกว่า "เปิดสาธารณ = ทุกคนแก้ได้" (กติกาใหม่)
   //   ถ้าใช้ตรงนี้ คนอื่นจะพลิกแม่แบบของเจ้าของเป็นส่วนตัวได้
   //   การเปลี่ยน visibility เป็นการจัดการ ไม่ใช่การแก้ฟอร์ม → ต้องเจ้าของเท่านั้น
+  //
+  // ⚠️ แต่ **admin ของทีมเจ้าของแม่แบบนั้น** ต้องเปลี่ยนได้
+  //   ไม่งั้นแม่แบบของทีมจะตั้ง visibility ไม่ได้เลย
+  //   แม้คนที่อัปโหลดจะออกจากทีมไปแล้วก็ตาม (ทีมเป็นเจ้าของร่วม)
   if (existing?.owner && existing.owner !== user.sub) {
-    throw new AppError('FORBIDDEN', 'เฉพาะเจ้าของแม่แบบเท่านั้นที่เปลี่ยนการมองเห็นได้', 403)
+    await assertTeamAdmin(app, existing.team, user.sub, 'เฉพาะเจ้าของทีมเท่านั้นที่เปลี่ยนการมองเห็นแม่แบบของทีมได้')
   }
 
   const doc: AccessDoc = {
@@ -404,7 +506,7 @@ export async function addShare(
   const existing = await loadAccess(app, input.templateKey)
 
   if (existing && existing.owner !== user.sub) {
-    throw new AppError('FORBIDDEN', 'เฉพาะเจ้าของแม่แบบเท่านั้นที่เพิ่มคนอื่นได้', 403)
+    await assertTeamAdmin(app, existing.team, user.sub, 'เฉพาะเจ้าของทีมเท่านั้นที่เพิ่มคนอื่นเข้าแม่แบบของทีมได้')
   }
   if (input.sub === user.sub) {
     throw new AppError('BAD_REQUEST', 'เจ้าของอยู่ในรายชื่ออยู่แล้ว', 422)
@@ -478,7 +580,7 @@ export async function removeShare(
   const existing = await loadAccess(app, input.templateKey)
   if (!existing) throw new NotFoundError('การแชร์แม่แบบ', input.templateKey)
   if (existing.owner !== user.sub) {
-    throw new AppError('FORBIDDEN', 'เฉพาะเจ้าของแม่แบบเท่านั้นที่ถอนสิทธิ์ได้', 403)
+    await assertTeamAdmin(app, existing.team, user.sub, 'เฉพาะเจ้าของทีมเท่านั้นที่ถอนสิทธิ์แม่แบบของทีมได้')
   }
 
   const doc: AccessDoc = {
@@ -513,7 +615,7 @@ export async function deleteAccess(app: App, templateKey: string, req: Req): Pro
   const existing = await loadAccess(app, templateKey)
   if (!existing) return
   if (existing.owner !== user.sub) {
-    throw new AppError('FORBIDDEN', 'เฉพาะเจ้าของแม่แบบเท่านั้นที่ล้างการแชร์ได้', 403)
+    await assertTeamAdmin(app, existing.team, user.sub, 'เฉพาะเจ้าของทีมเท่านั้นที่ล้างการตั้งค่าการแชร์แม่แบบของทีมได้')
   }
   await app.mongo.collection<AccessDoc>(ACCESS).deleteOne({ _id: templateKey } as never)
   app.log.info({ templateKey }, 'ล้างการตั้งค่าการแชร์แล้ว')
@@ -539,10 +641,124 @@ export async function resolveAccess(
     .find({ _id: { $in: wanted } } as never)
     .toArray()
 
+  /**
+   * โหลดทีมของผู้เรียก**ครั้งเดียว** ไม่งั้นจะเป็น N+1
+   *
+   * ⚠️ หน้ารายการส่งมาสูงสุด 200 แม่แบบ ถ้า query role ทีละแม่แบบ
+   *   จะยิง Mongo 200 ครั้งต่อการเปิดหน้าเดียว
+   *   (เคยคิดว่าไม่ต้อง role เพราะไม่มีทีม — พอมีทีมต้องมีตารางนี้)
+   */
+  const myTeams = await loadMyTeamMap(app, sub)
+
   const byKey = new Map(rows.map((r) => [String((r as { _id: unknown })._id), r as AccessDoc]))
   const out: Record<string, AccessView> = {}
-  for (const k of wanted) out[k] = toView(byKey.get(k) ?? null, k, sub)
+  for (const k of wanted) {
+    const doc = byKey.get(k) ?? null
+    const t = doc?.team ? myTeams.get(doc.team) : undefined
+    out[k] = toView(doc, k, sub, t?.role ?? null, t?.name ?? null)
+  }
   return out
+}
+
+/** ทีมทั้งหมดที่ผู้ใช้อยู่ → Map<teamId, {role, name}> (อ่านครั้งเดียว ใช้ซ้ำในลูป) */
+async function loadMyTeamMap(
+  app: App,
+  sub: string,
+): Promise<Map<string, { role: TeamRole; name: string }>> {
+  const [rows, teamsCol] = await Promise.all([
+    app.mongo
+      .collection<{ team: string; role: TeamRole }>('team_members')
+      .find({ sub } as never)
+      .toArray(),
+    app.mongo.collection<{ _id: string; name: string }>('teams').find({} as never).toArray(),
+  ])
+  if (rows.length === 0) return new Map()
+
+  const names = new Map(teamsCol.map((t) => [String(t._id), t.name]))
+  return new Map(
+    rows.map((r) => [r.team, { role: r.role, name: names.get(r.team) ?? '' }]),
+  )
+}
+
+/**
+ * ย้ายแม่แบบเข้า/ออกทีม
+ *
+ * ── ใครทำอะไรได้ ────────────────────────────────────────────
+ *   **เข้าทีม** — เจ้าของส่วนตัว หรือ admin ของทีมปลายทาง (สำหรับแม่แบบที่ยังไม่มีเจ้าของ)
+ *   **ออกจากทีม** — เจ้าของส่วนตัว หรือ admin ของทีมเดิม
+ *
+ *   ⚠️ ห้ามใช้แค่ `canEdit` — เพราะ `canEdit` จริงสำหรับแม่แบบ published
+ *     ถ้าใช้ตรงนี้ ใครก็ได้ที่เปิดแม่แบบสาธารณเข้ามากวาดในทีมตัวเองได้
+ *     (แม่แบบสาธารณแก้ได้ทุกคน → ถ้าใช้ canEdit ก็เท่ากับใครก็ "ยึด" ได้)
+ *
+ * ── ย้ายเข้าทีม = บังคับเป็น private ────────────────────────────
+ *   กติกาเดิมของระบบคือ "published = ทุกคนแก้ได้"
+ *   ถ้าย้ายเข้าทีมแล้วยังเปิดสาธารณอยู่ แม่แบบนั้นจะยังแก้ได้โดยคนนอกทีม
+ *   → ทีมก็ไม่มีความหมาย → จึงตั้งเป็น private ให้อัตโนมัติ
+ *   (admin ทีมเปิดสาธารณเองได้ภายหลังถ้าต้องการ)
+ */
+export async function setTemplateTeam(
+  app: App,
+  input: { templateKey: string; team: string | null },
+  req: Req,
+): Promise<AccessView> {
+  const user = who(req)
+  const existing = await loadAccess(app, input.templateKey)
+
+  if (input.team) {
+    // ต้องเป็น admin ของทีมปลายทางเสมอ ไม่งั้นใครก็ชวนคนอื่นเข้าทีมตัวเองได้
+    await teams.assertTeamRole(app, input.team, user.sub, 'admin')
+
+    // แม่แบบที่มีเจ้าของเป็นคนอื่น = ต้องให้เจ้าของย้ายเอง ไม่ใช่ลากเข้ามาเอง
+    const isPersonalOwner = !existing?.owner || existing.owner === user.sub
+    if (!isPersonalOwner) {
+      throw new AppError(
+        'FORBIDDEN',
+        'แม่แบบนี้มีเจ้าของอยู่แล้ว — ให้เจ้าของย้ายเข้าทีมเอง',
+        403,
+      )
+    }
+  } else if (existing?.team) {
+    await assertTeamAdmin(app, existing.team, user.sub, 'เฉพาะเจ้าของทีมเท่านั้นที่ถอนแม่แบบออกจากทีมได้')
+  }
+
+  if (!existing) {
+    if (!input.team) {
+      // ถอนทีมจากแม่แบบที่ไม่มีเอกสารสิทธิ์ = ไม่มีอะไรให้ทำ
+      return toView(null, input.templateKey, user.sub)
+    }
+    // แม่แบบยังไม่มีเอกสารสิทธิ์ (ไม่มีใครตั้งค่า) → สร้างใหม่ โดยผู้ทำคือเจ้าของ
+    const doc: AccessDoc = {
+      _id: input.templateKey,
+      templateKey: input.templateKey,
+      visibility: 'private',
+      owner: user.sub,
+      ownerName: user.name,
+      team: input.team,
+      sharedWith: [],
+      updatedAt: now(),
+    }
+    await app.mongo.collection<AccessDoc>(ACCESS).insertOne(doc as never)
+    app.log.info({ templateKey: input.templateKey, team: input.team }, 'ย้ายแม่แบบเข้าทีม')
+    return toView(doc, input.templateKey, user.sub, 'owner', null)
+  }
+
+  const doc: AccessDoc = {
+    ...existing,
+    // เข้าทีม → private เสมอ · ออกจากทีม → คืนค่าเดิม (ไม่เดา ผู้ใช้ตั้งเองภายหลัง)
+    visibility: input.team ? 'private' : existing.visibility,
+    team: input.team,
+    updatedAt: now(),
+  }
+  await app.mongo
+    .collection<AccessDoc>(ACCESS)
+    .replaceOne({ _id: input.templateKey } as never, doc as never)
+
+  app.log.info(
+    { templateKey: input.templateKey, team: input.team, visibility: doc.visibility },
+    input.team ? 'ย้ายแม่แบบเข้าทีม' : 'ถอนแม่แบบออกจากทีม',
+  )
+  return loadView(app, input.templateKey, user.sub)
 }
 
 // ── แชทกับ AI ────────────────────────────────────────────────
@@ -818,7 +1034,28 @@ export async function listBookmarks(
     .sort({ createdAt: -1 })
     .limit(200)
     .toArray()
-  return rows.map((r) => ({ ...r, _id: String(r._id) }))
+
+  /*
+   * เติม `teamName` ให้ฝั่งเว็บ ไม่ต้องยิงเพิ่มหนึ่งรอบต่อบุ๊กมาร์ก
+   *
+   * ⚠️ ชื่อทีมที่ไม่เจอ = ทีมถูกลบไปแล้ว (หรือผู้ใช้ถูกถอนออกจากทีม)
+   *   คืน `null` ให้ฝั่งเว็บไปแสดงว่า "ส่วนตัว" แทนที่จะค้างชี้ไปทีมที่ไม่มีอยู่จริง
+   */
+  const teamIds = [...new Set(rows.map((r) => r.team).filter((t): t is string => !!t))]
+  const names = new Map<string, string>()
+  if (teamIds.length > 0) {
+    const docs = await app.mongo
+      .collection<{ _id: string; name: string }>('teams')
+      .find({ _id: { $in: teamIds } } as never)
+      .toArray()
+    for (const d of docs) names.set(String(d._id), d.name)
+  }
+
+  return rows.map((r) => ({
+    ...r,
+    _id: String(r._id),
+    teamName: r.team ? names.get(r.team) ?? null : null,
+  }))
 }
 
 export async function addBookmark(
@@ -828,22 +1065,45 @@ export async function addBookmark(
     versionId: string
     templateName?: string
     note?: string
+    /** `null`/ไม่ส่ง = เก็บส่วนตัว */
+    team?: string | null
   },
   req: Req,
 ): Promise<BookmarkRecord> {
   const { sub } = who(req)
+
+  /*
+   * ⚠️ ต้องเช็คว่าเป็นสมาชิกทีมนั้นจริง ไม่งั้นส่ง id ทีมอะไรมาก็เก็บได้
+   *   บุ๊กมาร์กเป็นของส่วนตัว การชี้ไปทีมที่ตัวเองไม่มีสิทธิ์
+   *   จะทำให้ข้อมูลของทีมรั่วออกไปทางชื่อทีม โดยไม่มี error
+   */
+  const team = input.team ?? null
+  if (team && !(await teams.roleIn(app, team, sub))) {
+    throw new AppError('FORBIDDEN', 'ไม่ได้เป็นสมาชิกทีมนี้ จึงเก็บบุ๊กมาร์กลงทีมไม่ได้', 403)
+  }
 
   // กดบุ๊กมาร์กซ้ำ = เอาอันเดิมกลับมา ไม่ต้องเพิ่มซ้ำให้รก
   const col = app.mongo.collection<BookmarkRecord>(BOOKMARKS)
   const existing = await col.findOne({ user: sub, templateKey: input.templateKey } as never)
 
   if (existing) {
+    /*
+     * กดดาวซ้ำแล้วเลือกทีมใหม่ = **เปลี่ยนที่เก็บ** ไม่ใช่สร้างรายการใหม่
+     *   เพราะหนึ่งแม่แบบมีบุ๊กมาร์กได้แค่รายการเดียว (ดู BookmarkRecord)
+     *   `updatedAt` ไม่ต้องแตะ `createdAt` เพื่อให้เรียงตามเวลาที่กดครั้งแรกเหมือนเดิม
+     */
     const patch = {
       templateName: input.templateName ?? existing.templateName,
       note: input.note ?? existing.note,
+      team,
     }
     await col.updateOne({ _id: existing._id } as never, { $set: patch } as never)
-    return { ...(existing as BookmarkRecord), ...patch, _id: String(existing._id) }
+    return {
+      ...(existing as BookmarkRecord),
+      ...patch,
+      _id: String(existing._id),
+      teamName: team ? await teams.teamName(app, team) : null,
+    }
   }
 
   const doc: BookmarkRecord = {
@@ -854,9 +1114,13 @@ export async function addBookmark(
     templateName: input.templateName ?? null,
     note: input.note ?? null,
     createdAt: now(),
+    team,
   }
   await col.insertOne(doc as never)
-  return doc
+  return {
+    ...doc,
+    teamName: team ? await teams.teamName(app, team) : null,
+  }
 }
 
 export async function removeBookmark(

@@ -5,7 +5,7 @@ const app = await buildApp()
 
 try {
   await app.listen({ host: env.API_HOST, port: env.API_PORT })
-  app.log.info(`เอกสาร API อยู่ที่ /docs`)
+  app.log.info(`เอกสาร API อยู่ที่ /apis`)
 } catch (err) {
   app.log.error({ err }, 'เปิดเซิร์ฟเวอร์ไม่ได้')
   process.exit(1)

@@ -17,6 +17,21 @@ const connString = (scheme: string) =>
 const httpUrl = z.string().url()
 
 /**
+ * URL ที่ "เว้นว่าง = ไม่ตั้ง" — รับค่าว่างได้ด้วย
+ *
+ * ⚠️ ทำไมต้องมีตัวนี้ (เจอจริง 2026-10-06)
+ *   `z.string().url().optional()` รับ `undefined` แต่**ไม่รับ `''`**
+ *   ขณะที่ไฟล์ `.env` / `.env.example` ของเราเขียนค่าเว้นว่างเป็น `KEY=`
+ *   (เป็นรูปแบบมาตรฐานของไฟล์ env และเป็นวิธีบอกว่า "ยังไม่ได้ตั้ง")
+ *   ผลคือ `LLM_BASE_URL=` ทำให้ API crash ตอน boot ด้วย "Invalid URL"
+ *   ทั้งที่ผู้ใช้ทำตามค่าตัวอย่างเป๊ะ → schema ต้องยอมรับรูปแบบของไฟล์จริง
+ */
+const optionalUrl = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+  httpUrl.optional(),
+)
+
+/**
  * Config ทั้งระบบ validate ครั้งเดียวตอน import
  * ถ้าตัวไหนขาดหรือผิดรูป จะ crash ทันทีตอน start — ไม่ใช่ตอนรันคำขอแรก
  */
@@ -193,7 +208,7 @@ const schema = z.object({
    *
    * เว้นว่าง = ใช้ค่าเริ่มต้นของ provider ที่เลือก
    */
-  LLM_BASE_URL: httpUrl.optional(),
+  LLM_BASE_URL: optionalUrl,
   /** เว้นว่าง = provider ยังไม่พร้อมใช้งาน (API จะตอบ 503 พร้อมเหตุผล) */
   LLM_API_KEY: z.string().optional(),
   LLM_MODEL: z.string().default('MiniMax-M3'),
@@ -207,6 +222,21 @@ const schema = z.object({
   LLM_THINKING: z.enum(['auto', 'disabled']).default('disabled'),
   /** จำกัดความยาวคำตอบ token */
   LLM_MAX_TOKENS: z.coerce.number().int().positive().default(2000),
+
+  /**
+   * ผู้ที่จะเห็นรายงานปัญหาที่ผู้ใช้ส่งมา — คั่นด้วย `,` (ค่าของ Casdoor คือ `sub`)
+   *
+   * เว่นว่าง = ปิดฟีเจอร์รายงานปัญหาทั้งหมด
+   *   ปุ่ม "รายงานปัญหา" จะไม่โผล่ที่ไหน และหน้า `/reports` จะตอบ 403 ให้ทุกคน
+   *   เหตุผลที่เว้นว่างแล้วปิด ไม่ใช่แค่ไม่มีใครมาดู — ถ้ามีรายงานแล้วไม่มีคนอ่าน
+   *   ผู้ใช้จะกดแล้วเห็น "ส่งแล้ว" แต่เราไม่เห็น ซึ่งแย่กว่าไม่มีปุ่ม
+   *
+   * ⚠️ ผู้ส่งรายงานเป็นคนอื่นได้ทุกคน (ไม่ต้องอยู่ในรายชื่อนี้)
+   *   รายชื่อนี้คือ "ใครเป็นผู้ดูแล" ไม่ใช่ "ใครขอรายงานได้"
+   *   เพราะการจำกัดผู้ส่งจะทำให้ผู้ใช้ที่เจอปัญหาจริงพึ่งทางลัดไม่ได้
+   *   ซึ่งแปลว่าปัญหาจะถูกเก็บไว้เงียบ ๆ ซึ่งแย่กว่าปล่อยให้ส่ง
+   */
+  REPORT_TO_SUBS: z.string().default(''),
 })
 
 const parsed = schema.safeParse(process.env)
@@ -237,6 +267,17 @@ export const env = parsed.data
 export const corsOrigins = env.CORS_ORIGINS.split(',')
   .map((s) => s.trim())
   .filter(Boolean)
+
+/**
+ * ผู้ที่ได้รับรายงานปัญหา — ตัดตัวคั่นออก ตัวว่างทิ้ง และตัดซ้ำให้ด้วย
+ *
+ * ⚠️ ต้องคืนค่าเป็น array ใหม่ทุกครั้ง ไม่ใช่ cache ไว้เป็นตัวแปรคงที่
+ *   ถ้าเก็บเป็น array ที่สร้างครั้งเดียวแล้วส่งต่อ ใครก็แก้ค่าในนั้นได้
+ *   (เช่น push เพิ่ม) → รายชื่อผู้รับจะโตเงียบ ๆ ระหว่างที่โปรเซสยังรันอยู่
+ */
+export function reportReceivers(): string[] {
+  return [...new Set(env.REPORT_TO_SUBS.split(',').map((s) => s.trim()).filter(Boolean))]
+}
 
 /**
  * ตัวเลือกสำหรับ `nats.connect()`

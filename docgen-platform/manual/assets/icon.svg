@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="คู่มือ">
+  <rect width="32" height="32" rx="7" fill="#1d6f5c"/>
+  <!-- หน้ากระดาษ -->
+  <path d="M8 7.5h11.5a4.5 4.5 0 0 1 4.5 4.5v13H12.5A4.5 4.5 0 0 1 8 20.5v-13z" fill="#fbfaf8"/>
+  <!-- สันหนังสือ -->
+  <path d="M8 20.5A4.5 4.5 0 0 1 12.5 16H24v3.2a4.8 4.8 0 0 0 0 9.6H12.5A4.5 4.5 0 0 1 8 24.3v-3.8z" fill="#d9e8e2"/>
+  <!-- บรรทัดข้อความ -->
+  <g stroke="#1d6f5c" stroke-width="1.4" stroke-linecap="round" opacity=".55">
+    <path d="M11.2 11.4h8.4"/>
+    <path d="M11.2 14.2h8.4"/>
+    <path d="M11.2 17h5.4"/>
+  </g>
+</svg>

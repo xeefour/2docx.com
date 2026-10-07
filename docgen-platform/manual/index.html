@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>คู่มือสร้างแม่แบบ .docx ภาษาไทย — 2docx.com</title>
+<meta name="description" content="คู่มือภาษาไทยสอนสร้างแม่แบบ .docx สำหรับระบบ 2docx.com ใส่ tag วนซ้ำ เงื่อนไข ตาราง วันที่ พ.ศ. และรู้ว่าอะไรใช้ไม่ได้">
+<!-- ต้องประกาศไอคอนเอง ไม่งั้นเบราว์เซอร์จะขอ /favicon.ico ที่ราก
+     ซึ่งตกไป catch-all ของ Caddy → ได้ 404 ทุกครั้งที่เปิดหน้า -->
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/manual.css">
+</head>
+<body>
+
+<a class="skip" href="#main">ข้ามไปเนื้อหา</a>
+
+<header class="topbar">
+  <button class="topbar__menu" id="navToggle" aria-label="เปิด/ปิดเมนู" aria-expanded="false">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="topbar__brand">
+    <strong>คู่มือสร้างแม่แบบ .docx</strong>
+    <span class="topbar__ver">ฉบับ <b data-manual-ver>0.1.0</b> · ทดสอบกับเซิร์ฟเวอร์จริงทุกตัวอย่าง</span>
+  </div>
+  <div class="topbar__search">
+    <input type="search" id="search" placeholder="ค้นในคู่มือ… เช่น พ.ศ. / formatC / ตาราง" aria-label="ค้นในคู่มือ">
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidenav" id="sidenav" aria-label="สารบัญ">
+    <ol>
+      <li><a href="#start">1 · เริ่มต้น</a></li>
+      <li><a href="#prep">2 · เตรียมไฟล์ .docx</a></li>
+      <li><a href="#tag">3 · เขียน tag</a></li>
+      <li><a href="#data">4 · ชี้ทางไปข้อมูล</a></li>
+      <li><a href="#text">5 · จัดรูปแบบข้อความ</a></li>
+      <li><a href="#number">6 · ตัวเลขและเงิน</a></li>
+      <li><a href="#date">7 · วันที่และ พ.ศ.</a></li>
+      <li><a href="#cond">8 · เงื่อนไข</a></li>
+      <li><a href="#loop">9 · รายการซ้ำ</a></li>
+      <li><a href="#table">10 · ตาราง</a></li>
+      <li><a href="#page">11 · หัวและท้ายกระดาษ</a></li>
+      <li><a href="#trap">12 · กับดักที่พบบ่อย</a></li>
+      <li><a href="#limit">13 · สิ่งที่ใช้ไม่ได้</a></li>
+      <li><a href="#check">14 · เช็กลิสต์ก่อนใช้จริง</a></li>
+      <li><a href="#version">15 · รุ่นของคู่มือ</a></li>
+    </ol>
+    <p class="sidenav__foot">ทุกตัวอย่างในหน้านี้<br>ผ่านการรันจริงทั้งหมด</p>
+  </nav>
+
+  <main id="main" class="content">
+
+    <!-- ── 1 ── -->
+    <section id="start">
+      <h1>สร้างแม่แบบ .docx ให้ระบบเติมข้อมูลให้</h1>
+      <p class="lead">
+        คู่มือนี้อธิบายเฉพาะ<strong>การทำแม่แบบไฟล์ .docx</strong> ให้ระบบนำไปเติมข้อมูลจริง
+        แล้วส่งเอกสารกลับมาเป็น Word หรือ PDF ครบทุกขั้นตอนในหน้าเดียว ไม่ต้องไปเปิดคู่มือที่อื่น
+      </p>
+
+      <div class="callout callout--info">
+        <b>ทุกตัวอย่างในหน้านี้ผ่านการรันจริง</b>
+        <p>ตัวอย่างทุกชิ้นถูกส่งเข้าเครื่องเรนเดอร์ตัวจริงที่ระบบใช้อยู่
+        แล้วอ่านข้อความจากไฟล์ที่ได้กลับมาเทียบกับค่าที่คาดไว้
+        ถ้าตัวไหนผิด สคริปต์ตรวจจะรายงานตกทันที ไม่ใช่ปล่อยให้ผิดพลาดไปกับเอกสารราชการ</p>
+      </div>
+
+      <div class="callout callout--warn">
+        <b>หน้านี้สำคัญกว่าคู่มือของต้นฉบับ — ให้ยึดหน้านี้เป็นหลัก</b>
+        <p>ระบบนี้สร้างต่อยอดจาก <em>Carbone</em> เป็นต้นฉบับ แต่ไม่ได้ใช้ Carbone ตามที่มันเป็นทุกส่วน
+        มีหลายส่วนที่เราพัฒนาเพิ่มขึ้นเอง เช่น การจัดการการจัดย่อหน้าภาษาไทย
+        การตั้งภาษาไทยในไฟล์ผลลัพธ์ การแปลงเป็น PDF และส่วนประกอบในหน้าเว็บ</p>
+        <p><b>ถ้าสิ่งที่เขียนในหน้านี้ขัดกับคู่มือของ Carbone ให้ยึดหน้านี้</b>
+        เพราะหน้านี้ทดสอบกับเครื่องที่ระบบใช้จริงแล้ว ส่วนคู่มือของ Carbone
+        อธิบายระบบเต็มรูปแบบที่เราไม่ได้ใช้ทั้งหมด</p>
+        <p>ฉบับปัจจุบัน <b data-manual-ver>0.1.0</b> — เลขนี้นับของคู่มือเล่มนี้เอง
+        ไม่เกี่ยวกับเลขเวอร์ชันของ Carbone ดู<a href="#version">รายละเอียดการเปลี่ยนแปลง</a></p>
+      </div>
+
+      <h2>ภาพรวมงานที่ต้องทำ</h2>
+      <ol class="steps">
+        <li>
+          <b>ออกแบบเอกสารใน Word ให้เสร็จก่อน</b>
+          <p>จัดหน้า ตาราง สี ฟอนต์ ให้สมบูรณ์แบบเอกสารเปล่าก่อน แล้วค่อยแทรก tag ทับลงไป</p>
+        </li>
+        <li>
+          <b>แทรก tag บอกว่าตรงนี้ให้เติมข้อมูลอะไร</b>
+          <p>เช่น <code>{d.ชื่อ}</code> หรือ <code>{d.ยอดเงิน:formatN(2)}</code></p>
+        </li>
+        <li>
+          <b>อัปโหลดแม่แบบขึ้นระบบ</b>
+          <p>ระบบจะเก็บแม่แบบไว้ให้เรียกใช้ซ้ำได้ทุกครั้ง</p>
+        </li>
+        <li>
+          <b>กรอกข้อมูลแล้วสั่งสร้างเอกสาร</b>
+          <p>ระบบเติม tag ทั้งหมด แล้วให้ดาวน์โหลดเป็น .docx หรือ .pdf</p>
+        </li>
+      </ol>
+
+      <h2>สิ่งที่ทำได้และทำไม่ได้</h2>
+      <table class="tbl">
+        <thead><tr><th>หัวข้อ</th><th>สถานะ</th><th>หมายเหตุ</th></tr></thead>
+        <tbody>
+          <tr><td>ตัวอักษรไทยในเอกสาร</td><td><span class="ok">ได้</span></td><td>ทำได้ตามปกติ</td></tr>
+          <tr><td>เติมข้อมูลลงในเนื้อหา หัวกระดาษ ท้ายกระดาษ</td><td><span class="ok">ได้</span></td><td>ใช้ tag เหมือนกันทุกที่</td></tr>
+          <tr><td>ตารางที่วนตามข้อมูล</td><td><span class="ok">ได้</span></td><td>มีทั้งแถวและคอลัมน์</td></tr>
+          <tr><td>แสดง/ซ่อนข้อความตามเงื่อนไข</td><td><span class="ok">ได้</span></td><td>ซ่อนเป็นช่วง หรือซ่อนเฉพาะประโยคก็ได้</td></tr>
+          <tr><td>ชื่อเดือนเป็นภาษาไทย</td><td><span class="no">ไม่ได้</span></td><td>ได้ชื่อเดือนภาษาอังกฤษ ต้องเขียนเอง</td></tr>
+          <tr><td>สกุลเงินบาทอัตโนมัติ</td><td><span class="no">ไม่ได้</span></td><td>ได้สัญลักษณ์ยูโร ต้องเขียนคำว่า “บาท” เอง</td></tr>
+          <tr><td>ปี พ.ศ.</td><td><span class="warn">ต้องทำเพิ่ม</span></td><td><a href="#date">บวก 543 เอง</a></td></tr>
+          <tr><td>ลบแถวหรือย่อหน้าตามเงื่อนไข</td><td><span class="no">ไม่ได้</span></td><td>ดู<a href="#limit">ข้อจำกัดของระบบ</a></td></tr>
+          <tr><td>ใส่รูปผ่าน tag</td><td><span class="no">ไม่ได้</span></td><td>ต้องวางรูปลงในไฟล์แม่แบบด้วย Word</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ── 2 ── -->
+    <section id="prep">
+      <h2>เตรียมไฟล์ .docx ก่อนใส่ tag</h2>
+
+      <h3>ปิดเครื่องหมายคำพูดอัจฉรัยก่อนเป็นอันดับแรก</h3>
+      <p>ขั้นนี้สำคัญที่สุด เพราะ Word จะเปลี่ยน <code>'</code> เป็น <code>’</code> ให้เอง
+      พอ tag มีเครื่องหมายคำพูดโค้ง ระบบจะอ่านไม่ออก แล้ว tag ทั้งบรรทัดจะหายไปเงียบ ๆ</p>
+      <ol class="steps">
+        <li>
+          <b>ไปที่ File › Options › Proofing › AutoCorrect Options</b>
+          <p>ใน Word รุ่นเก่าใช้เมนู Tools › AutoCorrect Options แทน</p>
+        </li>
+        <li>
+          <b>เปิดแท็บ AutoFormat As You Type</b>
+          <p>เอาติ๊ก <em>“Straight quotes with smart quotes”</em> ออก</p>
+        </li>
+        <li>
+          <b>ตรวจด้วยตาเองอีกครั้ง</b>
+          <p>พิมพ์ tag ที่ต้องใช้ แล้วดูว่าเครื่องหมายคำพูดเป็นตัวตรงหรือไม่
+          ถ้าเป็นตัวโค้ง แปลว่ายังไม่ปิด</p>
+        </li>
+      </ol>
+
+      <div class="callout callout--danger">
+        <b>เครื่องหมายคำพูดคู่ <code>"</code> ทำให้เอกสารเพี้ยน</b>
+        <p>ถ้าใช้ <code>"</code> ระบบจะ escape ซ้ำสองชั้น
+        เอกสารที่ได้จะมีตัวอักษร <code>&amp;quot;</code> โผล่มาให้เห็นเป็นข้อความธรรมดา
+        ต้องใช้ <code>'</code> เดี่ยวเท่านั้น</p>
+      </div>
+
+      <h3>ตั้งค่าที่ควรทำ</h3>
+      <table class="tbl">
+        <thead><tr><th>เรื่อง</th><th>ค่าที่แนะนำ</th><th>เหตุผล</th></tr></thead>
+        <tbody>
+          <tr><td>ฟอนต์</td><td>TH Sarabun New ขนาด 16 ต้น</td><td>มาตรฐานหนังสือราชการไทย และต้องมีติดตั้งในเครื่องเรนเดอร์</td></tr>
+          <tr><td>ระยะบรรทัด</td><td>1.5 เท่า</td><td>ระเบียบงานสารนุกรมราชการไทยใช้ 1.5 เท่า</td></tr>
+          <tr><td>กระดาษ</td><td>A4</td><td>มาตรฐานเอกสารราชการไทย</td></tr>
+          <tr><td>ขนาดหนังสือ</td><td>16 ปอนท์</td><td>ถ้าอ่านแล้วเล็กเกินไปให้ลดเหลือ 14 ปอนท์</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--warn">
+        <b>ชื่อไฟล์แม่แบบใช้ภาษาอังกฤษ</b>
+        <p>ตั้งชื่อไฟล์และชื่อภายในแม่แบบเป็นภาษาอังกฤษหรือตัวเลข
+        ถ้าใช้ชื่อไฟล์ภาษาไทย อาจมีปัญหาเรื่องการเข้ารหัสอักขระตอนประมวลผลบน Linux</p>
+      </div>
+
+      <h3>tag ต้องอยู่ในชิ้นเดียวกัน</h3>
+      <p>อย่าเพิ่งแบ่งสี หรือเพิ่มการขีดเส้นใต้กลาง tag
+      ให้พิมพ์ tag ให้เสร็จก่อนแล้วค่อยจัดรูปแบบทั้งบล็อก
+      ถ้าต้องการสีเฉพาะตัวอักษร ให้ใช้ <em>Font Color</em> ทั้งบล็อกแทนการไล่เฉพาะบางตัวอักษร</p>
+    </section>
+
+    <!-- ── 3 ── -->
+    <section id="tag">
+      <h2>เขียน tag</h2>
+      <p>ระบบนี้ใช้ tag แบบเดียวเท่านั้น คือ <code>{d.ชื่อข้อมูล}</code>
+      เมื่อเติมข้อมูลแล้ว tag จะหายไปและกลายเป็นค่าจริงในเอกสาร</p>
+
+      <table class="tbl tbl--code">
+        <thead><tr><th>เขียนแบบนี้</th><th>ได้</th><th>หมายเหตุ</th></tr></thead>
+        <tbody>
+          <tr><td><code>{d.ชื่อ}</code></td><td><span class="ok">ได้</span></td><td>รูปแบบเดียวที่ใช้ได้</td></tr>
+          <tr><td><code>{ชื่อ}</code></td><td><span class="no">ไม่ได้</span></td><td>ต้องมี <code>d.</code> นำหน้าเสมอ</td></tr>
+          <tr><td><code>{c.ชื่อ}</code></td><td><span class="no">ไม่ได้</span></td><td>ระบบนี้ไม่มีที่ให้ดึงข้อมูลผ่าน <code>c.</code></td></tr>
+          <tr><td><code>{t(คำ)}</code></td><td><span class="no">ไม่ได้</span></td><td>ระบบนี้ไม่ได้ตั้งค่าการแปลภาษาไว้</td></tr>
+          <tr><td><code>{o.lang=th}</code></td><td><span class="no">ไม่ได้</span></td><td>ตัวเลือกในเทมเพลตไม่มีผลกับระบบนี้</td></tr>
+        </tbody>
+      </table>
+
+      <h3>กฎของ tag</h3>
+      <ul class="links">
+        <li><b>ชื่อข้อมูลห้ามมีช่องว่าง</b> — <code>{d.ชื่อ เต็ม}</code> จะทำให้ทั้งย่อหน้าหายไป
+        ถ้าจำเป็นต้องมีช่องว่าง ให้ครอบด้วยคำพูดเดี่ยว: <code>{d.'ชื่อ เต็ม'}</code></li>
+        <li><b>ใช้เครื่องหมายคำพูดเดี่ยวเท่านั้น</b> — <code>'ข้อความ'</code> ไม่ใช่ <code>"ข้อความ"</code></li>
+        <li><b>ต่อ formatter ด้วยเครื่องหมาย <code>:</code></b> — เช่น <code>{d.ยอด:formatN(2):round(0)}</code></li>
+        <li><b>ค่าคงที่ในวงเล็บไม่ต้องครอบคำพูด</b> — <code>substr(0,5)</code> ไม่ใช่ <code>substr('0','5')</code>
+        ยกเว้นข้อความที่มีช่องว่างหรือเครื่องหมาย</li>
+      </ul>
+
+      <h3>ตัวอย่างจริง</h3>
+      <table class="tbl tbl--code">
+        <thead><tr><th>tag ในแม่แบบ</th><th>ผลที่ได้</th></tr></thead>
+        <tbody>
+          <tr><td><code>{d.ชื่อ}</code></td><td class="out out--good">สมชาย</td></tr>
+          <tr><td>เรียน&nbsp; <strong><code>{d.ตำแหน่ง}</code></strong></td><td class="out out--good">เรียน นายชาญชัย</td></tr>
+          <tr><td><code>{d.หมายเหตุ:print('- ไม่มี -')}</code></td><td class="out out--good">- ไม่มี -</td></tr>
+        </tbody>
+      </table>
+      <p class="foot">ตัวอย่างเหล่านี้ตรวจสอบแล้วว่าให้ผลตามที่เขียนทุกประการ</p>
+    </section>
+
+    <!-- ── 4 ── -->
+    <section id="data">
+      <h2>ชี้ทางไปยังข้อมูล</h2>
+
+      <h3>ข้อมูลที่อยู่ระดับบนสุด</h3>
+      <p>ถ้าข้อมูลมีโครงสร้างแบบนี้</p>
+      <table class="tbl tbl--code">
+        <thead><tr><th>JSON</th><th>tag</th><th>ผล</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>{ "ชื่อ": "สมชาย" }</code></td>
+            <td><code>{d.ชื่อ}</code></td>
+            <td class="out out--good">สมชาย</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>ข้อมูลที่อยู่ข้างในอาร์เรย์</h3>
+      <p>ใช้ <code>[i]</code> เพื่อบอกว่ากำลังวนอยู่ในรายการตัวที่เท่าไร
+      ดูรายละเอียดที่<a href="#loop">หัวข้อรายการซ้ำ</a></p>
+      <table class="tbl tbl--code">
+        <thead><tr><th>JSON</th><th>tag</th><th>ผล</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>{ "รายการ": [ { "ชื่อ": "ก" }, { "ชื่อ": "ข" } ] }</code></td>
+            <td><code>{d.รายการ[i].ชื่อ}</code></td>
+            <td class="out out--good">ก และ ข</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>ข้อมูลที่อยู่ซ้อนกันหลายชั้น</h3>
+      <p>วงซ้อนกันกี่ชั้นก็เขียนจุดตามจำนวนชั้น ชั้นที่หนึ่งใช้ <code>{d....}</code> ไม่ต้องมีจุดนำหน้า</p>
+      <table class="tbl tbl--code">
+        <thead><tr><th>ตำแหน่ง</th><th>เขียนแบบนี้</th></tr></thead>
+        <tbody>
+          <tr><td>ชั้นที่วงอยู่</td><td><code>{d.ชื่อ}</code></td></tr>
+          <tr><td>ชั้นที่อยู่ข้างในวง</td><td><code>{.ชื่อ}</code></td></tr>
+          <tr><td>ชั้นที่สองข้างใน</td><td><code>{..ชื่อ}</code></td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--warn">
+        <b>ที่ระดับบนสุดของเอกสาร ห้ามขึ้นต้นด้วยจุด</b>
+        <p><code>{.ชื่อ}</code> นอกวงจะไม่ทำงาน ระบบจะปล่อยให้ข้อความ <code>{.ชื่อ}</code> โผล่อยู่ในเอกสาร
+        ให้ใช้ <code>{d.ชื่อ}</code> เสมอเมื่ออยู่ระดับบนสุด</p>
+      </div>
+
+      <h3>อ้างค่าจากชั้นที่อยู่ข้างบน</h3>
+      <p>ถ้าต้องการค่าจากชั้นบนขณะที่อยู่ในวง ให้ขึ้นต้นด้วยจุดตามจำนวนชั้นที่ต้องถอย</p>
+      <table class="tbl tbl--code">
+        <thead><tr><th>tag</th><th>หมายถึง</th></tr></thead>
+        <tbody>
+          <tr><td><code>{d.ยอดเงิน:add(.อัตรา):formatN(2)}</code></td><td>เอาค่า <code>อัตรา</code> จากชั้นบนมาบวกกับ <code>ยอดเงิน</code></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ── 5 ── -->
+    <section id="text">
+      <h2>จัดรูปแบบข้อความ</h2>
+      <p>ใส่หลังชื่อข้อมูลด้วยเครื่องหมาย <code>:</code> แล้วตามด้วยชื่อ formatter</p>
+
+      <table class="tbl tbl--code">
+        <thead><tr><th>formatter</th><th>ทำอะไร</th><th>ตัวอย่างและผลจริง</th></tr></thead>
+        <tbody>
+          <tr><td><code>substr(เริ่ม,จบ)</code></td><td>ตัดข้อความ</td><td><code>{d.ข้อความ:substr(0,5)}</code> → Hello</td></tr>
+          <tr><td><code>substr(เริ่ม)</code></td><td>ตัดจากตำแหน่งนั้นจนจบ</td><td><code>{d.ข้อความ:substr(6)}</code> → Carbone</td></tr>
+          <tr><td><code>prepend('ข้อความ')</code></td><td>เติมข้างหน้า</td><td><code>{d.ชื่อย่อ:prepend('บริษัท ')}</code> → บริษัท Carbone</td></tr>
+          <tr><td><code>append('ข้อความ')</code></td><td>เติมข้างท้าย</td><td><code>{d.ชื่อย่อ:append(' จำกัด')}</code> → Carbone จำกัด</td></tr>
+          <tr><td><code>replace('เดิม','ใหม่')</code></td><td>แทนคำในข้อความ</td><td><code>{d.ข้อความ:replace('Carbone','คาร์โบน')}</code> → Hello คาร์โบน</td></tr>
+          <tr><td><code>ellipsis(จำนวน)</code></td><td>ตัดให้เหลือความยาวที่กำหนดแล้วเติมจุด</td><td><code>{d.ข้อความ:ellipsis(8)}</code> → Hello Ca...</td></tr>
+          <tr><td><code>len</code></td><td>นับจำนวนอักขระ</td><td><code>{d.ข้อความ:len}</code> → 13</td></tr>
+          <tr><td><code>print('ข้อความ')</code></td><td>ขึ้นข้อความที่กำหนดเสมอ ไม่สนใจค่าที่มี</td><td><code>{d.หมายเหตุ:print('- ไม่มี -')}</code> → - ไม่มี -</td></tr>
+          <tr><td><code>unaccent</code></td><td>ตัดเครื่องหมายเอกับเฉพาะภาษาอังกฤษ</td><td><code>{d.ข้อความ:unaccent}</code> → Hello Carbone</td></tr>
+          <tr><td><code>arrayJoin('ตัวคั่น')</code></td><td>รวมอาร์เรย์ของข้อความธรรมดาให้เป็นบรรทัดเดียว</td><td><code>{d.รหัส:arrayJoin(', ')}</code> → A01, B02, C03</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--warn">
+        <b>ภาษาไทยไม่มีตัวพิมพ์ใหญ่เล็ก</b>
+        <p><code>upperCase</code> <code>lowerCase</code> <code>ucFirst</code> และ <code>ucWords</code>
+        จะไม่เปลี่ยนอะไรเลยเมื่อใช้กับข้อความไทย
+        ตัว formatter กลุ่มนี้ใช้ได้ผลเฉพาะข้อความภาษาอังกฤษหรือตัวเลข</p>
+      </div>
+
+      <div class="callout callout--warn">
+        <b><code>arrayJoin</code> ใช้ได้เฉพาะอาร์เรย์ของข้อความธรรมดา</b>
+        <p>ถ้าอาร์เรย์เป็นรายการของวัตถุ จะได้ผลเป็น <code>[object Object]</code>
+        และถ้าใส่ไว้ในวงซ้ำ จะได้เพียงค่าของรายการนั้น ไม่ใช่รวมทั้งอาร์เรย์</p>
+      </div>
+    </section>
+
+    <!-- ── 6 ── -->
+    <section id="number">
+      <h2>ตัวเลขและเงิน</h2>
+
+      <table class="tbl tbl--code">
+        <thead><tr><th>formatter</th><th>ทำอะไร</th><th>ผลจริงจาก 125000.5</th></tr></thead>
+        <tbody>
+          <tr><td><code>formatN(ทศนิยม)</code></td><td>จัดรูปแบบตัวเลข มีจุลภาคและเครื่องหมายคั่นหลัก</td><td class="out out--good">125,000.50</td></tr>
+          <tr><td><code>formatC(ทศนิยม)</code></td><td>จัดรูปแบบเงิน ตามสกุลเงินที่ระบบตั้งไว้</td><td class="out">125,000.50 €</td></tr>
+          <tr><td><code>round(ทศนิยม)</code></td><td>ปัดเศษ</td><td>ปัดจาก -1234.5678 เป็น -1235</td></tr>
+          <tr><td><code>abs</code></td><td>เอาค่าสัมบูรณ์ ตัดเครื่องหมายลบออก</td><td>1234.5678</td></tr>
+          <tr><td><code>add(ค่า)</code></td><td>บวก</td><td>บวกค่าคงที่ หรือบวกค่าจากชั้นบนด้วย <code>add(.ชื่อ)</code></td></tr>
+          <tr><td><code>sub(ค่า)</code></td><td>ลบ</td><td>125000.5 − 250 = 124750.5</td></tr>
+          <tr><td><code>mul(ค่า)</code></td><td>คูณ</td><td>250,001</td></tr>
+          <tr><td><code>div(ค่า)</code></td><td>หาร</td><td>31,250.13</td></tr>
+        </tbody>
+      </table>
+
+      <h3>เรียง formatter ต่อกันได้</h3>
+      <p>ลำดับมีผล ต้องคำนวณก่อนแล้วค่อยจัดรูปแบบ</p>
+      <table class="tbl tbl--code">
+        <thead><tr><th>เขียนแบบนี้</th><th>ผล</th></tr></thead>
+        <tbody>
+          <tr><td><code>{d.ยอดเงิน:mul(2):formatN(0)}</code></td><td class="out out--good">250,001</td></tr>
+          <tr><td><code>{d.ยอดเงิน:formatN(0):mul(2)}</code></td><td class="out out--bad">ผิด — จัดรูปแบบก่อนแล้วค่อยคูณ</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--danger">
+        <b>เงินที่ได้ออกมาเป็นสกุลยูโร ไม่ใช่บาท</b>
+        <p>ระบบนี้ไม่ได้ตั้งสกุลเงินไทยไว้ ผลที่ได้จึงเป็น <code>€</code>
+        ถ้าต้องการเป็นบาท ให้ใช้ <code>formatN</code> แล้วเขียนคำว่า “บาท” ต่อท้ายเองในแม่แบบ</p>
+      </div>
+
+      <div class="callout callout--warn">
+        <b>เลขที่หารไม่ลงตัวจะมีเศษทศนิยมยาวมาก</b>
+        <p>125000.5 หารด้วย 3 ได้ 41,666.8333 ซึ่งเป็นค่าจริงของเลขทศนิยมใน JavaScript
+        ถ้าไม่ต้องการเศษ ให้หารด้วยจำนวนที่หารลงตัว หรือปัดทีหลังด้วย <code>round()</code></p>
+      </div>
+    </section>
+
+    <!-- ── 7 ── -->
+    <section id="date">
+      <h2>วันที่และปี พ.ศ.</h2>
+
+      <h3>รูปแบบวันที่ที่ใช้บ่อย</h3>
+      <p>ใส่ <code>{d.ชื่อวันที่:formatD('รูปแบบ')}</code>
+      ตัวอักษรในเครื่องหมายคำพูดคือรูปแบบ ไม่ใช่ข้อมูลจริง</p>
+
+      <table class="tbl tbl--code">
+        <thead><tr><th>รูปแบบ</th><th>หมายถึง</th><th>ผลจริงจาก 7 ส.ค. 2026</th></tr></thead>
+        <tbody>
+          <tr><td><code>DD/MM/YYYY</code></td><td>วัน/เดือน/ปี</td><td class="out out--good">07/08/2026</td></tr>
+          <tr><td><code>D MMM YYYY</code></td><td>เดือนย่อภาษาอังกฤษ</td><td class="out">7 Aug 2026</td></tr>
+          <tr><td><code>D MMMM YYYY</code></td><td>เดือนเต็มภาษาอังกฤษ</td><td class="out">7 August 2026</td></tr>
+          <tr><td><code>dddd</code></td><td>ชื่อวันภาษาอังกฤษ</td><td class="out">Friday</td></tr>
+          <tr><td><code>YYYY</code></td><td>ปี ค.ศ.</td><td class="out">2026</td></tr>
+          <tr><td><code>HH:mm</code></td><td>เวลา 24 ชั่วโมง</td><td>ใช้ได้ แต่อ่าน<a href="#trap">กับดักเรื่องเขตเวลา</a>ก่อน</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--danger">
+        <b>ชื่อเดือนเป็นภาษาอังกฤษเท่านั้น</b>
+        <p>ระบบนี้ไม่ได้ตั้งภาษาไทยไว้ ชื่อเดือนจึงออกมาเป็น August, Aug
+        ถ้าต้องการเป็น “สิงหาคม” ต้องเตรียมชื่อเดือนภาษาไทยมาเก็บในข้อมูลแล้ว
+        อ้างอิงด้วย <code>{d.เดือนไทย}</code> ซึ่งเป็นวิธีที่ใช้ได้จริงกับระบบนี้</p>
+      </div>
+
+      <h3>แปลงเป็นปี พ.ศ.</h3>
+      <p>ปีที่ได้จาก <code>formatD</code> คือ ค.ศ. เสมอ
+      ให้จัดรูปแบบให้เสร็จก่อน แล้วค่อยบวก 543 ต่อท้าย</p>
+
+      <table class="tbl tbl--code">
+        <thead><tr><th>เขียนแบบนี้</th><th>ผล</th></tr></thead>
+        <tbody>
+          <tr><td><code>{d.วันที่สั่ง:formatD('YYYY'):add(543)}</code></td><td class="out out--good">2569 ถูกต้อง</td></tr>
+          <tr><td><code>{d.วันที่สั่ง:add(543):formatD('YYYY')}</code></td><td class="out out--bad">2568 ผิด — ลำดับกลับกัน</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--ok">
+        <b>ใส่ พ.ศ. ในข้อความเต็มได้ด้วย</b>
+        <p>เช่น <code>ปี {d.วันที่สั่ง:formatD('YYYY'):add(543)}</code> จะได้ “ปี 2569”
+        ทดสอบกับวันที่ต่าง ๆ แล้วให้ผลถูกต้องทุกเดือน</p>
+      </div>
+
+      <h3>สิ่งที่ทำกับวันที่ไม่ได้</h3>
+      <p>ระบบนี้คำนวณวันผิดเมื่อนำผลมาต่อกับ <code>formatD</code> อีกที
+      จึง<b>ไม่ควรใช้</b>ตัวต่อไปนี้:</p>
+      <table class="tbl tbl--code">
+        <thead><tr><th>เขียนแบบนี้</th><th>ควรได้</th><th>ได้จริง</th></tr></thead>
+        <tbody>
+          <tr><td><code>addD(1,'day')</code> ต่อด้วย formatD</td><td>08/08/2026</td><td class="out out--bad">07/08/2026</td></tr>
+          <tr><td><code>startOfD('month')</code> ต่อด้วย formatD</td><td>01/08/2026</td><td class="out out--bad">31/07/2026</td></tr>
+          <tr><td><code>subD(1,'month')</code> ต่อด้วย formatD</td><td>07/07/2026</td><td class="out out--bad">06/07/2026</td></tr>
+        </tbody>
+      </table>
+      <p>ถ้าต้องการวันที่ย้อนหลังหรือเดินหน้า ให้คำนวณไว้ในข้อมูลตั้งแต่ต้น
+      แล้วส่งมาเป็นวันที่ที่คำนวณเสร็จแล้วเลย</p>
+    </section>
+
+    <!-- ── 8 ── -->
+    <section id="cond">
+      <h2>เงื่อนไข</h2>
+
+      <h3>ตรวจค่าแล้วเลือกข้อความ</h3>
+      <p>รูปแบบคือ <code>{d.ชื่อ:ตัวตรวจ(ค่า):show('ข้อความ'):elseShow('ข้อความอื่น')}</code></p>
+
+      <table class="tbl tbl--code">
+        <thead><tr><th>ตัวตรวจ</th><th>ความหมาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>ifEQ(ค่า)</code></td><td>เท่ากับค่านั้น</td></tr>
+          <tr><td><code>ifNE(ค่า)</code></td><td>ไม่เท่ากับค่านั้น</td></tr>
+          <tr><td><code>ifGT(ค่า)</code></td><td>มากกว่าค่านั้น</td></tr>
+          <tr><td><code>ifGTE(ค่า)</code></td><td>มากกว่าหรือเท่ากับค่านั้น</td></tr>
+          <tr><td><code>ifLT(ค่า)</code></td><td>น้อยกว่าค่านั้น</td></tr>
+          <tr><td><code>ifLTE(ค่า)</code></td><td>น้อยกว่าหรือเท่ากับค่านั้น</td></tr>
+          <tr><td><code>ifEM</code></td><td>ค่าว่าง</td></tr>
+          <tr><td><code>ifNEM</code></td><td>ค่าไม่ว่าง</td></tr>
+        </tbody>
+      </table>
+
+      <h3>ตัวอย่างเงื่อนไข</h3>
+      <table class="tbl tbl--code">
+        <thead><tr><th>tag</th><th>ผลจริง</th></tr></thead>
+        <tbody>
+          <tr><td><code>{d.เร่งด่วน:ifEQ(true):show('เร่งด่วน')}</code></td><td class="out out--good">เร่งด่วน</td></tr>
+          <tr><td><code>{d.ปกติ:ifEQ(true):show('ไม่ควรเห็น'):elseShow('ปกติ')}</code></td><td class="out out--good">ปกติ</td></tr>
+          <tr><td><code>{d.หมายเหตุ:ifEM:show('ยังไม่มีหมายเหตุ')}</code></td><td class="out out--good">ยังไม่มีหมายเหตุ</td></tr>
+          <tr><td><code>{d.ยอดเงิน:ifGT(100000):show('เกินแสน')}</code></td><td class="out out--good">เกินแสน</td></tr>
+          <tr><td><code>{d.อัตรา:ifLT(0.25):show('น้อยกว่า'):elseShow('ถึงขั้นต่ำ')}</code></td><td class="out out--good">ถึงขั้นต่ำ</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--danger">
+        <b>เงื่อนไขเป็นเท็จแต่ไม่ใส่ elseShow จะได้ค่าเดิมออกไป</b>
+        <p><code>{d.ยอดเงิน:ifGT(9999999):show('ข้อความใหม่')}</code>
+        เมื่อเงื่อนไขไม่จริง ระบบจะพิมพ์ค่าเดิมคือ <code>125000.5</code> ลงในเอกสาร
+        ถ้าไม่ต้องการให้อะไรปรากฏ ให้เติม <code>:elseShow('')</code> เสมอ</p>
+      </div>
+
+      <div class="callout callout--warn">
+        <b>ค่า <code>false</code> ไม่ถือว่าเป็นค่าว่าง</b>
+        <p>เมื่อค่าเป็น <code>false</code> ตัวตรวจ <code>ifEM</code> จะไม่ทำงาน
+        เพราะฉะนั้นข้อความที่ตั้งใจจะแสดงเมื่อไม่มีข้อมูล อาจไม่ปรากฏ
+        ให้ตรวจด้วย <code>ifEQ(false)</code> แทน</p>
+      </div>
+
+      <h3>ตั้งข้อความสำรองได้ในเงื่อนไขเดียว</h3>
+      <table class="tbl tbl--code">
+        <thead><tr><th>tag</th><th>ผลจริง</th></tr></thead>
+        <tbody>
+          <tr><td><code>{d.หมายเหตุ:ifEmpty('(ไม่มีหมายเหตุ)')}</code></td><td class="out out--good">(ไม่มีหมายเหตุ)</td></tr>
+          <tr><td><code>{d.เรื่อง:ifContain('รายงาน','เป็นรายงาน')}</code></td><td class="out out--good">เป็นรายงาน</td></tr>
+        </tbody>
+      </table>
+
+      <h3>ต่อเงื่อนไขสองข้อ</h3>
+      <p>ใช้ <code>and</code> เมื่อต้องผ่านทั้งสองข้อ
+      และต้องต่อด้วย <code>show</code> หรือ <code>elseShow</code> <b>ทันที</b> ไม่มีตัวอื่นคั่น</p>
+      <table class="tbl tbl--code">
+        <thead><tr><th>เขียนแบบนี้</th><th>ผล</th></tr></thead>
+        <tbody>
+          <tr><td><code>{d.อัตรา:ifGT(0.1):and('.ยอดเงิน'...):show('ผ่านทั้งสองข้อ')}</code></td><td class="out out--good">ผ่านทั้งสองข้อ</td></tr>
+          <tr><td><code>{d.อัตรา:ifGT(0.1):and('.ยอดเงิน'...):ifGT(1000):show('ผ่าน')}</code></td><td class="out out--bad">พัง — มีตัวตรวจคั่น</td></tr>
+          <tr><td><code>{d.อัตรา:ifGT(99):or('.ยอดเงิน'...):show('ผ่าน')}</code></td><td class="out out--bad">พัง — อย่าใช้ <code>or</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>ซ่อนเป็นช่วงหลายบรรทัด</h3>
+      <p>ใช้เมื่อต้องการซ่อนหรือแสดงหลายย่อหน้าติดกัน โดยไม่ต้องใส่เงื่อนไขทีละบรรทัด</p>
+      <ul class="links">
+        <li><code>showBegin</code> / <code>showEnd</code> — แสดงเฉพาะเมื่อเงื่อนไขเป็นจริง</li>
+        <li><code>hideBegin</code> / <code>hideEnd</code> — ซ่อนเมื่อเงื่อนไขเป็นจริง</li>
+      </ul>
+
+      <table class="tbl tbl--code">
+        <thead><tr><th>ในแม่แบบ</th><th>ผลเมื่อมีค่า</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>
+              ข้อความก่อน<br>
+              <code>{d.หมายเหตุยาว:ifNEM:showBegin}</code><br>
+              หมายเหตุ: <code>{d.หมายเหตุยาว}</code><br>
+              <code>{d.หมายเหตุยาว:showEnd}</code><br>
+              ข้อความหลัง
+            </td>
+            <td class="out out--good">ข้อความก่อน<br>หมายเหตุ: ฉบับร่างรอพิจารณา<br>ข้อความหลัง</td>
+          </tr>
+          <tr>
+            <td>
+              ข้อความก่อน<br>
+              <code>{d.หมายเหตุยาว:ifNEM:hideBegin}</code><br>
+              ไม่ควรเห็นบรรทัดนี้<br>
+              <code>{d.หมายเหตุ:hideEnd}</code><br>
+              ข้อความหลัง
+            </td>
+            <td class="out out--good">ข้อความก่อน<br>ข้อความหลัง</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--ok">
+        <b>ซ่อนเนื้อหาในเซลล์ตารางได้ด้วยวิธีเดียวกัน</h3>
+        <p>วาง <code>showBegin</code> ไว้ต้นเซลล์ เนื้อหากลาง และ <code>showEnd</code> ไว้ท้ายเซลล์
+        เนื้อหาที่อยู่ระหว่างสองจุดจะหายไปทั้งหมดเมื่อเงื่อนไขเป็นเท็จ</p>
+      </div>
+    </section>
+
+    <!-- ── 9 ── -->
+    <section id="loop">
+      <h2>รายการซ้ำ</h2>
+      <p>เมื่อข้อมูลเป็นอาร์เรย์ ให้เขียน <code>[i]</code> เพื่อเริ่มวง
+      และเขียน <code>[i+1]</code> ไว้ที่ท้ายวง <b>เสมอ</b> ไม่งั้นระบบจะแจ้งข้อผิดพลาด</p>
+
+      <h3>วงในย่อหน้า</h3>
+      <table class="tbl tbl--code">
+        <thead><tr><th>ในแม่แบบ</th><th>ผลจริงจากข้อมูล 3 รายการ</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>
+              รายการ: <code>{d.รายการ[i].ชื่อ}</code><br>
+              <code>{d.รายการ[i+1]}</code>
+            </td>
+            <td class="out out--good">
+              รายการ: ค่าเช่าค่าต๋าง<br>
+              รายการ: ค่าสาธารณูปโภค<br>
+              รายการ: ค่าใช้จ่ายเดินทาง
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--info">
+        <b>ตัวปิดวงไม่ได้ทำอะไรนอกจากบอกจุดจบ</b>
+        <p><code>{d.รายการ[i+1]}</code> ใช้บอกว่าวงจบตรงไหนเท่านั้น
+        ไม่ได้นับจำนวนรายการให้ ถ้าต้องการบอกว่ามีกี่รายการ
+        ให้เตรียมจำนวนไว้ในข้อมูลแล้วอ้างอิงด้วย <code>{d.จำนวนรายการ}</code></p>
+      </div>
+
+      <h3>อาร์เรย์ว่าง</h3>
+      <p>ถ้าอาร์เรย์ไม่มีข้อมูล แถวตัวอย่างจะหายไปเองโดยไม่ต้องเขียนเงื่อนไขใด ๆ
+      แถวหัวตารางที่อยู่นอกวงจะยังอยู่เสมอ</p>
+      <table class="tbl tbl--code">
+        <thead><tr><th>สถานะ</th><th>ผลลัพธ์</th></tr></thead>
+        <tbody>
+          <tr><td>มี 3 รายการ</td><td class="out out--good">แถวข้อมูล 3 แถว</td></tr>
+          <tr><td>อาร์เรย์ว่าง</td><td class="out out--good">เหลือเฉพาะแถวหัวตาราง</td></tr>
+        </tbody>
+      </table>
+
+      <h3>วงซ้อนกันสองชั้น</h3>
+      <p>วงซ้อนกันต้องมีตัวปิดของทุกชั้น
+      เรียงลำดับเป็น เปิดชั้นนอก → เปิดชั้นใน → ปิดชั้นใน → ปิดชั้นนอก</p>
+      <table class="tbl tbl--code">
+        <thead><tr><th>แถว</th><th>คอลัมน์ซ้าย</th><th>คอลัมน์ขวา</th></tr></thead>
+        <tbody>
+          <tr><td>แถวข้อมูล</td><td><code>{d.กลุ่ม[i].ชื่อกลุ่ม}</code></td><td><code>{d.กลุ่ม[i].รายการ[i].ชื่อ}</code></td></tr>
+          <tr><td>ปิดวงชั้นใน</td><td></td><td><code>{d.กลุ่ม[i].รายการ[i+1]}</code></td></tr>
+          <tr><td>ปิดวงชั้นนอก</td><td><code>{d.กลุ่ม[i+1]}</code></td><td></td></tr>
+        </tbody>
+      </table>
+
+      <h3>กรองข้อมูลในวง</h3>
+      <p>ใส่เงื่อนไขกรองไว้ในวงเปิด คั่นด้วยจุลภาค
+      เงื่อนไขมากกว่าหนึ่งข้อหมายถึง “ต้องผ่านทุกข้อ”</p>
+      <table class="tbl tbl--code">
+        <thead><tr><th>ตัวดำเนินการ</th><th>ความหมาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>=</code></td><td>เท่ากับ</td></tr>
+          <tr><td><code>!=</code></td><td>ไม่เท่ากับ</td></tr>
+          <tr><td><code>&gt;</code> <code>&lt;</code> <code>&gt;=</code> <code>&lt;=</code></td><td>มากกว่า น้อยกว่า มากกว่าหรือเท่า น้อยกว่าหรือเท่า</td></tr>
+        </tbody>
+      </table>
+
+      <table class="tbl tbl--code">
+        <thead><tr><th>tag</th><th>ผลจริง</th></tr></thead>
+        <tbody>
+          <tr><td><code>{d.พนักงาน[i, อายุ > 19, อายุ < 40].ชื่อ}</code></td><td class="out out--good">สมชาย และ สุดา</td></tr>
+          <tr><td><code>{d.พนักงาน[i, แผนก = วิชาการ].ชื่อ}</code></td><td class="out out--good">สมชาย และ สุดา</td></tr>
+          <tr><td><code>{d.พนักงาน[i, แผนก = บริหาร].ชื่อ}</code></td><td class="out out--good">ประเสริฐ</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--warn">
+        <b>ตัวดำเนินการเปรียบเท่าใช้ <code>=</code> ตัวเดียว</b>
+        <p>เขียน <code>==</code> หรือครอบด้วยคำพูด จะได้ผลลัพธ์ว่างเปล่าโดยไม่มีข้อความแจ้งเตือน
+        ให้เขียน <code>แผนก = วิชาการ</code> โดยไม่ต้องครอบคำพูด</p>
+      </div>
+
+      <h3>เลขลำดับต้องเตรียมมาเอง</h3>
+      <p>ระบบนี้ไม่มีตัวนับอัตโนมัติ
+        ให้เตรียมฟิลด์ลำดับมาในข้อมูลแล้วอ้างอิงได้ตรง ๆ</p>
+      <table class="tbl tbl--code">
+        <thead><tr><th>tag</th><th>ผลจริง</th></tr></thead>
+        <tbody>
+          <tr><td><code>{d.รายการ[i].ลำดับ}. {d.รายการ[i].ชื่อ}</code></td><td class="out out--good">1. ค่าเช่าค่าต๋าง และอื่น ๆ</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ── 10 ── -->
+    <section id="table">
+      <h2>ตาราง</h2>
+
+      <h3>ตารางที่วนตามแถว</h3>
+      <p>วาง tag ในช่อง แล้ววาง <code>[i+1]</code> ไว้ในแถวถัดไปเสมอ</p>
+      <table class="tbl tbl--code">
+        <thead><tr><th>แถว</th><th>ลำดับ</th><th>รายการ</th><th>จำนวน</th></tr></thead>
+        <tbody>
+          <tr><td>หัวตาราง</td><td>ลำดับ</td><td>รายการ</td><td>จำนวน</td></tr>
+          <tr><td>แถววง</td><td><code>{d.รายการ[i].ลำดับ}</code></td><td><code>{d.รายการ[i].ชื่อ}</code></td><td><code>{d.รายการ[i].จำนวน:formatN(2)}</code></td></tr>
+          <tr><td>แถวปิดวง</td><td><code>{d.รายการ[i+1]}</code></td><td></td><td></td></tr>
+        </tbody>
+      </table>
+      <p class="foot">ได้ผลจริง: 1 / ค่าเช่าค่าต๋าง / 3.00 · 2 / ค่าสาธารณูปโภค / 12.00 · 3 / ค่าใช้จ่ายเดินทาง / 7.00</p>
+
+      <h3>ตารางที่วนตามคอลัมน์</h3>
+      <p>ใช้วิธีเดียวกัน แต่เขียน tag ในแนวนอน
+        และปิดวงในแถวถัดไปของแนวนั้น</p>
+      <table class="tbl tbl--code">
+        <thead><tr><th>แถว</th><th>เนื้อหา</th></tr></thead>
+        <tbody>
+          <tr><td>แถวที่ 1</td><td><code>{d.สถานะ[i].ชื่อ}</code></td></tr>
+          <tr><td>แถวที่ 2</td><td><code>{d.สถานะ[i+1]}</code></td></tr>
+        </tbody>
+      </table>
+      <p class="foot">ได้ผลจริง: ร่าง และ อนุมัติ</p>
+
+      <h3>ข้อความสำรองในเซลล์</h3>
+      <table class="tbl tbl--code">
+        <thead><tr><th>tag</th><th>ผลจริงเมื่อไม่มีค่า</th></tr></thead>
+        <tbody>
+          <tr><td><code>{d.หมายเหตุ:ifEM:show('- ไม่มี -'):elseShow(d.หมายเหตุ)}</code></td><td class="out out--good">- ไม่มี -</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--warn">
+        <b>เซลล์ที่รวมแถวแล้วไม่รองรับการวน</b>
+        <p>ถ้าตารางมีการรวมเซลล์ (Merge cells) การวนจะได้ผลไม่ถูกต้อง
+        ให้หลีกเลี่ยงการรวมเซลล์ในตารางที่ต้องวน และใช้วิธีอื่นแทน</p>
+      </div>
+    </section>
+
+    <!-- ── 11 ── -->
+    <section id="page">
+      <h2>หัวกระดาษและท้ายกระดาษ</h2>
+
+      <h3>ใส่ข้อมูลในหัวและท้ายได้เหมือนกัน</h3>
+      <p>ใช้ tag แบบเดียวกับเนื้อหาหลัก เพียงพิมพ์ในส่วนหัวหรือท้ายกระดาษของ Word</p>
+      <table class="tbl tbl--code">
+        <thead><tr><th>ตำแหน่ง</th><th>tag</th><th>ผลจริง</th></tr></thead>
+        <tbody>
+          <tr><td>หัวกระดาษ</td><td><code>{d.หน่วยงาน}</code></td><td class="out out--good">กองวิชาการเกษตร</td></tr>
+          <tr><td>ท้ายกระดาษ</td><td><code>{d.เลขที่}</code></td><td class="out out--good">๘๕/๒๕๖๙</td></tr>
+        </tbody>
+      </table>
+
+      <h3>เลขหน้าอัตโนมัติ</h3>
+      <p>เลขหน้าไม่ใช่ tag แต่เป็นฟิลด์ของ Word
+        ใส่ได้โดยไม่ต้องเตรียมข้อมูลใน JSON เลย</p>
+      <ol class="steps">
+        <li>
+          <b>เปิดส่วนท้ายกระดาษ</b>
+          <p>ไปที่ Insert › Footer แล้วเลือกแบบที่ต้องการ</p>
+        </li>
+        <li>
+          <b>แทรกเลขหน้า</b>
+          <p>Insert › Page Number › Current Position › Plain Number</p>
+        </li>
+        <li>
+          <b>เพิ่มจำนวนหน้าทั้งหมด</b>
+          <p>พิมพ์ข้อความ “จาก” แล้ว Insert › Page Number › Total Number of Pages</p>
+        </li>
+      </ol>
+      <p>ผลที่ได้จะเป็นข้อความแบบ <em>หน้า 1 จาก 5 หน้า</em>
+      และจะนับใหม่เองทุกครั้งที่จำนวนหน้าเปลี่ยน</p>
+
+      <h3>หน้าแรกต่างจากหน้าอื่น</h3>
+      <p>เอกสารราชการไทยจำนวนมากต้องการให้หน้าแรกไม่มีเลขหน้า
+        ตั้งค่าได้ใน Word ที่ Layout › Different First Page</p>
+      <p>หลังจากเปิดใช้ ส่วนหัวและท้ายกระดาษจะแยกเป็นสองชุด
+        ต้องใส่ tag ของหน้าแรกกับหน้าถัดไปแยกกัน ไม่งั้นข้อมูลจะไม่ขึ้น</p>
+
+      <div class="callout callout--warn">
+        <b>เว้นที่ในส่วนหัวไว้หน่อย</b>
+        <p>ตั้งขอบบนกระดาษให้มีที่ว่างพอสำหรับหัวกระดาษและเส้นคั่น
+        มิฉะนั้นเนื้อหาจะถูกบดบัง มาตรฐานหนังสือราชการใช้ขอบบนประมาณ 3 เซนติเมตร</p>
+      </div>
+    </section>
+
+    <!-- ── 12 ── -->
+    <section id="trap">
+      <h2>กับดักที่พบบ่อย</h2>
+
+      <h3><span class="num">1</span> ชื่อข้อมูลที่มีช่องว่างทำให้ทั้งย่อหน้าหาย</h3>
+      <table class="tbl tbl--code">
+        <thead><tr><th>เขียนแบบนี้</th><th>ผลจริง</th></tr></thead>
+        <tbody>
+          <tr><td><code>ก่อน {d.ชื่อ เต็ม} หลัง</code></td><td class="out out--bad">ก่อน  หลัง — ค่าหายไปทั้งย่อหน้า</td></tr>
+          <tr><td><code>{d.'ชื่อ เต็ม'}</code></td><td class="out out--good">สมชาย รักดี — ครอบคำพูดแล้วได้</td></tr>
+        </tbody>
+      </table>
+      <p>วิธีที่ดีกว่าคือตั้งชื่อข้อมูลใหม่ให้ไม่มีช่องว่างตั้งแต่ต้น
+        เช่น <code>ชื่อเต็ม</code> แทน <code>ชื่อ เต็ม</code></p>
+
+      <h3><span class="num">2</span> เครื่องหมายคำพูดคู่ทำให้เอกสารเพี้ยน</h3>
+      <table class="tbl tbl--code">
+        <thead><tr><th>เขียนแบบนี้</th><th>ผลจริงในเอกสาร</th></tr></thead>
+        <tbody>
+          <tr><td><code>{d.ชื่อย่อ:prepend('&gt;&gt; ')}</code></td><td class="out out--good">&gt;&gt; Carbone</td></tr>
+          <tr><td><code>{d.ชื่อย่อ:prepend("&gt;&gt; ")}</code></td><td class="out out--bad">Carbone พร้อมตัวอักษร &amp;quot; โผล่มา</td></tr>
+        </tbody>
+      </table>
+
+      <h3><span class="num">3</span> ลำดับ formatter ผิดทำให้ได้เลขผิด</h3>
+      <p>ต้องคำนวณก่อนแล้วค่อยจัดรูปแบบ
+        <code>{d.ยอดเงิน:mul(2):formatN(0)}</code> ถูก ส่วน <code>{d.ยอดเงิน:formatN(0):mul(2)}</code> ผิด
+        ดูตัวอย่างเพิ่มที่<a href="#number">หัวข้อตัวเลข</a></p>
+
+      <h3><span class="num">4</span> แปลง พ.ศ. ผิดลำดับได้ปีผิด</h3>
+      <p><code>{d.วันที่สั่ง:add(543):formatD('YYYY')}</code> ได้ 2568 แต่ควรเป็น 2569
+        ต้องสลับเป็น <code>{d.วันที่สั่ง:formatD('YYYY'):add(543)}</code>
+        ดูตัวอย่างเพิ่มที่<a href="#date">หัวข้อวันที่</a></p>
+
+      <h3><span class="num">5</span> วันที่ที่มีเวลาจะข้ามวัน</h3>
+      <table class="tbl tbl--code">
+        <thead><tr><th>ข้อมูลที่ส่งเข้า</th><th>ผลที่ได้</th><th>ควรเป็น</th></tr></thead>
+        <tbody>
+          <tr><td><code>2026-10-08T02:00:00+07:00</code></td><td class="out out--bad">07/10/2026</td><td>08/10/2026</td></tr>
+          <tr><td><code>2026-08-07</code></td><td class="out out--good">07/08/2026</td><td>07/08/2026</td></tr>
+        </tbody>
+      </table>
+      <p>ระบบแปลงเวลาตามเขตเวลาของเครื่องเรนเดอร์ ซึ่งไม่ใช่เวลาไทย
+        <b>วิธีเลี่ยงคือส่งวันที่ล้วน ๆ ไม่ต้องมีเวลาต่อท้าย</b>
+        เอกสารราชการแทบไม่มีความจำเป็นต้องระบุเวลาจึงไม่ควรเสียเวลาไปกับกับดักนี้</p>
+
+      <h3><span class="num">6</span> วงซ้ำที่ไม่มีตัวปิดจะทำให้เรนเดอร์ล้มทั้งฉบับ</h3>
+      <p>ระบบจะแจ้งว่า <em>has no corresponding [i+1]</em>
+        ให้ไล่ตรวจว่าทุก <code>[i]</code> มี <code>[i+1]</code> ครบทุกชั้น</p>
+
+      <h3><span class="num">7</span> ฟอนต์ไทยต้องมีบนเครื่องที่เรนเดอร์</h3>
+      <p>ถ้าเครื่องเรนเดอร์ไม่มี TH Sarabun New เอกสารที่ได้จะเป็นฟอนต์อื่น
+        ขนาดไม่ตรง และบรรทัดล้น ให้เลือกฟอนต์ที่ติดตั้งไว้แน่นอน</p>
+
+      <h3><span class="num">8</span> ค่าที่ไม่มีในข้อมูลจะไม่ทำให้ tag หาย</h3>
+      <p>ถ้าอ้างชื่อข้อมูลที่ไม่มีจริง ระบบจะลบ tag ทิ้งแล้วไม่ใส่อะไรแทน
+        ถ้าต้องการข้อความสำรอง ให้ใช้ <code>print()</code> หรือเงื่อนไข <code>ifEM</code></p>
+    </section>
+
+    <!-- ── 13 ── -->
+    <section id="limit">
+      <h2>สิ่งที่ใช้ไม่ได้</h2>
+      <p>รายการนี้ทดสอบแล้วว่าใช้ไม่ได้จริงกับระบบนี้
+        ไม่ใช่แค่ไม่แนะนำ — ใส่แล้วจะได้ผลผิดหรือเอกสารล้มทั้งฉบับ</p>
+
+      <table class="tbl tbl--code">
+        <thead><tr><th>สิ่งที่เขียน</th><th>อาการ</th></tr></thead>
+        <tbody>
+          <tr><td><code>drop(...)</code> <code>keep(...)</code></td><td>ระบบปฏิเสธทั้งฉบับ บอกว่าปิดฟีเจอร์นี้</td></tr>
+          <tr><td><code>count</code> <code>cumCount</code></td><td>ระบบปฏิเสธทั้งฉบับ</td></tr>
+          <tr><td><code>formatR</code> <code>barcode</code></td><td>ระบบปฏิเสธทั้งฉบับ</td></tr>
+          <tr><td><code>{c.ชื่อ}</code></td><td>ได้ค่าว่างเปล่า</td></tr>
+          <tr><td><code>{ชื่อ}</code> ไม่มี <code>d.</code></td><td>ได้ข้อความ <code>{ชื่อ}</code> ตามเดิมในเอกสาร</td></tr>
+          <tr><td><code>{o.lang=th}</code></td><td>ได้ข้อความ <code>{o.lang=th}</code> ตามเดิมในเอกสาร และไม่มีผลใด ๆ</td></tr>
+          <tr><td><code>{t(คำ)}</code></td><td>ได้ข้อความคำนั้นตามเดิม ไม่ได้แปลภาษา</td></tr>
+          <tr><td><code>{img ...}</code></td><td>ได้ข้อความตามเดิมในเอกสาร</td></tr>
+          <tr><td><code>or</code></td><td>ได้ข้อความที่เหลือของ tag หลุดออกมา</td></tr>
+          <tr><td><code>{d.รายการ[i].i}</code></td><td>ได้ค่าว่าง ไม่มีเลขลำดับ</td></tr>
+          <tr><td><code>ifIN</code> <code>ifNIN</code> กับข้อความไทย</td><td>เงื่อนไขไม่จริงเสมอ</td></tr>
+          <tr><td><code>{d.ชื่อ[การ์ด]}</code> มีช่องว่างในชื่อ</td><td>ทั้งย่อหน้าหายไป</td></tr>
+        </tbody>
+      </table>
+
+      <h3>ทำแทนอย่างไร</h3>
+      <table class="tbl">
+        <thead><tr><th>ต้องการ</th><th>ทำแทนด้วย</th></tr></thead>
+        <tbody>
+          <tr><td>ลบแถวที่ไม่ต้องการ</td><td>กรองข้อมูลในวงก่อน แล้ววนเฉพาะที่ต้องการ</td></tr>
+          <tr><td>ซ่อนย่อหน้าทั้งก้อน</td><td><code>showBegin</code> / <code>showEnd</code></td></tr>
+          <tr><td>นับจำนวนรายการ</td><td>เตรียมจำนวนไว้ในข้อมูลแล้วอ้างอิง</td></tr>
+          <tr><td>เลขลำดับแถว</td><td>เตรียมฟิลด์ลำดับไว้ในข้อมูล</td></tr>
+          <tr><td>ชื่อเดือนภาษาไทย</td><td>เตรียมชื่อเดือนเป็นภาษาไทยไว้ในข้อมูล</td></tr>
+          <tr><td>สกุลเงินบาท</td><td>ใช้ <code>formatN</code> แล้วเขียนคำว่า “บาท” ต่อท้าย</td></tr>
+          <tr><td>รูปภาพ</td><td>วางรูปลงในไฟล์แม่แบบด้วย Word ก่อน แล้วใช้ tag อ้างคำบรรยายแทน</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ── 14 ── -->
+    <section id="check">
+      <h2>เช็กลิสต์ก่อนใช้จริง</h2>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>ปิดเครื่องหมายคำพูดอัจฉรัยแล้ว</span></label></li>
+        <li><label><input type="checkbox"><span>ทุก tag ใช้ <code>{d.}</code> นำหน้า</span></label></li>
+        <li><label><input type="checkbox"><span>ไม่มีชื่อข้อมูลที่มีช่องว่าง</span></label></li>
+        <li><label><input type="checkbox"><span>ใช้เครื่องหมายคำพูดเดี่ยว <code>'</code> เท่านั้น</span></label></li>
+        <li><label><input type="checkbox"><span>ทุก <code>[i]</code> มี <code>[i+1]</code> ครบทุกชั้น</span></label></li>
+        <li><label><input type="checkbox"><span>ลำดับ formatter ถูก คำนวณก่อนจัดรูปแบบ</span></label></li>
+        <li><label><input type="checkbox"><span>แปลง พ.ศ. แล้ว ตรวจว่าลำดับเป็น formatD ก่อน add(543)</span></label></li>
+        <li><label><input type="checkbox"><span>ส่งวันที่เป็นวันที่ล้วน ไม่มีเวลาต่อท้าย</span></label></li>
+        <li><label><input type="checkbox"><span>เงื่อนไขที่อาจเป็นเท็จ มี <code>elseShow('')</code> กำกับ</span></label></li>
+        <li><label><input type="checkbox"><span>ไม่มี <code>drop</code> <code>keep</code> <code>count</code> หรือ <code>{o.}</code> ปะปนอยู่</span></label></li>
+        <li><label><input type="checkbox"><span>ทดลองเรนเดอร์แล้วเปิดดูทุกหน้า ไม่ใช่แค่หน้าแรก</span></label></li>
+        <li><label><input type="checkbox"><span>ตรวจแล้วว่าไม่มีข้อความ <code>{</code> ค้างอยู่ในเอกสาร</span></label></li>
+      </ul>
+
+      <div class="callout callout--info">
+        <b>ตรวจเอกสารที่ได้ทุกครั้ง</b>
+        <p>ค้นหา <code>{</code> ในเอกสารที่ได้ ถ้าเจอวงเล็บปีกกาค้างอยู่ แปลว่ามี tag ที่เขียนผิด
+        ให้ไล่กลับไปแก้ในแม่แบบ ไม่ใช่แก้ในไฟล์ที่ได้ เพราะไฟล์ที่ได้จะถูกสร้างใหม่ทุกครั้ง</p>
+      </div>
+    </section>
+
+    <!-- ── 15 ── -->
+    <section id="version">
+      <h2>รุ่นของคู่มือ</h2>
+
+      <p>คู่มือเล่มนี้มีเลขรุ่นของตัวเอง เริ่มที่ <b data-manual-ver>0.1.0</b>
+      เลขนี้<strong>ไม่เกี่ยวกับเลขเวอร์ชันของ Carbone</strong> และไม่เกี่ยวกับรุ่นของระบบอื่น
+      มีไว้เพื่อบอกว่าคุณกำลังอ่านเนื้อหาชุดไหนอยู่</p>
+
+      <h3>กติกาการเพิ่มเลขรุ่น</h3>
+      <table class="tbl">
+        <thead><tr><th>ตัวเลข</th><th>เมื่อไรต้องเพิ่ม</th></tr></thead>
+        <tbody>
+          <tr><td><code>0.1.0</code> → <code>0.1.1</code></td><td>แก้คำผิด เพิ่มตัวอย่าง หรือแก้ถ้อยคำ โดยวิธีใช้งานไม่เปลี่ยน</td></tr>
+          <tr><td><code>0.1.1</code> → <code>0.2.0</code></td><td>เพิ่มหัวข้อใหม่ หรือเพิ่มข้อจำกัด/กับดักที่เจอเพิ่ม</td></tr>
+          <tr><td><code>0.2.0</code> → <code>1.0.0</code></td><td>วิธีใช้งานหลักเปลี่ยนไปจริง ๆ เช่น ตัว tag เปลี่ยนรูปแบบ</td></tr>
+          <tr><td><code>1.0.0</code> → <code>2.0.0</code></td><td>เปลี่ยนรุ่นใหญ่ ข้อมูลหรือแม่แบบที่ทำไว้อาจต้องทำใหม่</td></tr>
+        </tbody>
+      </table>
+
+      <h3>ประวัติการเปลี่ยนแปลง</h3>
+      <table class="tbl">
+        <thead><tr><th>รุ่น</th><th>วันที่</th><th>สิ่งที่เปลี่ยน</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>0.1.0</b></td>
+            <td class="nowrap">7 ต.ค. 2569</td>
+            <td>เขียนคู่มือฉบับแรก โฟกัสเฉพาะการสร้างแม่แบบ .docx
+            ตรวจทุกตัวอย่างด้วยการรันจริง และถอดสิ่งที่ใช้ไม่ได้ออกทั้งหมด</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--info">
+        <b>ระบบนี้ต่อยอดจาก Carbone</b>
+        <p>ส่วนที่เราเขียนเพิ่มเองและอาจไม่ตรงกับ Carbone ได้แก่
+        การตั้งภาษาไทยในไฟล์ .docx ที่ส่งมอบ การแก้การจัดย่อหน้าไทยก่อนแปลงเป็น PDF
+        และส่วนประกอบทั้งหมดในหน้าเว็บของระบบ</p>
+        <p><b>เมื่อสิ่งที่เขียนในคู่มือนี้ขัดกับคู่มือของ Carbone ให้ยึดหน้านี้เป็นหลัก</b>
+        เพราะหน้านี้ทดสอบกับเครื่องที่ระบบใช้งานจริงแล้วทุกตัวอย่าง</p>
+      </div>
+    </section>
+
+    <p class="foot">
+      คู่มือนี้เขียนสำหรับระบบ 2docx.com ที่ใช้เครื่องเรนเดอร์เอกสารของตัวเอง
+      ตัวอย่างทุกชิ้นผ่านการรันจริงและมีสคริปต์ตรวจอัตโนมัติที่จะรายงานตกทันทีถ้าสิ่งที่เขียนไว้ผิดจริง
+    </p>
+
+  </main>
+</div>
+
+<script src="assets/manual.js"></script>
+</body>
+</html>

@@ -46,8 +46,11 @@ const ALLOWED_CT: Record<string, string> = {
  *   ไฟล์ HTML ที่รันบนโดเมนเราได้ (stored XSS)
  *
  * ลายเซ็น: PNG = `89 50 4E 47` · JPEG = `FF D8 FF` · WebP = `RIFF....WEBP`
+ *
+ * export ให้ `modules/account` ใช้ตัวเดียวกัน — ตรรกะตรวจไฟล์รูปเป็นเรื่องความปลอดภัย
+ * ถ้าเขียนซ้ำสองที่แล้วแก้ที่เดียว อีกที่จะเงียบ ๆ
  */
-function sniffImage(b: Buffer): string | null {
+export function sniffImage(b: Buffer): string | null {
   if (b.byteLength >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) {
     return 'image/png'
   }

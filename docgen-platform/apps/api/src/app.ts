@@ -24,8 +24,9 @@ import { studioRoutes } from './modules/studio/route.js'
 import { accountRoutes } from './modules/account/route.js'
 import { teamRoutes } from './modules/teams/route.js'
 import { peopleRoutes } from './modules/people/route.js'
+import { reportRoutes } from './modules/reports/route.js'
 import { healthRoutes } from './modules/health/route.js'
-import { authRoutes } from './modules/auth/route.js'
+import { authRoutes, sessionRoutes } from './modules/auth/route.js'
 import { sessionPlugin } from './modules/auth/session.js'
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -154,14 +155,14 @@ export async function buildApp(): Promise<FastifyInstance> {
    *      ค่าเริ่มต้นของไลบรารี (ถ้าไลบรารีเปลี่ยนรูปแบบ string จะพังเงียบ ๆ)
    *
    * ⚠️ ผ่อนแค่ `style-src` เท่านั้น ที่เหลือยังเข้มเท่าเดิมทุกข้อ
-   *   และ hook นี้อยู่ใน scope ของ plugin → กระทบเฉพาะ route `/docs`
+   *   และ hook นี้อยู่ใน scope ของ plugin → กระทบเฉพาะ route `/apis`
    *   route `/api/*` ไม่มี CSP อยู่แล้ว (ดู `helmet` ด้านบนที่ปิดไว้)
    *
    *   ทางเลือกอื่นที่เข้มกว่า (hash / nonce) ใช้ไม่ได้จริง
    *   เพราะ Swagger สร้าง style ตอนรันแบบไม่รู้ค่าล่วงหน้า
    */
   await app.register(swaggerUi, {
-    routePrefix: '/docs',
+    routePrefix: '/apis',
     uiConfig: { docExpansion: 'list', deepLinking: true },
     staticCSP: {
       'default-src': ["'self'"],
@@ -186,6 +187,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(accountRoutes)
       await api.register(teamRoutes)
       await api.register(peopleRoutes)
+      await api.register(reportRoutes)
+      await api.register(sessionRoutes)
       await api.register(healthRoutes)
     },
     { prefix: '/api' },
@@ -215,7 +218,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.addHook('onRequest', async (req, reply) => {
     const path = req.url.split('?')[0] ?? req.url
     if (PUBLIC.has(path)) return
-    if (path.startsWith('/docs')) return // swagger UI โหลด static หลายไฟล์
+    if (path.startsWith('/apis')) return // swagger UI โหลด static หลายไฟล์
 
     const sid = req.cookies[env.SESSION_COOKIE_NAME]
     const user = await app.sessions.get(sid)

@@ -1,11 +1,12 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod/v4'
-import { env } from '@docgen/shared'
+import { env, reportReceivers } from '@docgen/shared'
 import type { App } from '../../types.js'
 import { authorizeUrl, discovery, pkceChallenge, randomToken } from './oidc.js'
-import { loginWithCode } from './verify.js'
+import { claimPendingInvites } from '../teams/service.js'
 import { claimPendingShares } from '../people/invite.js'
 import { touchPerson } from '../people/directory.js'
+import { loginWithCode } from './verify.js'
 
 /** cookie ชั่วคราวระหว่าง redirect ไป Casdoor แล้วกลับมา */
 const STATE_COOKIE = 'oauth_state'
@@ -155,6 +156,21 @@ export async function authRoutes(app: App) {
       })
 
       /**
+       * ผูกสมาชิกที่ถูกเชิญด้วยอีเมลไว้ ให้กลายเป็นสมาชิกจริง
+       *
+       * ตอนเชิญเรารู้แค่อีเมล เพราะระบบไม่มีที่เก็บรายชื่อผู้ใช้
+       * → คนที่ยังไม่เคยเข้าระบบจะถูกเก็บเป็นแถว "รอผูก" แล้วผูกตรงนี้
+       *
+       * ⚠️ ห่อ try/catch เพราะล็อกอินสำเร็จแล้ว ต้องไม่ให้เรื่องนี้ทำให้เข้าไม่ได้
+       *   (Mongo ล่ม = ยังไม่ได้เข้าทีม แต่อย่างน้อยยังเข้าระบบได้)
+       */
+      try {
+        await claimPendingInvites(app, user)
+      } catch (err) {
+        app.log.warn({ err, sub: user.sub }, 'ผูกสมาชิกที่รอเข้าระบบไม่สำเร็จ — ข้ามไปก่อน')
+      }
+
+      /**
        * จดลงสมุดที่อยู่ผู้ใช้ + ผูกคำเชิญแม่แบบ
        *
        * ⚠️ เขียนใหม่ทุกครั้งที่ล็อกอิน ไม่ใช่ครั้งแรก
@@ -162,7 +178,7 @@ export async function authRoutes(app: App) {
        *   รายชื่อจะชี้ไปยังที่เก่า → พิมพ์หาแล้วเจอคนที่เปลี่ยนไปแล้ว
        *   และถ้าเชิญด้วยอีเมล ไปเชิญคนผิด
        *
-       * ⚠️ ห่อ try/catch เพราะล็อกอินสำเร็จแล้วต้องเข้าระบบได้เสมอ
+       * ⚠️ ห่อ try/catch เหมือนข้างบน — ล็อกอินสำเร็จแล้วต้องเข้าระบบได้เสมอ
        *   (Mongo ล่ม = ยังไม่มีในสมุดที่อยู่ แต่อย่างน้อยยังเข้าระบบได้)
        */
       try {
@@ -171,6 +187,7 @@ export async function authRoutes(app: App) {
       } catch (err) {
         app.log.warn({ err, sub: user.sub }, 'บันทึกสมุดที่อยู่/ผูกคำเชิญไม่สำเร็จ — ข้ามไปก่อน')
       }
+
       app.log.info({ sub: user.sub, name: user.name }, 'ล็อกอินสำเร็จ')
 
       const dest = returnToRaw
@@ -186,28 +203,115 @@ export async function authRoutes(app: App) {
     },
   )
 
-  // POST /auth/logout
+  /** ทำลาย session ปัจจุบัน — ใช้ร่วมกันทั้ง GET และ POST */
+  async function destroySession(req: FastifyRequest, reply: FastifyReply) {
+    const sid = req.cookies[env.SESSION_COOKIE_NAME]
+    await app.sessions.destroy(sid)
+    reply.clearCookie(env.SESSION_COOKIE_NAME, { path: '/' })
+  }
+
+  // POST /auth/logout — สำหรับ client ที่ยิงด้วย fetch
   app.post(
     '/auth/logout',
     { schema: { tags, summary: 'ออกจากระบบ' } },
     async (req, reply) => {
-      const sid = req.cookies[env.SESSION_COOKIE_NAME]
-      await app.sessions.destroy(sid)
-      reply.clearCookie(env.SESSION_COOKIE_NAME, { path: '/' })
+      await destroySession(req, reply)
       return reply.code(204).send(null)
     },
   )
 
-  // GET /auth/me
+  /**
+   * GET /auth/logout — ให้ปุ่ม "ออกจากระบบ" ที่เป็น <a href> ใช้ได้
+   *
+   * ⚠️ ทำไมต้องมี GET ทั้งที่ logout เป็นการเปลี่ยน state
+   *   ปุ่มในเว็บเป็นลิงก์ธรรมดา 5 จุด (studio · account 2 จุด · teams · team detail)
+   *   ลิงก์ยิง GET เสมอ แต่ route เดิมมีแค่ POST → กดแล้วได้ 404
+   *   ทางแก้คือเพิ่ม GET ที่นี่จุดเดียว แทนการไปแก้ onClick ทั้ง 5 จุด
+   *   ซึ่งเสี่ยงตกหล่นจุดใดจุดหนึ่งตอนเพิ่มหน้าใหม่ในอนาคต
+   *
+   * ⚠️ GET ที่เปลี่ยน state เปิดให้ CSRF ได้ (เช่น <img src="/auth/logout">)
+   *   ผลกระทบจำกัดอยู่ที่ "ผู้ใช้ถูกบังคับออกจากระบบ" ซึ่งไม่ทำให้ข้อมูลรั่ว
+   *   แลกกับปุ่มที่ใช้งานได้จริงทุกหน้า → ยอมรับได้
+   *   ถ้าวันไหนอยากปิดช่องนี้ ต้องเปลี่ยนปุ่มในเว็บเป็น <form method="post"> ให้ครบทุกจุด
+   */
+  app.get(
+    '/auth/logout',
+    { schema: { tags, summary: 'ออกจากระบบ (จากลิงก์ในหน้าเว็บ)' } },
+    async (req, reply) => {
+      await destroySession(req, reply)
+      // ต้อง redirect เสมอ ไม่งั้นผู้ใช้จะเจอหน้าว่างเปล่า ๆ หลังกดปุ่ม
+      return reply.redirect('/', 302)
+    },
+  )
+
+  // GET /auth/me — **ไม่มี prefix /api**
+  //
+  // ⚠️ `authRoutes` ลงทะเบียนโดยไม่มี prefix เพราะ `redirect_uri` ที่ลงทะเบียนไว้กับ Casdoor
+  //   ต้องตรงเป๊ะ → ย้ายทั้งปลั๊กไปใต้ `/api` ไม่ได้ เพราะจะทำให้ callback path เปลี่ยน
+  //
+  //   ผลคือหน้าเว็บเรียกใช้ไม่ได้ผ่านตัวช่วย `call()` ที่เติม `/api` ให้เสมอ
+  //   → ด้านล่างมี `GET /api/session` เป็นทางเดียวกันสำหรับหน้าเว็บ
   app.get(
     '/auth/me',
-    { schema: { tags, summary: 'ข้อมูลผู้ใช้ปัจจุบัน' } },
-    async (req, reply) => {
-      if (!req.user) {
-        return reply.code(401).send({ code: 'UNAUTHENTICATED', message: 'ยังไม่ได้เข้าสู่ระบบ' })
-      }
-      return { user: req.user }
+    {
+      schema: {
+        tags,
+        summary: 'ข้อมูลผู้ใช้ปัจจุบัน',
+        description: [
+          'เบา พอจะให้ทุกหน้ายิงเรียกเมื่อ mount',
+          '',
+          '⚠️ path นี้**ไม่มี prefix /api** เพราะ Casdoor ต้องตรงกับ `redirect_uri`',
+          '   หน้าเว็บที่อยู่ใต้ `/api` ให้เรียก `GET /api/session` แทน (ค่าเหมือนกัน)',
+        ].join('\n'),
+      },
     },
+    meHandler(app),
+  )
+}
+
+/**
+ * ตัวจัดการ `/auth/me` และ `/api/session` — **ตัวเดียวกัน**
+ *
+ * ⚠️ ต้องอ่าน session เอง ไม่ใช่ใช้ `req.user`
+ *   `authRoutes` ลงทะเบียน**ก่อน** `addHook('onRequest')` ที่เป็นตัวเติม `req.user`
+ *   (hook อยู่ในไฟล์ app.ts) → ทุก route ในไฟล์นี้จะได้ `req.user = undefined`
+ *   เจอเพราะปุ่ม "รายงานปัญหา" ถามสิทธิ์จากที่นี่แล้วได้ 401 ทุกคน
+ *
+ *   ข้อสังเกต: ถ้าเมื่อไหร่ route ในปลั๊กนี้เริ่มได้ `req.user` จริง
+ *   แปลว่า hook ถูกย้ายมาก่อนบล็อกนี้แล้ว → โค้ดนี้ซ้ำซ้อนแต่ยังถูก
+ */
+function meHandler(app: App) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const sid = req.cookies[env.SESSION_COOKIE_NAME]
+    const user = sid ? await app.sessions.get(sid) : null
+    if (!user) {
+      return reply.code(401).send({ code: 'UNAUTHENTICATED', message: 'ยังไม่ได้เข้าสู่ระบบ' })
+    }
+    return {
+      user,
+      /** ผู้รับรายงานปัญหาไหม (อยู่ใน `REPORT_TO_SUBS`) — ให้หน้าเว็บตัดสินว่าจะโผล่ปุ่มตรงไหน */
+      canReceiveReports: reportReceivers().includes(user.sub),
+    }
+  }
+}
+
+/** `/api/session` — ทางเดียวกันข้างบน แต่อยู่ใต้ `/api` ให้หน้าเว็บเรียกผ่าน `call()` ได้ */
+export async function sessionRoutes(app: App) {
+  app.get(
+    '/session',
+    {
+      schema: {
+        tags: ['auth'],
+        summary: 'ข้อมูลผู้ใช้ปัจจุบัน (สำหรับหน้าเว็บ)',
+        description: [
+          'ค่าเดียวกับ `GET /auth/me` — ตัวนี้อยู่ใต้ `/api` จึงเรียกจากหน้าเว็บได้',
+          '',
+          'หน้าเว็บยิงตอน mount ครั้งเดียว แล้วใช้ค่าตัดสินทุกที่',
+          '(`canReceiveReports` = คนนี้ได้รับรายงานปัญหาไหม)',
+        ].join('\n'),
+      },
+    },
+    meHandler(app),
   )
 }
 

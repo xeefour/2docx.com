@@ -206,7 +206,7 @@ export const UploadTemplateResponse = z.object({
 export const HealthCheck = z.object({
   /** id สั้น ๆ ใช้เป็น key ใน log/metric — เช่น "mongodb", "rustfs" */
   id: z.string(),
-  /** ชื่อที่คนอ่านเข้าใจ — แสดงใน /docs */
+  /** ชื่อที่คนอ่านเข้าใจ — แสดงใน /apis */
   label: z.string(),
   /** container ใน docker compose ถ้ามี — ใช้เทียบกับ `docker ps` ได้ */
   container: z.string().nullable(),

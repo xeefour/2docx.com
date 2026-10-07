@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "node --env-file=../../../dokploy-infra/.env --env-file=../../.env --import tsx --watch src/index.ts",
+    "dev": "node --env-file=../../../dokploy-infra/.env --env-file=../../../dokploy-infra/.env.development --import tsx --watch src/index.ts",
     "build": "tsc -b",
     "start": "node dist/index.js"
   },

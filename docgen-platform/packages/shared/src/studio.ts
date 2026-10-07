@@ -1,4 +1,5 @@
 import { z } from 'zod/v4'
+import { TeamRole } from './teams.js'
 
 /**
  * ข้อมูลฝั่ง Studio — ฟอร์มที่ผู้ใช้ออกแบบเอง, การแชร์แม่แบบ, แชทกับ AI,
@@ -123,6 +124,14 @@ export const AccessEntry = z.object({
   visibility: Visibility,
   owner: z.string(),
   ownerName: z.string().nullable(),
+  /**
+   * ทีมที่เป็นเจ้าของร่วม — null = ของคนเดียวตามปกติ
+   *
+   * ⚠️ `owner` ไม่หายเมื่อมีทีม — คนที่อัปโหลดยังคงเป็นเจ้าของส่วนตัวเสมอ
+   *   ตอนลบทีมจะถอน `team` ออกแล้วแม่แบบจะกลับเป็นของคนนั้นทันที
+   *   (ถ้าลบ `owner` ทิ้ด แม่แบบจะกลายเป็นของกำพร้าที่ไม่มีใครลบได้)
+   */
+  team: z.string().nullable().optional(),
   sharedWith: z.array(
     z.object({
       sub: z.string(),
@@ -154,13 +163,17 @@ export type ShareBody = z.infer<typeof ShareBody>
 /** สิทธิ์ของผู้ใช้ปัจจุบันที่มีต่อแม่แบบหนึ่งตัว */
 export const AccessView = z.object({
   templateKey: z.string(),
-  /** owner = เจ้าของ · shared = ถูกแชร์ให้เรา · published = เปิดสาธารณ */
-  relation: z.enum(['owner', 'shared', 'published']),
+  /** owner = เจ้าของ · team = เป็นสมาชิกทีมเจ้าของ · shared = ถูกแชร์ให้เรา · published = เปิดสาธารณ */
+  relation: z.enum(['owner', 'team', 'shared', 'published']),
   role: AccessRole.nullable(),
+  /** สิทธิ์ในทีมเจ้าของ — null = ไม่ได้อยู่ในทีม (แม่แบบไม่มีทีม หรือเราไม่ใช่สมาชิก) */
+  teamRole: TeamRole.nullable(),
   canEdit: z.boolean(),
   visibility: Visibility,
   owner: z.string().nullable(),
   ownerName: z.string().nullable(),
+  team: z.string().nullable(),
+  teamName: z.string().nullable(),
   sharedWith: z.array(
     z.object({ sub: z.string(), name: z.string().nullable(), role: AccessRole, at: z.date() }),
   ),
@@ -257,8 +270,97 @@ export const LlmStatus = z.object({
 })
 export type LlmStatus = z.infer<typeof LlmStatus>
 
+// ── สัมภาษณ์ผู้ใช้เพื่อกรอกฟอร์ม ─────────────────────────────────
+//
+// ต่างจากแชทอิสระ (`/chat`) ตรงที่ **โมเดลเป็นคนถาม** และถามตามช่องที่ยังขาด
+//   ผู้ใช้ตอบ → โมเดลเรียบเรียงคำตอบให้ตรงกับชนิดชอง (input property)
+//   เหตุผลที่ต้องมีทั้งสองโหมด: ถาม-ตอบอิสระได้เร็วแต่เสี่ยงแต่งข้อมูล
+//   ส่วนสัมภาษณ์บังคับให้ถามเฉพาะที่คนรู้จริง แล้วค่อยแปลงเป็นค่าที่ช่องรับได้
+
+/** วิธีถาม — ทีละข้อ (คุยครั้งละ 1) หรือทีละชุด (ถามหลายข้อพร้อมกัน) */
+export const InterviewMode = z.enum(['one', 'batch'])
+export type InterviewMode = z.infer<typeof InterviewMode>
+
+/** คำถาม 1 ข้อ — `key` ระบุว่าคำตอบจะไปลงช่องไหน */
+export const InterviewQuestion = z.object({
+  key: z.string().min(1).max(200),
+  /** ข้อความคำถามที่ผู้ใช้เห็น — ภาษาคน อ่านแล้วตอบได้เลย */
+  question: z.string().min(1).max(500),
+  /**
+   * ตัวเลือกสำหรับช่อง select/checkbox — มีแล้ว UI จะเป็นปุ่มให้กดเลือก
+   * แทนช่องพิมพ์ (ผู้ใช้ไม่ต้องพิมพ์ผิดรูปแบบ)
+   */
+  options: z.array(z.string().min(1).max(200)).max(20).optional(),
+  /** ข้อความช่วยอธิบายว่าถามเพราะอะไร — ช่วยให้ตอบตรงประเด็น */
+  help: z.string().max(300).optional(),
+})
+export type InterviewQuestion = z.infer<typeof InterviewQuestion>
+
+/** ขอคำถามชุดถัดไป */
+export const InterviewPlanBody = z.object({
+  templateKey: z.string().min(1).max(200),
+  templateName: z.string().max(200).optional(),
+  mode: InterviewMode.default('one'),
+  /** โหมด batch — ถามกี่ข้อต่อรอบ (มากเกินไปผู้ใช้จะตอบไม่ครบ) */
+  batchSize: z.number().int().min(2).max(8).default(5),
+  /** ข้อมูลที่มีแล้ว — ใช้ตัดช่องที่ไม่ต้องถามซ้ำ */
+  data: z.record(z.string(), z.unknown()).default({}),
+  /** key ที่ถามไปแล้วในรอบนี้ — ไม่ถามซ้ำ */
+  asked: z.array(z.string().max(200)).max(200).default([]),
+  /** คำตอบที่ผู้ใช้ให้มาแล้ว — ให้ AI ถามต่อโดยไม่ต้องถามซ้ำ */
+  answers: z.record(z.string(), z.string().max(4000)).default({}),
+  provider: z.enum(['minimax', 'openai', 'mock']).optional(),
+})
+export type InterviewPlanBody = z.infer<typeof InterviewPlanBody>
+
+export const InterviewPlanReply = z.object({
+  questions: z.array(InterviewQuestion),
+  /** ช่องที่ยังขาดทั้งหมดในแม่แบบนี้ */
+  remaining: z.array(z.string()).default([]),
+  /** ข้อความนำ/สรุปสั้น ๆ จาก AI (เช่น ปิดท้ายเมื่อถามครบ) */
+  reply: z.string().default(''),
+  provider: z.string(),
+  model: z.string(),
+})
+export type InterviewPlanReply = z.infer<typeof InterviewPlanReply>
+
+/** ส่งคำตอบกลับไปให้ AI เรียบเรียงเป็นค่าของแต่ละช่อง */
+export const InterviewComposeBody = z.object({
+  templateKey: z.string().min(1).max(200),
+  templateName: z.string().max(200).optional(),
+  /** key ช่อง → คำตอบเป็นข้อความของผู้ใช้ */
+  answers: z.record(z.string().max(200), z.string().max(4000)),
+  /** ข้อมูลที่มีแล้ว — ค่าที่ผู้ใช้พิมพ์เองจะไม่ถูกทับ */
+  data: z.record(z.string(), z.unknown()).default({}),
+  provider: z.enum(['minimax', 'openai', 'mock']).optional(),
+})
+export type InterviewComposeBody = z.infer<typeof InterviewComposeBody>
+
+export const InterviewComposeReply = z.object({
+  /** ค่าที่ได้หลัง merge กับของเดิม (ค่าเดิมที่ผู้ใช้กรอกเองไม่ถูกทับ) */
+  data: z.record(z.string(), z.unknown()),
+  /** key ที่ถูกเติมจริงในรอบนี้ */
+  changed: z.array(z.string()),
+  /** คีย์ที่ทิ้งเพราะโมเดลตอบไม่ครบ/ไม่ตรงกับชนิดชอง — เอาไปเตือนผู้ใช้ */
+  skipped: z.array(z.string()).default([]),
+  reply: z.string().default(''),
+  provider: z.string(),
+  model: z.string(),
+})
+export type InterviewComposeReply = z.infer<typeof InterviewComposeReply>
+
 // ── บุ๊กมาร์ก ────────────────────────────────────────────────
 
+/**
+ * บุ๊กมาร์กของผู้ใช้คนหนึ่ง — **หนึ่งรายการต่อหนึ่งแม่แบบ**
+ *
+ * ⚠️ `team` คือ "เก็บไว้ที่ไหน" ไม่ใช่ "แม่แบบนี้เป็นของทีมไหน"
+ *   สองเรื่องนี้คนละเรื่องกัน ถ้าสับสนจะไปแกะความหมายของข้อมูลทิ้ง
+ *   (การย้าย**แม่แบบ**เข้าทีมอยู่ที่ `AccessView.team` / `SetTemplateTeamBody`)
+ *
+ *   บุ๊กมาร์กเป็นของ**ส่วนตัวของผู้กดดาวเสมอ** แม้จะเลือกเก็บลงทีม
+ *   ทีมแค่เป็น "โฟลเดอร์" ส่วนตัวของผู้ใช้แต่ละคน ไม่ใช่การแชร์บุ๊กมาร์กให้ทีมเห็น
+ */
 export const BookmarkRecord = z.object({
   _id: z.string(),
   user: z.string(),
@@ -267,6 +369,15 @@ export const BookmarkRecord = z.object({
   templateName: z.string().nullable(),
   note: z.string().max(500).nullable(),
   createdAt: z.date(),
+  /**
+   * ทีมที่เลือกเก็บ — `null` หรือไม่มี = ส่วนตัว
+   *
+   * ⚠️ `.optional()` เพราะเอกสารเก่าใน Mongo ไม่มีฟิลด์นี้
+   *   ถ้าไม่ใส่ optional ข้อมูลเดิมทุกรายการจะพังตอนอ่าน (ไม่ใช่ตอนเขียน)
+   */
+  team: z.string().nullable().optional(),
+  /** ชื่อทีมที่เติมให้ฝั่งเว็บตอนอ่าน — ไม่ได้เก็บลงฐานข้อมูล (ชื่อทีมเปลี่ยนได้) */
+  teamName: z.string().nullable().optional(),
 })
 export type BookmarkRecord = z.infer<typeof BookmarkRecord>
 
@@ -275,6 +386,8 @@ export const CreateBookmarkBody = z.object({
   versionId: z.string().min(1).max(200),
   templateName: z.string().max(200).optional(),
   note: z.string().max(500).optional(),
+  /** `null` = เก็บส่วนตัว (ค่าเริ่มต้นของข้อมูลเก่า) */
+  team: z.string().max(120).nullable().optional(),
 })
 export type CreateBookmarkBody = z.infer<typeof CreateBookmarkBody>
 
@@ -359,8 +472,13 @@ export type MyHistoryQuery = z.infer<typeof MyHistoryQuery>
  *  · access   สิทธิ์ของเราเกี่ยวกับแม่แบบนั้นถูกเปลี่ยน
  *  · document งานเอกสารที่เราสั่ง เสร็จหรือล้มเหลว
  *  · system   เรื่องของแม่แบบที่ระบบแจ้ง (ใกล้ถูกลบถาวร / เปิด-ปิดสาธารณ)
+ *  · issue    ผู้ใช้รายงานปัญหาผ่านปุ่ม "รายงานปัญหา" (ดู `reports.ts`)
+ *
+ * ⚠️ `issue` ตั้งใจให้**ปิดไม่ได้** เหมือน `access` / `system`
+ *   เพราะเป็นช่องทางเดียวที่ผู้ใช้บอกเราว่าระบบพังตรงไหน ถ้าปิดทิ้งเงียบ ๆ
+ *   เราจะได้แต่คนที่แจ้งเองทางอื่น แล้วคิดว่าไม่มีใครเจอปัญหา
  */
-export const NotificationKind = z.enum(['share', 'access', 'document', 'system'])
+export const NotificationKind = z.enum(['share', 'access', 'document', 'system', 'issue'])
 export type NotificationKind = z.infer<typeof NotificationKind>
 
 /** ป้ายกำกับบนตัวกรองในหน้าเว็บ — เก็บที่นี่เพื่อให้ API กับหน้าเว็บใช้คำเดียวกัน */
@@ -369,6 +487,7 @@ export const NOTIFICATION_KIND_LABEL: Record<NotificationKind, string> = {
   access: 'สิทธิ์',
   document: 'งานเอกสาร',
   system: 'ระบบ',
+  issue: 'ปัญหาที่แจ้ง',
 }
 
 /** จดหมายหนึ่งฉบับ (เก็บใน MongoDB collection `notifications`) */
@@ -427,6 +546,17 @@ export function getPath(data: Record<string, unknown>, path: string): unknown {
     cur = (cur as Record<string, unknown>)[p]
   }
   return cur
+}
+
+/**
+ * ค่านี้ "ยังไม่มีเนื้อหา" หรือไม่ — นิยามเดียวกับฝั่งเว็บ (`lib/fields.ts`)
+ *
+ * ⚠️ ต้องตรงกันทั้งสองฝั่ง
+ *   ถ้าฝั่งหนึ่งนับว่าว่าง อีกฝั่งนับว่าไม่ว่าง
+ *   ผู้ใช้จะเห็น "กรอกครบแล้ว" แต่ปุ่มสร้างถูกปฏิเสธ โดยไม่มีใครเห็นว่าขัดกัน
+ */
+export function isBlankValue(v: unknown): boolean {
+  return v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)
 }
 
 /**
@@ -489,6 +619,13 @@ export function deletePath(
  * - ค่าเดิมที่ผู้ใช้กรอกเอง → **คงไว้** (ไม่ให้ AI ไปทับของที่คนพิมพ์เอง)
  *
  * คืนทั้งข้อมูลใหม่และรายการ key ที่เปลี่ยน เพื่อให้ UI บอกผู้ใช้ได้
+ *
+ * ⚠️ ค่าที่**ว่าง**จาก AI ต้องไม่ถูกนับว่าเปลี่ยน (วัดจริง 2026-10-06)
+ *   โมเดลคืน `{"เรียน": ""}` เมื่อไม่รู้จะเติมอะไร
+ *   เดิมนับเป็น changed → หน้าเว็บขึ้นว่า *"เติม 1 ช่องแล้ว · ใส่ให้แล้ว"*
+ *   แต่ช่องยังว่างเปล่า และตัวนับ "กรอกแล้ว 0/1" ไม่ขยับ
+ *   → ผู้ใช้เชื่อว่างานเสร็จแล้ว ทั้งที่ไม่มีอะไรเปลี่ยน
+ *   การเขียนค่าว่างทับค่าว่างคือ no-op จึงไม่มีสิทธิ์รายงานว่าเปลี่ยน
  */
 export function mergeAiData(
   current: Record<string, unknown>,
@@ -497,13 +634,8 @@ export function mergeAiData(
   let data: Record<string, unknown> = { ...current }
   const changed: string[] = []
   for (const [key, value] of Object.entries(incoming)) {
-    const existing = getPath(data, key)
-    const empty =
-      existing === undefined ||
-      existing === null ||
-      existing === '' ||
-      (Array.isArray(existing) && existing.length === 0)
-    if (empty && value !== null && value !== undefined) {
+    if (isBlankValue(value)) continue
+    if (isBlankValue(getPath(data, key))) {
       data = setPath(data, key, value)
       changed.push(key)
     }
@@ -560,11 +692,7 @@ export function validateFormData(
 
   for (const f of fields) {
     const raw = getPath(data, f.key)
-    const isBlank =
-      raw === undefined ||
-      raw === null ||
-      raw === '' ||
-      (Array.isArray(raw) && raw.length === 0)
+    const isBlank = isBlankValue(raw)
 
     if (f.required && isBlank) {
       errors[f.key] = 'ช่องนี้ต้องกรอก'

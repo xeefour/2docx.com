@@ -23,10 +23,12 @@
 #  ── ตารางเส้นทาง ───────────────────────────────────────────
 #  /api/*      → api:4000          (Fastify mount ใต้ /api)
 #  /auth/*     → api:4000          (Casdoor callback ไม่ได้อยู่ใต้ /api)
-#  /docs       → api:4000          (Swagger UI)
-#  /docs/*     → api:4000          (css/js/favicon ของ Swagger UI)
+#  /apis       → api:4000          (Swagger UI)
+#  /apis/*     → api:4000          (css/js/favicon ของ Swagger UI)
+#  /docs/*     → ตัวเอง             (คู่มือ Carbone ภาษาไทย, static file_server)
 #  /files/*    → rustfs-ui:8080    (หน้าไฟล์ใน S3)
 #  /logs/*     → loki:3100         (ค้น log)
+#  /analyze/*  → log-analyzer:3110(หน้าเว็บวิเคราะห์ log ด้วย AI)
 #  อื่นทั้งหมด → web:3000          (เว็บ Next.js)
 #
 #  ── สิ่งที่ตั้งใจไม่เปิด ────────────────────────────────────
@@ -37,7 +39,6 @@
 #    จึงปล่อยไว้ที่ 127.0.0.1:12345 เหมือนเดิม เข้าผ่าน SSH tunnel ได้
 #  · MongoDB / NATS / Valkey / RustFS — ข้อมูล ไม่ใช่หน้าเว็บ
 # ─────────────────────────────────────────────────────────────
-
 {
 	# Dokploy เป็นคนจัดการ TLS แล้วส่งต่อมาเป็น HTTP
 	# → บอก Caddy ว่าข้างนอกเป็น https เพื่อไม่ให้ redirect ผิดและไม่ให้ลองยกอัตโนมัติ
@@ -76,20 +77,44 @@
 	}
 
 	# เอกสาร API เปิดได้โดยไม่ต้องจำพอร์ต
-	# ⚠️ ต้อง match ทั้ง `/docs` และ `/docs/*` ไม่งั้นไฟล์ชั้นในจะตกไปโดนเว็บ
-	#   หน้า Swagger UI ดึงอีก 7 ไฟล์จาก `/docs/static/…` (css/js/favicon)
-	#   ถ้า match แค่ `/docs` พวกนั้นจะหลุดไปจบที่ catch-all ด้านล่าง → 404
+	# ⚠️ ต้อง match ทั้ง `/apis` และ `/apis/*` ไม่งั้นไฟล์ชั้นในจะตกไปโดนเว็บ
+	#   หน้า Swagger UI ดึงอีก 7 ไฟล์จาก `/apis/static/…` (css/js/favicon)
+	#   ถ้า match แค่ `/apis` พวกนั้นจะหลุดไปจบที่ catch-all ด้านล่าง → 404
 	#   (เจอตอนผ่าน gateway: HTML 200 แต่ static 404 ทั้งหมด)
 	#
 	# ⚠️ ต้องใช้ named matcher เพราะ `handle` รับ path matcher ได้แค่ตัวเดียว
-	#   (`handle /docs /docs/* { }` ทำให้ caddy validate ไม่ผ่าน — เจอตอนลองจริง)
-	#   และไม่ใช้ `/docs*` เพราะจะไปจับ `/docsomething` ไปด้วย
-	@docs path /docs /docs/*
-	handle @docs {
+	#   (`handle /apis /apis/* { }` ทำให้ caddy validate ไม่ผ่าน — เจอตอนลองจริง)
+	#   และไม่ใช้ `/apis*` เพราะจะไปจับ `/apisomething` ไปด้วย
+	@apis path /apis /apis/*
+	handle @apis {
 		reverse_proxy api:4000
 	}
 	handle /openapi.json {
 		reverse_proxy api:4000
+	}
+
+	# ── คู่มือ Carbone ภาษาไทย (static) ───────────────────────
+	# เสิร์ฟตรงจากตัว Caddy ไม่ต้องมี container เพิ่มและไม่ต้อง build
+	#   โฟลเดอร์ที่เสิร์ฟ = /srv/manual (mount จาก docgen-platform/manual)
+	#
+	# ⚠️ ต้องใช้ `handle_path` ไม่ใช่ `handle` เพราะไฟล์ในคู่มืออ้างอิงกัน
+	#     แบบสัมพัทฤ์ (`assets/manual.css` ไม่มี slash นำหน้า)
+	#     `handle_path` ถอด `/docs` ออกก่อนส่งให้ file_server
+	#     ถ้าใช้ `handle` ไฟล์จะถูกมองหาที่ `/srv/manual/docs/…` → 404 ทั้งเว็บ
+	#
+	# ⚠️ `/docs` (ไม่มี slash ท้าย) ไม่ match `/docs/*` → ต้อง redirect ให้เป็น
+	#     `/docs/` ก่อน ไม่งั้นพิมพ์ URL ตรง ๆ แล้วได้ 404
+	#
+	# ⚠️ เส้นทางนี้**ทับ** Swagger UI เดิมที่เคยอยู่ที่ /docs ไป
+	#     ตอนนี้ API ตั้ง routePrefix เป็น `/apis` แล้ว (ดู apps/api/src/app.ts)
+	#     เอกสาร API จึงย้ายไปอยู่ที่ /apis แทน
+	redir /docs /docs/ 301
+	handle_path /docs/* {
+		root * /srv/manual
+		file_server {
+			index index.html
+		}
+		header Cache-Control "public, max-age=300"
 	}
 
 	# ── หน้าไฟล์ใน S3 ──────────────────────────────────────
@@ -110,6 +135,39 @@
 		reverse_proxy loki:3100
 	}
 
+	# ── วิเคราะห์ log ด้วย AI ────────────────────────────────
+	# log-analyzer เสิร์ฟหน้าเว็บตัวเดียวที่ / และ API ใต้ /api/*
+	# ใช้ handle_path ได้ เพราะ index.html ไม่มี asset ภายนอกเลย (self-contained)
+	#   → /analyze            → /                  (หน้าเว็บ)
+	#   → /analyze/api/status → /api/status
+	#
+	# ⚠️ มี basic_auth แล้ว (เพิ่ม 2026-10-06) เพราะหน้านี้เปิด log ทั้งหมด
+	#    และใช้โควตา AI ของเรา ใครเข้ามาก็ใช้ได้
+	#
+	# รหัสผ่านมาจาก ANALYZE_AUTH_PASSWORD ใน dokploy-infra/.env เป็นรหัสผ่านธรรมดา
+	#   ที่อ่านออกและแก้ได้เอง ไม่ต้องเดาว่าเดิมตั้งอะไรไว้
+	#   แต่ Caddy บังคับให้เป็น bcrypt hash → entrypoint.sh แปลงให้ตอน container เริ่ม
+	#   แล้วแทนคำว่า PLACEHOLDER (ตัวข้างล่าง) ด้วย hash จริง
+	#
+	# ⚠️ ห้ามเขียนชื่อ placeholder นี้ไว้ที่อื่นในไฟล์ (รวมถึงในคอมเมนต์)
+	#    entrypoint ใช้ sed แทนทุกที่ที่เจอ → hash จะไปโผล่ในคอมเมนต์ด้วย
+	# ⚠️ ห้ามเขียน hash ตรงนี้อีก — เคยเขียนแล้วถูก commit ลง git ไป (6 ต.ค.)
+	# ⚠️ ถ้าไม่มี ANALYZE_AUTH_PASSWORD entrypoint จะหยุด container ไว้เลย
+	#    → ตั้งใจให้ fail เห็นชัด แทนที่จะเปิดหน้านี้ทิ้งไว้โดยไม่มี auth
+	redir /analyze /analyze/ 301
+	handle_path /analyze/* {
+		basic_auth {
+			{$ANALYZE_AUTH_USER} ANALYZE_HASH_PLACEHOLDER
+		}
+		reverse_proxy log-analyzer:3110 {
+			# การวิเคราะห์ด้วยโมเดลที่คิดนาน ๆ (effort=high ใช้ ~90 วิ) ต้องไม่ให้ proxy ตัดก่อน
+			transport http {
+				read_timeout 5m
+				write_timeout 5m
+			}
+		}
+	}
+
 	# ── เว็บ ───────────────────────────────────────────────
 	# ต้องอยู่ท้ายสุด: ทุกอย่างที่ไม่ match ข้างบนจะมาตกที่นี่
 	handle {
@@ -118,15 +176,26 @@
 }
 
 # ─────────────────────────────────────────────────────────────
-#  คำเตือนเรื่องความปลอดภัยของ 2 เส้นทางนี้
+#  สถานะการยืนยันตัวตนของแต่ละเส้นทาง
 #
-#  ⚠️ `/files` และ `/logs` เปิด**ไม่มีการยืนยันตัวตน** เพราะ:
-#     · rustfs-ui  = rclone serve http ไม่มี auth เลย
-#     · Loki       = ตั้ง auth_enabled: false
-#    เปิดบนโดเมนสาธารณะแล้วใครก็ดูไฟล์ใน S3 และค้น log ได้
+#  | เส้นทาง     | ยืนยันตัวตน | เพราะอะไร |
+#  |---|---|---|
+#  | `/analyze`  | ✅ basic_auth (ops) | เพิ่ม 2026-10-06 — เปิด log ทั้งหมด + ใช้โควตา AI |
+#  | `/logs`     | ❌ ไม่มี | Loki ตั้ง `auth_enabled: false` |
+#  | `/files`    | ❌ ไม่มี | rustfs-ui คือ `rclone serve http` ไม่มี auth เลย |
 #
-#  ถ้าต้องการปิดบังค์ ให้ uncomment ด้านล่าง (ต้องเตรียม bcrypt hash ก่อน:
-#  `docker run --rm caddy:2 caddy hash-password --plaintext 'รหัสผ่าน'`)
+#  ⚠️ ถ้าจะ map โดเมนจริง ต้องปิด `/logs` และ `/files` ด้วย ไม่งั้น
+#     ใครก็ดูไฟล์ใน S3 และค้น log ได้โดยไม่ต้องล็อกอิน
+#
+#  ── ถ้าจะเพิ่ม basic_auth ─────────────────────────────────
+#  1. สร้าง hash:
+#     docker run --rm caddy:2 caddy hash-password --plaintext 'รหัสผ่าน'
+#  2. ใส่ hash ลงในบรรทัด `ops` ข้างล่าง (เขียนทับ ADMIN_HASH_HERE)
+#  3. uncomment บล็อกที่ต้องการ
+#
+#  ⚠️ bcrypt hash ปลอดภัยกว่าจะ commit ลง git
+#     (คนที่ได้ hash ไปยังล็อกอินไม่ได้ แต่ยังตั้งรหัสใหม่ออนไลน์ได้)
+#     ถ้าเป็นระบบสาธารณะจริง ให้ผูกกับ Casdoor แทน basic_auth
 #
 #  handle /files* {
 #  	basic_auth {
@@ -135,5 +204,30 @@
 #  	reverse_proxy rustfs-ui:8080
 #  }
 #
-#  ทางเลือกที่ปลอดภัยกว่า: ไม่เปิดสองเส้นทางนี้ ใช้การเข้าเว็บธรรมดาอย่างเดียว
+#  handle /logs* {
+#  	basic_auth {
+#  		ops ADMIN_HASH_HERE
+#  	}
+#  	handle_path * {
+#  		reverse_proxy loki:3100
+#  	}
+#  }
+#
+#  ทางเลือกที่ปลอดภัยกว่า: ไม่เปิดสองเส้นทางนี้บนโดเมนสาธารณะ
+#  ให้เข้าได้เฉพาะ 127.0.0.1 (ผูก loopback) หรือผ่าน SSH tunnel
+# ─────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────
+#  เปลี่ยนรหัสผ่านของ /analyze
+#
+#  1. สร้าง hash ใหม่:
+#     docker run --rm caddy:2 caddy hash-password --plaintext 'รหัสผ่านใหม่'
+#
+#  2. แทน hash เดิมในบล็อก `handle_path /analyze/*` ด้านบน
+#
+#  3. บังคับให้ใช้ hash ใหม่ทันที (hash เก่ายังใช้ได้จนกว่าจะ reload):
+#     cd D:\2docx.com\dokploy-infra
+#     docker compose restart gateway
+#
+#  ผู้ใช้ชื่อ `ops` · ถ้าอยากเปลี่ยนชื่อผู้ใช้ แก้คำว่า ops ในบล็อกเดียวกัน
 # ─────────────────────────────────────────────────────────────

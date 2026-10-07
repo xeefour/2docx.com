@@ -26,7 +26,7 @@ foreach ($p in @(@{n='web';u='http://localhost:3000'},@{n='api';u='http://127.0.
 
 # 3. แก้โค้ด → ตรวจ typecheck → รันเทสต์ที่กระทบ → commit
 npx.cmd tsc --noEmit -p apps/web/tsconfig.json
-node --env-file=.env tools/test-xxx.mjs
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-xxx.mjs
 ```
 
 **กติกาที่พลาดแล้วเสียหายที่สุด** — อย่าเพิ่งสรุปว่าเทสต์ตกเพราะโค้ดพัง
@@ -152,7 +152,7 @@ Start-Process -FilePath cmd.exe -ArgumentList "/c","logs\run-x.cmd" -WorkingDire
 ### 3.1 รันยังไง
 
 ```bash
-node --env-file=.env tools/test-xxx.mjs
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-xxx.mjs
 ```
 
 `tools/lib/` มีตัวช่วยใช้ซ้ำ:
@@ -324,7 +324,8 @@ branch    : feat/docgen-platform-studio   (push ที่นี่ที่เ�
 - commit **แยกตามงาน** · ห้าม commit `.env` / secret
 - **commit ภาพหน้าจอที่เทสต์สร้างด้วย** (convention โปรเจกต์) — `tests/nav-status/output-*/`
 - untracked นอกขอบเขตที่**ต้องปล่อยไว้ ไม่ต้องแตะ**:
-  `../docserver_replace_image.py`, `../dokploy-infra/`, `../output-example/`, `../tools/doc_pipeline.py`
+  `../dokploy-infra/`, `../tools/doc_pipeline.py`, `../tools/log-analyzer/`,
+  `../tools/docserver/`, `../data/` (สำรอง docserver · gitignored)
 - ห้ามสร้างไฟล์นอก `docgen-platform/`
 
 ### 6.1 แยก commit ในไฟล์เดียว (`git add -p` ใช้ไม่ได้)
@@ -424,3 +425,6 @@ git commit -F logs/msg.txt
 | ย้ายไฟล์ compose ไปโฟลเดอร์อื่น แล้วค่า env หายทั้งชุด **โดยไม่มี error ชัดเจน** | `docker compose` อ่าน `${VAR}` จาก `.env` **ที่อยู่โฟลเดอร์เดียวกับไฟล์ compose** เท่านั้น ไม่ใช่จาก cwd · ค่าที่มี `${VAR:-default}` จะได้ค่า default เงียบ ๆ ไม่เตือน | `docker compose config --quiet` แล้วอ่านข้อความ `variable is not set` · ย้ายคีย์ไป `.env` ฝั่ง compose · ตรวจด้วยเกณฑ์ที่อ่านทั้งสองฝั่ง |
 | `node --env-file` อ่านไฟล์แรกไม่ได้ ทั้งที่ไฟล์มีอยู่ | npm รัน script ของ workspace ที่ `apps/api` → `../../dokploy-infra` ชี้ไปที่ `docgen-platform/dokploy-infra` ซึ่งไม่มีอยู่จริง | ต้องขึ้น **3** ชั้น (`../../../dokploy-infra/.env`) — path ของ workspace ไม่ใช่ของโปรเจกต์ |
 | จัด `CORS_ORIGINS` เป็น dev-only แต่ compose ก็ใช้ | มี `${CORS_ORIGINS:-default}` → ค่า default ทำให้ compose **ไม่เตือน** ว่าขาด ตกไปเงียบ ๆ | ดึงชื่อตัวแปรจากไฟล์ compose จริงด้วย regex แล้วเทียบกับที่มีใน `.env` — ไม่เดาจากความจำ |
+| ค่าลับกระจาย 3 ไฟล์ + มีแบ็กอัป 3 ไฟล์ที่มีรหัสผ่านจริง (2026-10-06) | แต่ละไฟล์ถูก ignore อยู่จริง จึงไม่มีอะไรเตือน · `MINIMAX_API_KEY` มี 2 ชุด แก้ผิดไฟล์ก็ไม่มีผล · รหัสผ่านฝังซ้ำใน URL ฝั่ง dev ตอนเปลี่ยนรหัสในไฟล์กลาง ไฟล์ dev ไม่เปลี่ยนตาม → auth พังเงียบ | รวมที่ `dokploy-infra/.env` ไฟล์เดียว (ต้องอยู่โฟลเดอร์เดียวกับ compose) · เกณฑ์ `check-env-single-file.mjs` + ฉีดบั๊กพิสูจน์ 6 แบบ |
+| เกณฑ์ "คีย์สำคัญต้องไม่ว่าง" ผ่าน ทั้งที่ฉีดค่าว่างแล้ว | regex `^\s*KEY\s*=\s*(.*)$` — **`\s` จับขึ้นบรรทัดด้วย** ทำให้ข้ามจาก `KEY=` (ว่าง) ไปจับ `=` ของบรรทัด comment ถัดไป แล้วได้ "ค่า" เป็นข้อความ comment → ผ่านแบบเงียบ | ใช้ `[ \t]*` และ `[^\r\n]*` ซึ่งไม่ข้ามบรรทัด (เจอตอนฉีดบั๊กครั้งที่ 3 ไม่ตก) |
+| สคริปต์วินิจฉัยเขียนไฟล์จริงทิ้งไว้ แล้วสคริปต์ถัดไปจับ "ต้นฉบับ" ที่เสียแล้ว | โปรบ์แก้ `.env` เพื่อทดสอบ regex แล้วเผลอปล่อยไว้ · `prove-*` ถ่าย snapshot จากไฟล์ที่เสีย → กู้คืนไม่ได้ ต้องกู้คีย์จริงด้วยมือ | สคริปต์ที่แตะไฟล์จริงต้อง `try/finally` คืนค่าเสมอ · ถ้าทำผิด ให้ตรวจด้วย fingerprint (sha256 10 ตัว) เทียบกับค่าที่จำได้ |

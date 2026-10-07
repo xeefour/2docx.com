@@ -31,6 +31,20 @@ export const mongoPlugin = fp(async (app) => {
 
   const db = client.db(env.MONGO_DB)
 
+  /**
+   * ลบ index ที่เปลี่ยนนิยามไปแล้ว — `createIndexes` จะไม่แก้ของเดิมให้
+   *   จะพ่น `IndexKeySpecsConflict` (code 85) แล้วบูตไม่ขึ้น
+   *   `dropIndex` คืน error ถ้าไม่มีอยู่จริง → กลืนทิ้งได้
+   */
+  const dropIndex = async (collection: string, name: string) => {
+    try {
+      await db.collection(collection).dropIndex(name)
+      app.log.info({ collection, index: name }, 'ลบ index เก่าที่นิยามไม่ตรงแล้ว')
+    } catch {
+      // ไม่มี index นี้อยู่แล้ว = ปกติ
+    }
+  }
+
   // เช็คว่า replica set ทำงานจริง — ถ้าเป็น standalone
   // transaction จะใช้ไม่ได้แต่จะไม่รู้ตัวจนกว่าจะพังตอน runtime
   const hello = await db.admin().command({ hello: 1 })
@@ -55,6 +69,9 @@ export const mongoPlugin = fp(async (app) => {
   // ── collection ของฟีเจอร์ Studio ────────────────────────────
   // form_schemas / template_access ใช้ templateKey เป็น _id เลย
   // → upsert ได้โดยไม่ต้องมี index เพิ่ม (Mongo ใช้ _id เป็น key อยู่แล้ว)
+  //
+  // user_settings ก็แบบเดียวกัน — ใช้ sub ของผู้ใช้เป็น _id (หนึ่งคนมีแถวเดียว)
+  //   ถ้าวันหลังเพิ่ม "ประวัติการแก้ค่าตั้งค่า" ค่อยมาเพิ่ม index ตอนนั้น
   await db.collection('chat_sessions').createIndexes([
     { key: { user: 1, updatedAt: -1 }, name: 'user_updated' },
     { key: { user: 1, templateKey: 1, updatedAt: -1 }, name: 'user_template_updated' },
@@ -88,6 +105,66 @@ export const mongoPlugin = fp(async (app) => {
     { key: { user: 1, at: -1 }, name: 'user_at' },
     // นับเฉพาะที่ยังไม่อ่าน (ทำป้ายบนกระดิ่ง 🔔) → ต้องมี `read` ต่อด้วย
     { key: { user: 1, read: 1, at: -1 }, name: 'user_unread_at' },
+  ])
+
+  // ── ระบบทีม ────────────────────────────────────────────────
+  /**
+   * `team_members` — หัวใจของระบบทีม
+   *
+   * ⚠️ `unique` ต่อ (team, sub) คือกันไม่ให้คนเดียวอยู่ในทีมเดียวสองแถว
+   *   ถ้าไม่มี การเชิญซ้ำจะกลายเป็นสมาชิกสองคน → นับผิด และลดสิทธิ์อาจพัง
+   *   (เจอจริงตอนทดสอบ: เรียก `addMember` ซ้ำด้วยคนเดิม)
+   *
+   * ⚠️ **ต้องเป็น partial index** เพราะเชิญด้วยอีเมล = แถวที่ยังไม่มี `sub` (`sub: null`)
+   *   ถ้าไม่ใส่ partial → `null` ซ้ำกันในทีมเดียวได้แค่แถวเดียว
+   *   = เชิญคนที่สองด้วยอีเมลแล้วพังทันที
+   */
+  // index เดิมเป็น unique ทั้งก้อน → ต้องทิ้งก่อน ไม่งั้นของเก่ายังบังคับ `sub: null` ไว้
+  await dropIndex('team_members', 'team_sub_unique')
+  await db.collection('team_members').createIndexes([
+    {
+      key: { team: 1, sub: 1 },
+      name: 'team_sub_unique',
+      unique: true,
+      partialFilterExpression: { sub: { $type: 'string' } },
+    },
+    // กันเชิญอีเมลเดิมซ้ำในทีมเดียว (คนละแถวกับ sub) — กันนับสมาชิกเกินจริง
+    {
+      key: { team: 1, email: 1 },
+      name: 'team_email_unique',
+      unique: true,
+      partialFilterExpression: { email: { $type: 'string' } },
+    },
+    // หน้า "ทีมของฉัน" กรองด้วย sub เสมอ
+    { key: { sub: 1 }, name: 'sub' },
+    // ตอนเข้าสู่ระบบ: หาแถวที่รอผูกด้วยอีเมลของตัวเอง (ข้ามทีม)
+    { key: { email: 1 }, name: 'email' },
+    // นับ owner ก่อนลดสิทธิ์ (กัน owner คนสุดท้ายหลุดสิทธิ์)
+    { key: { team: 1, role: 1 }, name: 'team_role' },
+  ])
+  /**
+   * `template_access.team` — แม่แบบของทีม
+   *
+   * ใช้นับแม่แบบของทีม (ป้ายในหน้ารายการทีม) และถอน `team` เวลาลบทีม
+   * แม่แบบที่ยังไม่มีทีม = `team: null` → index นี้ครอบทั้งสองกรณี
+   */
+  await db.collection('template_access').createIndexes([
+    { key: { team: 1 }, name: 'team' },
+    { key: { owner: 1 }, name: 'owner' },
+    { key: { 'sharedWith.sub': 1 }, name: 'shared_with' },
+  ])
+
+  /**
+   * รายงานปัญหาจากผู้ใช้
+   *
+   * หน้า `/reports` เปิดด้วย `sort({ createdAt: -1 }).limit(200)`
+   * → ถ้าไม่มี index นี้จะสแกนทั้ง collection ทุกครั้งที่เปิดหน้า
+   * (และ collection นี้โตเร็วเป็นพิเศษ เพราะเปิดส่งได้โดยไม่ต้องเป็นผู้ดูแล)
+   */
+  await db.collection('issue_reports').createIndexes([
+    { key: { createdAt: -1 }, name: 'created' },
+    // ทำป้าย "ยังค้างอยู่ N" — นับเฉพาะที่ยังไม่ได้ปิด
+    { key: { resolvedAt: 1 }, name: 'resolved' },
   ])
 
   app.decorate('mongo', db)

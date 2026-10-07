@@ -49,9 +49,13 @@ function who(req: Req): SessionUser {
   return u
 }
 
-/** ลิงก์ที่ส่งไปในอีเมล — พาไปหน้าแม่แบบนั้นเลย */
+/** ลิงก์ที่ส่งไปในอีเมล — พาไปหน้าแบบร่างนั้นเลย */
 function templateUrl(templateKey: string): string {
-  return `${env.AUTH_SUCCESS_REDIRECT.replace(/\/$/, '')}/studio/${encodeURIComponent(templateKey)}`
+  // ⚠️ ต้องใช้แค่ origin ไม่ใช้ทั้ง AUTH_SUCCESS_REDIRECT
+  //   เพราะค่านั้นลงท้ายด้วย /studio อยู่แล้ว (เช่น http://localhost:8090/studio)
+  //   ถ้าเอาทั้งค่ามาต่อ /studio อีก จะได้ /studio/studio/<key> → 404
+  const { origin } = new URL(env.AUTH_SUCCESS_REDIRECT)
+  return `${origin}/studio/${encodeURIComponent(templateKey)}`
 }
 
 /**

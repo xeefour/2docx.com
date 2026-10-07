@@ -51,11 +51,11 @@ docgen-platform/
 │   │       ├── branding.ts   เขียนทับ metadata เป็น 2docx.com
 │   │       └── s3.ts         บันทึกไฟล์
 │   └── web/                  Next.js 15 — เว็บสาธารณะ + 2docx Studio
-│       ├── next.config.mjs   rewrite /api, /auth, /docs ไป API (ไม่ต้องตั้ง CORS)
+│       ├── next.config.mjs   rewrite /api, /auth, /apis ไป API (ไม่ต้องตั้ง CORS)
 │       └── app/
 │           ├── page.tsx      หน้าแรก (server component → SEO ได้)
 │           └── studio/       Studio (client component → ไม่ต้อง SEO)
-├── tools/                    สคริปต์ตรวจและนำเข้าแม่แบบ (รันด้วย `node --env-file=.env`)
+├── tools/                    สคริปต์ตรวจและนำเข้าแม่แบบ (รันด้วย `node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development`)
 └── docker-compose.yml        api + worker เท่านั้น
 ```
 
@@ -103,7 +103,7 @@ docker compose up -d
 
 `docker compose up -d` ครอบคลุม api · web · worker · gateway แล้ว
 
-เข้าผ่าน **gateway ที่ `http://127.0.0.1:8090`** · Swagger UI ที่ `/docs` · spec JSON ที่ `/openapi.json`
+เข้าผ่าน **gateway ที่ `http://127.0.0.1:8090`** · Swagger UI ที่ `/apis` · spec JSON ที่ `/openapi.json`
 
 ### 4.1 ขึ้นเว็บ + 2docx Studio
 
@@ -126,7 +126,7 @@ npm run dev:web        # หรือ cd apps/web && npm run dev
 |---|---|---|
 | `/` · `/studio` · `/studio/[key]` · `/account` · `/teams` · `/teams/[id]` | เว็บ Next.js | ✅ |
 | `/api/*` · `/auth/*` | API | ✅ (Next rewrite) |
-| `/docs` · `/docs/*` · `/openapi.json` | Swagger UI | ✅ (Next rewrite) |
+| `/apis` · `/apis/*` · `/openapi.json` | Swagger UI | ✅ (Next rewrite) |
 | `/healthz` | ตรวจว่า gateway ยังฟัง | ❌ 404 |
 | `/files/*` | หน้าไฟล์ใน S3 (rustfs-ui) | ❌ 404 |
 | `/logs/*` | ค้น log (Loki) | ❌ 404 |
@@ -181,26 +181,26 @@ npm run dev:web        # หรือ cd apps/web && npm run dev
 
 **ถ้าต้องการทดสอบส่วนที่ต้องใช้ docserver ให้ใช้ gateway ที่ `:8090`** ซึ่งเป็นระบบจริงอยู่แล้ว
 
-## `/docs` เปิดสาธารณ — ตั้งใจ
+## `/apis` เปิดสาธารณ — ตั้งใจ
 
-Swagger UI ที่ `/docs` **ไม่ต้อง login** เป็นการตัดสินใจ ไม่ใช่ลืม
+Swagger UI ที่ `/apis` **ไม่ต้อง login** เป็นการตัดสินใจ ไม่ใช่ลืม
 
 - ตัว API ยังบังคับ login อยู่เสมอ — กด "Try it out" แล้วยิงก็ได้ 401
 - เปิดไว้เพราะเป็น API ภายในองค์กร (ผ่าน tailnet) และการดูเอกสารไม่ควรต้องล็อกอิน
 - ถ้าวันหนึ่งเปิดออกสาธารณะจริง (ผ่าน Cloudflare Tunnel) ค่อยล็อกเพิ่ม
 
-จุดที่ต้องรู้: `hook` ใน `app.ts` ตัด `/docs` ออกจาก auth แบบ `startsWith`
+จุดที่ต้องรู้: `hook` ใน `app.ts` ตัด `/apis` ออกจาก auth แบบ `startsWith`
 เพราะ Swagger UI โหลด static หลายไฟล์ ถ้าบังคับ login หน้าจะโหลดไม่ขึ้นเลย
 
 ## ดูสถานะทุก container ในจุดเดียว
 
 `GET /api/health` รวมสถานะทุก service ที่ระบบพึ่งไว้ที่เดียว
-โผล่ใน Swagger UI ที่ `/docs` (แท็ก `health`) — กด **Try it out** เห็นสถานะสดทันที
+โผล่ใน Swagger UI ที่ `/apis` (แท็ก `health`) — กด **Try it out** เห็นสถานะสดทันที
 
 หรือดูเป็นตารางในเทอร์มินัล:
 
 ```bash
-node --env-file=.env tools/health.mjs
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/health.mjs
 ```
 
 ```
@@ -249,7 +249,7 @@ node --env-file=.env tools/health.mjs
 2. ถ้าต้องตั้งค่าใหม่ ใส่ env ใน `packages/shared/src/env.ts` + `.env.example`
 3. เพิ่ม object หนึ่งตัวใน `buildChecks()` — ใส่ `container` = ชื่อที่ `docker ps` แสดง
    เพื่อให้เทียบกันได้ และเขียน `detail` ให้บอกว่าต้องไปแก้อะไร
-4. ไม่ต้องแก้ที่อื่น — route อ่านจาก array นี้อัตโนมัติและโผล่ใน `/docs` ทันที
+4. ไม่ต้องแก้ที่อื่น — route อ่านจาก array นี้อัตโนมัติและโผล่ใน `/apis` ทันที
 
 ถ้าไม่มี client ใน API ให้ probe ด้วย `fetch` ไปที่ endpoint ตรง ๆ แทน
 
@@ -325,6 +325,264 @@ http://localhost:4001/auth/callback
 ทุกเอกสารเก็บ `createdBy` = `sub` ของผู้สร้าง และทุก query กรองด้วย field นี้
 เอกสารเก่าที่ยังไม่มี field = ไม่มีใครเป็นเจ้าของ → ไม่มีใครเห็น
 
+## หน้าบัญชีผู้ใช้ (`/account`)
+
+ผู้ใช้สั่ง: *"ทำ /account ให้หน่อย"* → การ์ดโปรไฟล์ + สรุปสิ่งที่ทำในระบบ + ค่าตั้งค่า
+
+| route | ทำอะไร |
+|---|---|
+| `GET /api/account` | โปรไฟล์ + สถิติ 5 ตัว + ค่าตั้งค่า (คำขอเดียวจบทั้งหน้า) |
+| `GET /api/account/settings` | อ่านค่าตั้งค่าอย่างเดียว (ไม่นับสถิติ) |
+| `PUT /api/account/settings` | แก้ทีละช่อง · merge ทับของเดิม |
+| `PUT /api/account/avatar` | อัปโหลดรูปโปรไฟล์ (multipart · field `avatar`) |
+| `GET /api/account/avatar` | ดึงรูปที่อัปโหลด (404 = ยังไม่มี → ใช้รูปจาก Casdoor แทน) |
+| `DELETE /api/account/avatar` | ลบรูปที่อัปโหลด · กลับไปใช้รูปจาก Casdoor |
+
+### sidebar ยืมของเดิมมาทั้งชุด — ไม่เขียน CSS ซ้ำ
+
+`AccountRail.tsx` ใช้ `.shell` · `.rail` · `.tabs--rail` ชุดเดียวกับ Studio
+จึงได้หน้าตาเหมือนกันและได้การซ่อนเป็นลิ้นชักบนจอเล็ก (ผ้าคลุมมืด + ปุ่มปิด) ฟรี
+
+เหตุผลที่ไม่เขียน CSS ใหม่: `globals.css` มีงานค้างจากเรื่องอื่นอยู่แล้ว
+เขียนซ้ำแยกไฟล์ = ปรับหน้าตาทีต้องแก้สองที่ และงานสองเรื่องจะปนในไฟล์เดียวตอน commit
+
+รายการในเมนูเป็น**ส่วนของหน้าเดียวกัน** ไม่ใช่คนละแท็บ → กดแล้วเลื่อนไป
+และปิดลิ้นชักเองเมื่อจอเล็ก (ไม่งั้นบังเนื้อหาที่ผู้ใช้จะไปอ่าน)
+
+### เปลี่ยนรูปได้ แต่ชื่อ/อีเมลยังแก้ที่ Casdoor
+
+รูปที่อัปโหลดเก็บแยกใน S3 และไม่แตะรูปที่ Casdoor
+→ ชื่อกับรูปจึงมาจากคนละที่ ตั้งใจให้เป็นแบบนี้
+(ถ้าจะให้แก้รูปที่ Casdoor ด้วย ต้องเขียน API ของ Casdoor ซึ่งเราไม่ได้ทำ)
+
+| เรื่อง | ทำอย่างไร | ทำไม |
+|---|---|---|
+| ตรวจชนิดไฟล์ | `sniffImage` ตัวเดียวกับรูปตัวอย่างแม่แบบ | เช็กจาก**ไบต์จริง** ไม่ใช่ `Content-Type` — ถ้าเชื่อ mimetype จะเป็น stored XSS บนโดเมนเรา |
+| key ใน S3 | `avatars/<sha256(sub)>.<ext>` | `sub` มาจาก Casdoor เราคุมรูปแบบไม่ได้ อาจมี `/` หรือ `..` ถ้าใช้ตรง ๆ จะเขียนทับไฟล์คนอื่นได้ |
+| cache | `cache-control: no-store` | URL เดิมต้องชี้ของใหม่ทันที ถ้า cache ไว้ผู้ใช้จะเห็นรูปเก่าหลังเปลี่ยน |
+| เปลี่ยนสกุลไฟล์ | ลบไฟล์เดิม**ก่อน**บันทึก key ใหม่ | ถ้าบันทึกก่อนแล้วค่อยลบ → พังตรงนั้นคือเหลือไฟล์กำพร้าที่ไม่มีใครอ้างถึงแล้วลบไม่ได้ |
+| ไฟล์หาย | อ่านไม่สำเร็จ = ล้าง key ให้กลับไปใช้รูป Casdoor | bucket ถูกล้างแล้วหน้าจะไม่ค้างเป็นรูปเสีย |
+| ขนาด | สูงสุด 2 MB | เพิ่มเติมจาก 5 MB ของรูปตัวอย่าง — รูปโปรไฟล์ไม่ต้องใหญ่ |
+
+### ไม่เก็บข้อมูลประจำตัวซ้ำสองที่
+
+ชื่อ/อีเมล/รูป **อ่านสดจาก session** ทุกครั้ง ถ้าเก็บลง Mongo ด้วย
+ข้อมูลจะเพี้ยนทันทีที่ผู้ใช้เปลี่ยนชื่อที่ Casdoor → หน้านี้จึง**แก้ชื่อไม่ได้**
+และบอกผู้ใช้ตรง ๆ ว่าต้องไปแก้ที่ Casdoor
+
+collection `user_settings` เก็บเฉพาะค่าที่ Casdoor ไม่รู้จัก (ตอนนี้คือการแจ้งเตือน)
+ใช้ `sub` เป็น `_id` → หนึ่งคนมีแถวเดียว และ upsert ได้โดยไม่ต้องมี index เพิ่ม
+
+### ค่าตั้งค่าต้องมีผลจริง — ปิดได้เฉพาะประเภทที่เป็นเรื่องเสริม
+
+ตาราง `MUTEABLE` ใน `notifications.ts` แมปประเภทจดหมาย → ค่าที่ปิดได้
+ทำครั้งเดียวตรงจุดส่ง ทุกจุดที่ยิงจดหมายจึงเคารพค่าเดียวกันโดยไม่ต้องแก้ทีละที่
+
+| ประเภท | ปิดได้ | ทำไม |
+|---|---|---|
+| `share` | ✅ | เรื่องเสริม — ปิดได้ถ้าไม่อยากรู้ |
+| `document` | ✅ | เรื่องเสริม |
+| `access` | ❌ | สิทธิ์เปลี่ยน/ถูกถอน — ถ้าไม่รู้ ผู้ใช้จะเจอ 403 โดยไม่มีคำอธิบาย |
+| `system` | ❌ | สถานะของสิ่งที่ผู้ใช้เพิ่งกด |
+
+อ่านค่าตั้งค่าไม่สำเร็จ = **ส่งต่อ** ไม่ใช่ข้าม เพราะการแจ้งเตือนเป็นเรื่องเสริม
+การแจ้งเตือนล้มทิ้งยังดีกว่าที่ผู้ใช้ไม่ได้รับ (หลักการเดียวกับ `notify()`)
+
+### ยังไม่ทำ
+
+- ลิงก์ตรงไปหน้าโปรไฟล์ของ Casdoor — ต้องยืนยันรูปแบบ URL ก่อน
+  (มี param `owner`/`organizationName` ติดมาด้วย ยังไม่ได้ทดสอบจริง)
+- ค่าตั้งค่าอื่นนอกจากการแจ้งเตือน — ยังไม่เพิ่มจนกว่าจะมีที่ไหนอ่านมันจริง
+  (ค่าที่บันทึกได้แต่ไม่มีใครใช้ = ค่าหลอกที่ผู้ใช้กดแล้วไม่เกิดอะไร)
+- ยังไม่มีการ**ย่อรูป** — เก็บไฟล์เต็มไว้ใน S3
+  ตอนนี้จำกัดที่ 2 MB ซึ่งพอสำหรับรูปโปรไฟล์
+  ถ้าวันหนึ่งอยากรับภาพจากมือถือความละเอียดสูง (10–20 MB) ค่อยเพิ่มขั้นตอนย่อ
+
+ตรวจเองได้: `tools/test-account.mjs` (46 ข้อ) · `tools/test-account-ui.mjs` (47 ข้อ)
+
+## ระบบทีม (`/teams`)
+
+ผู้ใช้สั่ง: *"สร้างระบบ teams ให้หน่อย ว่าควรจะต้องทำอย่างไร ทำอะไรได้บ้าง"* →
+เลือกแผนเองคือ **ทำทีมฝั่ง docgen ทั้งหมด ไม่แตะ Casdoor**
+
+| route | ทำอะไร |
+|---|---|
+| `GET /api/teams` | ทีมที่ฉันอยู่ (พร้อม `myRole` · จำนวนสมาชิก · จำนวนแม่แบบ) |
+| `POST /api/teams` | สร้างทีม (ผู้สร้างเป็น `owner` อัตโนมัติ · รับ `members[]` มาพร้อมกันได้) |
+| `GET /api/teams/:id` | รายละเอียด + รายชื่อสมาชิก |
+| `PATCH /api/teams/:id` | เปลี่ยนชื่อทีม (owner/admin) |
+| `DELETE /api/teams/:id` | ลบทีม (owner) → **คืนแม่แบบให้เจ้าของเดิม** ไม่ลบแม่แบบ |
+| `POST /api/teams/:id/members` | เชิญสมาชิก **ด้วยอีเมล** + role |
+| `PATCH /api/teams/:id/members/:who` | เปลี่ยนสิทธิ์ (`:who` = `sub` หรืออีเมลของคนที่รอผูก) |
+| `DELETE /api/teams/:id/members/:who` | ถอนสมาชิก (`:who` เหมือนกัน) |
+| `PUT /api/access/:key/team` | ย้ายแม่แบบเข้า/ออกทีม |
+
+### ทำทีมเอง ไม่ใช้ Casdoor Organization — เพราะอะไร
+
+token ของ Casdoor มี claim `owner` + `organization` อยู่แล้ว แต่โค้ดเดิมดึงมาแค่ `affiliation`
+ตัดสินใจไม่ใช้เส้นทางนั้นเพราะ
+
+- Casdoor ผูกองค์กรไว้กับ IdP → ถ้าย้าย IdP ทีมทั้งหมดหาย
+- 1 คน = 1 องค์กร → ใช้ข้ามหน่วยงานไม่ได้ ซึ่งเป็นกรณีปกติของงานเอกสารราชการ
+- Casdoor ไม่มี role ระดับทีม (viewer/editor/admin/owner) — ทำที่นั่นไม่ได้อยู่แล้ว
+
+ตัวผูกจึงเป็น **`sub` ของ Casdoor** คนละค่ากับชื่อทีม
+ชื่อ/อีเมลอ่านสดจาก session ตอนแสดงผลเท่านั้น (หลักการเดียวกับ `/account`)
+
+### เชิญด้วยอีเมล แต่คนที่ยังไม่เคยเข้าระบบยังไม่มี `sub`
+
+ผู้ใช้สั่ง: *"การเชิญใช้การใส่ email"* — เพราะ `sub` ของ Casdoor อ่านยากมาก
+(`1a2b3c4d-…`) และหาไม่ได้ถ้าคนนั้นยังไม่เคยล็อกอินเลย
+
+แต่ระบบเรา **หา email → `sub` ไม่ได้** เพราะไม่มีที่เก็บรายชื่อผู้ใช้เลย
+(ไม่มี `users` collection · `sharedWith` เก็บแค่ `sub` · ไม่อยากเรียก Casdoor API)
+
+จึงออกแบบเป็น **"รอผูก"** — แถวที่มี `sub: null` แต่เก็บอีเมลไว้แทน
+
+| ขั้นตอน | เกิดอะไร |
+|---|---|
+| เจ้าของเชิญด้วยอีเมล | ได้แถว `sub: null` + `email` → หน้าเว็บขึ้นป้าย **"รอเข้าระบบ"** |
+| คนนั้นยังไม่ล็อกอิน | **ยังไม่มีสิทธิ์ในทีม** (ไม่มี `sub` = ระบบจำเขาไม่ได้) ยังไม่เห็นทีมใน "ทีมของฉัน" |
+| เขาล็อกอินครั้งแรก | `claimPendingInvites()` ผูก `sub` + ชื่อ แล้ว**ลบอีเมลทิ้ง** |
+
+จุดที่เรียก `claimPendingInvites()` คือ callback ของ Casdoor (`modules/auth/route.ts`)
+ห่อ `try/catch` ไว้ เพราะล็อกอินสำเร็จแล้วต้องไม่ให้เรื่องนี้ทำให้เข้าไม่ได้
+
+| เรื่อง | ทำอย่างไร | ทำไม |
+|---|---|---|
+| เชิญอีเมลเดิมซ้ำ | `upsert` ที่ `{team, sub: null, email}` → เปลี่ยน role ของแถวเดิม | ไม่งั้นคนเดียวมีสองแถว นับสมาชิกเกินจริง |
+| normalize อีเมล | `trim()` + `toLowerCase()` ก่อนเทียบทุกครั้ง | `A@B.co` กับ `a@b.co` คนเดียวกัน แต่คนละสตริง |
+| เชิญคนที่เป็นสมาชิกอยู่แล้วด้วยอีเมลเดิม | เกิดแถวรอซ้ำได้ (เราหา `sub` ของสมาชิกเดิมไม่ได้) → พอเขาล็อกอิน **`claimPendingInvites()` ลบแถวรอทิ้ง** ไม่ใช่เพิ่มแถวใหม่ | ไม่งั้นคนเดียวมีสองแถวในทีมเดียว |
+| index `{team, sub}` unique | ต้องเป็น **partial** (`sub: { $type: 'string' }`) | ไม่งั้น `null` ซ้ำกันในทีมเดียวได้แค่แถวเดียว = เชิญคนที่สองแล้วพังทันที |
+| เก็บอีเมลไว้หลังผูกแล้วไหม | **ไม่เก็บ** ลบทิ้งทันที | หลักการเดียวกับ `/account` — ข้อมูลประจำตัวอ่านสดจาก session เก็บซ้ำจะเพี้ยนเมื่อผู้ใช้เปลี่ยนอีเมลที่ Casdoor |
+| อ้างสมาชิกใน URL | `:who` = มี `@` → มองเป็นอีเมล · ไม่มี → มองเป็น `sub` | คนที่ยังรอผูกไม่มี `sub` ให้อ้าง |
+| ช่องแชร์รายคนใน Studio | ยังรับ `sub` เท่านั้น (ชี้ไป `/teams` ให้ใช้ทีมแทน) | สิทธิ์รายคนผูกกับ `sub` ตรง ๆ และ `redact` เปิดเผยรายชื่อคนที่ถูกแชร์ — เปลี่ยนเป็นอีเมลต้องแก้ทั้งชั้นสิทธิ์ |
+
+> ⚠️ **เทสต์ต้องเรียก `claimPendingInvites()` ตัวจริง ไม่ใช่แก้ Mongo เอง**
+>   จุดที่เรียกจริงคือ Casdoor callback ซึ่งยิงผ่าน HTTP ไม่ได้ในเทสต์
+>   เทสต์ที่จำลองผลในฐานข้อมูลเองจะผ่านแม้ฟังก์ชันพัง
+>   → `tools/claim-pending.ts` เรียกฟังก์ชันจริงผ่าน `tsx` (พิสูจน์แล้ว: ถอด `$set: { sub }` ออก แล้วตก 23 ข้อ)
+
+### role 4 ระดับ — เปลี่ยนที่เดียวทั้งระบบ
+
+`viewer < editor < admin < owner` เรียงจาก map `RANK` ใน `packages/shared/src/teams.ts`
+ทุกจุดที่ถามว่า "แก้ได้ไหม" เรียก `roleAtLeast()` ตัวเดียวกัน → ไม่มีที่ไหนเขียนเงื่อนไขแยก
+
+| role | ทำอะไรได้ |
+|---|---|
+| `viewer` | ดูแม่แบบของทีมอย่างเดียว |
+| `editor` | ดู + แก้ฟอร์ม |
+| `admin` | เพิ่มถอนสมาชิก · เปลี่ยนชื่อทีม · ย้ายแม่แบบเข้า/ออกทีม |
+| `owner` | ทุกอย่างของ admin + ลบทีม |
+
+### กติกาที่ตั้งใจบังคับ
+
+| เรื่อง | ทำอย่างไร | ทำไม |
+|---|---|---|
+| owner คนสุดท้าย | `assertNotLastOwner()` ครอบทุกทางที่ลดจำนวน owner (ลด role · ถอน · ออกเอง) | ทีมที่ไม่มี owner = ไม่มีใครลบทีมได้ และสิทธิ์ `admin` ของคนที่เหลือกลายเป็นสูงสุดทันทีโดยที่ไม่ได้ตั้งใจ |
+| เพิ่ม owner | `addMember` รับได้แค่ `viewer`/`editor`/`admin` ต้องเลื่อนผ่าน `PATCH` | ถ้าเพิ่มผ่าน `addMember` ได้ จะข้ามการเช็ค owner คนสุดท้าย |
+| แม่แบบของทีม | `team` อยู่**ข้าง ๆ `owner`** ไม่ได้แทนที่ | ถ้าลบ `owner` ทิ้ง แม่แบบจะกลายเป็นของกำพร้าที่ไม่มีใครลบได้ (เจ้าของคนแรกยังคุมต่อได้) |
+| ย้ายเข้าทีม | API บังคับ `visibility = private` | กติกาเดิม `published` = ทุกคนแก้ฟอร์มได้ ถ้าคงสาธารณไว้ คนนอกทีมก็ยังแก้ได้ → ทีมไม่มีความหมาย |
+| ย้ายเข้าทีม | ต้องเป็นเจ้าของส่วนตัว (หรือแม่แบบไม่มี owner) + เป็น admin ของทีมปลายทาง | กันคนทั่วไปลากแม่แบบของคนอื่นเข้าทีมตัวเอง |
+| ลบทีม | `team: null` ทุกแม่แบบ ไม่ลบแม่แบบ | งานที่สมาชิกอัปโหลดไว้จะหายถ้าลบตามทีม · และกัน `team` ที่ชี้ไป id ที่ไม่มีอยู่จริง |
+| ชื่อทีมชนกันได้ | URL ใช้ `_id` ไม่ใช่ slug | ไม่ต้องเขียนระบบกันชื่อซ้ำ และเปลี่ยนชื่อทีมแล้วลิงก์เดิมยังใช้ได้ |
+| เข้าทีมเอง | ยังไม่มีปุ่ม join กลาง | เอกสารราชการ — ให้ owner/admin เชิญเอง |
+
+### สิทธิ์แม่แบบ: ทีมอยู่ตรงไหนในลำดับ
+
+`toView()` ใน `modules/studio/service.ts` เป็นจุดเดียวที่คำนวณสิทธิ์ทั้งหมด
+ลำดับความสำคัญ: **เจ้าของส่วนตัว > สมาชิกทีม > ถูกแชร์รายคน > เปิดสาธารณ**
+
+```ts
+const isTeamMember = Boolean(doc.team && teamRole)   // อย่าเขียน `teamRole && isTeamMember` พลิกกลับด้าน
+const teamCanEdit = roleAtLeast(teamRole, 'editor')
+```
+
+`resolveAccess()` โหลดแผนที่ทีมของฉัน**ครั้งเดียว**ต่อคำขอ (`loadMyTeamMap()`) แล้วส่งต่อในทุก key
+→ ไม่เกิด N+1 ตอนหน้ารายการเรียกมา 30 แม่แบบ
+
+> ⚠️ **ช่องโหว่ที่เจอระหว่างทำระบบทีม** — `GET /api/access/:key` คืน `sharedWith` ให้คนนอกทีมเสมอ
+> แม้แม่แบบเป็น `private` (มีมาตั้งแต่ก่อนมีทีม) ใครก็ยิงดูรายชื่อคนที่ถูกแชร์ได้
+> แก้ด้วย `redact()` — ถ้าเป็นของส่วนตัวแล้วผู้เรียกไม่มีสิทธิ์ ให้ตัด `sharedWith: []` และ `team: null` ทิ้ง
+> **คง HTTP 200 + `canEdit: false`** ไม่ใช่ 403 เพราะหน้าแก้ไขต้องได้บอกผู้ใช้ว่า *"แก้ไม่ได้"* ไม่ใช่พังหน้า
+
+### หน้าเว็บ
+
+| ไฟล์ | ทำอะไร |
+|---|---|
+| `app/teams/page.tsx` | server component · `cache: 'no-store'` · ยิง API ตรงฝั่ง server |
+| `app/teams/TeamsPage.tsx` | ฟอร์มสร้างทีม + การ์ดทีม (ยืมคลาส `.shell`/`.rail` ของ Studio เหมือน `/account`) |
+| `app/teams/[id]/page.tsx` | รายละเอียดทีม · `notFound()` ถ้าสิทธิ์ไม่ถึง |
+| `app/teams/[id]/TeamDetailClient.tsx` | เชิญ · เปลี่ยน role · ถอน · ลบทีม (ปุ่ม owner คนสุดท้ายถูก disable) |
+| `app/studio/SharePanel.tsx` | กล่อง "ทีม" ในแท็บการแชร์ · เลือกย้ายเข้า/ออกทีม |
+| `app/studio/StudioRail.tsx` | รับ `navSections` = เมนูที่พาไปหน้าอื่น (ทีม · บัญชีของฉัน) แยกจากแท็บกรองรายการ |
+| `app/studio/Studio.tsx` | ส่งเมนูกลุ่ม "ทำงานร่วมกัน" เข้า `navSections` |
+
+### เมนูทีมใน sidebar — แยกจากแท็บกรองรายการ
+
+ผู้ใช้สั่ง: *"ถ้าเปิดใช้งาน teams ให้เพิ่มเมนู teams ใน sidebar"*
+
+เดิมลิงก์ `/teams` ถูกยัดไว้ใน `.rail__foot` ติดกับกระดิ่งจดหมาย
+หน้าตาจึงอ่านไม่ออกว่าเป็นเมนู (ดูเหมือนส่วนหนึ่งของกล่องจดหมาย)
+
+จัดใหม่เป็น **กลุ่มเมนูแยก** ชื่อ "ทำงานร่วมกัน" อยู่ใต้แท็บรายการ มีเส้นคั่นกันชัดเจน
+
+| เรื่อง | ทำอย่างไร | ทำไม |
+|---|---|---|
+| แยกจาก `tabs` | เพิ่ม prop `navSections` ใน `StudioRail` | แท็บด้านบนคือ**ตัวกรองในหน้าเดิว** กดแล้วไม่ออกจากหน้า · ถ้ายัดรวมกันผู้ใช้จะคิดว่ากดแล้วกรองรายการ |
+| หน้าตาให้เหมือนกัน | ใช้คลาสชุดเดิม `tabs--rail` + `tabs__tab` | ได้หน้าตาเดียวกันโดย**ไม่ต้องเขียน CSS ใหม่** (`globals.css` ยังมีงานค้างจากเรื่องอื่น) |
+| เส้นคั่นกลุ่ม | inline style `borderTop` + `marginTop` | มิฉะนั้นกลุ่มใหม่ดูเป็นแท็บอีกอันของ "รายการ" |
+| ลิงก์ในลิ้นชัก | `onClick` ปิดลิ้นชักด้วย | กดแล้วเปลี่ยนหน้า แต่ถ้าผ้าคลุมมืดยังทับอยู่ ผู้ใช้จะเห็นจอเดิมแล้วคิดว่ากดไม่ได้ |
+| `บัญชีของฉัน` | ย้ายขึ้นมาอยู่กลุ่มเดียวกัน | เป็นลิงก์ไปหน้าอื่นเหมือนกัน ค้างไว้คนละที่ดูเหมือนตกหล่น |
+| โรงท้าย sidebar | เหลือแค่กระดิ่งจดหมาย + ออกจากระบบ | สองอย่างนี้เป็น*การกระทำ* ไม่ใช่*การนำทาง* |
+
+แยก server/client เพราะข้อมูลทีมไม่เปลี่ยนเอง แต่หลังแก้สมาชิกต้อง `router.refresh()` ใหม่ทุกครั้ง
+
+> ⚠️ **การ์ดการแชร์อยู่ที่ `pane=history`** ไม่ใช่ `pane=template` (ผู้ใช้สั่งย้ายไปแล้ว)
+> เทสต์ที่รอปุ่มผิดแท็บจะตกทั้งชุด — ใช้ `/studio/:key?tabs=form&pane=history` และรอ `.bootveil` หายก่อน
+
+### จอเล็กล้น — `width: 100%` บนคอลัมน์เนื้อหา (ไม่ใช่แค่ `minWidth: 0`)
+
+เพิ่มบรรทัดอีเมลยาว ๆ แล้วหน้าทีมล้นจอ 390px ถึง 111px
+แต่การแก้แบบที่คิดไว้ (ใส่ `minWidth: 0`) **ไม่ช่วยอะไรเลย**
+
+| สิ่งที่วัดได้ | ค่า |
+|---|---|
+| คอลัมน์เนื้อหา | 411px (ทั้งที่จอ 390px) |
+| ลูกที่กว้างที่สุด (รายชื่อสมาชิก) | min-content 363px |
+| `.shell__main` | `display: flex` · `flex-direction: column` · กว้าง 390px |
+
+คอลัมน์เนื้อหาเป็น **flex item ที่ถูกจัดขนาดแบบ fit-content ไม่ใช่ stretch**
+→ ความกว้าง = min-content ของลูกที่กว้างที่สุด ไม่ใช่ความกว้างจอ
+`minWidth: 0` แก้ได้แค่ข้อจำกัด `min-width: auto` แต่ fit-content ยังต้อง ≥ min-content อยู่ดี
+
+แก้โดยระบุ `width: '100%'` ตรง ๆ (คู่กับ `maxWidth: 860`) → คอลัมน์กว้างเท่าจอเสมอ ลูกข้างในพับเอง
+`box-sizing: border-box` ตั้งไว้ทั้งโปรเจกต์แล้ว จึงรวม padding ไว้ใน 100%
+
+> ⚠️ **อย่าใช้ `encodeURIComponent` กับค่าที่จะกลายเป็น `data-testid` หรือ `key` ของ React**
+>   อีเมลกลายเป็น `%40` ใน testid → เทสต์มองหา testid ที่ไม่มีอยู่จริง
+>   (เจอตอนทดสอบ: เชิญสำเร็จ 200 แต่หาแถวไม่เจอ) encode เฉพาะตอนใส่ใน URL
+
+### ยังไม่ทำ (ตั้งใจ)
+
+- **เอกสารที่สร้างจากแม่แบบยังผูกกับคนสร้างรายคน** — ทีมยังไม่เห็นประวัติของกัน
+  เพราะถ้าทำตอนนี้จะเปิดเอกสารราชการของคนอื่นให้ทั้งทีมเห็น
+  (ถ้าจะทำต่อ ต้องตัดสินใจเรื่อง "ทีมเห็นประวัติของกันแค่ไหน" ก่อน ไม่ใช่แค่แก้ query)
+- **ค่าตั้งค่าของทีม** — `user_settings` เป็นรายคน ยังไม่มีของทีม
+- **ประวัติการแก้ไขแม่แบบ** — ยังไม่บอกว่าใครแก้อะไรผ่านทีม
+
+ทดสอบเองได้: `tools/test-teams.mjs` (64 ข้อ · API) · `tools/test-teams-ui.mjs` (38 ข้อ · หน้าเว็บจริง)
+· `tools/claim-pending.ts` (ตัวช่วยเทสต์ · จำลองการเข้าสู่ระบบหนึ่งครั้ง)
+
+> ⚠️ เทสต์ UI กดปุ่มด้วยเมาส์จริงผ่าน CDP — ตอน Next dev **คอมไพล์หน้าครั้งแรก**
+> `Runtime.evaluate` จะได้ค่า `undefined` แล้วคลิกไปเปล่า เทสต์ตกตั้งแต่ข้อแรก
+> แถม HTML จาก SSR ยังไม่มี `onSubmit` → กดแล้วเป็น native form submit ไม่เกิดอะไรเลย
+> `clickTestId()` จึงต้องรอ **fiber ของ React** ให้เกิดก่อนถึงจะกดได้
+>
+> ⚠️ **ถ้าเทสต์ล้มเป็นก้อนติดกัน ให้เช็ค `GET /health` ก่อนสรุปว่าเป็นบั๊ก**
+> `tsx --watch` restart API กลางคันได้ (เจอครั้งหนึ่ง: ข้อ 6 ตก 6 ข้อ เพราะ API เพิ่ง restart 175 วินาที)
+> รอให้ `uptime` เกิน ~400 วินาทีแล้วรันซ้ำก่อน
+
 ## แบรนด์ที่ฝังในไฟล์ที่ส่งออก
 
 `worker/src/branding.ts` เขียนทับ metadata ของไฟล์**หลังเรนเดอร์เสร็จ ก่อนขึ้น S3**
@@ -345,8 +603,8 @@ http://localhost:4001/auth/callback
 ทดสอบว่า patch แล้วเอกสารยังเปิดได้:
 
 ```bash
-node --env-file=.env tools/test-branding.mjs    # PDF + DOCX ผ่านสายงานจริง
-node --env-file=.env tools/verify-meta.mjs     # PDF อ่านกลับ + ODT ตรวจ mimetype
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-branding.mjs    # PDF + DOCX ผ่านสายงานจริง
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/verify-meta.mjs     # PDF อ่านกลับ + ODT ตรวจ mimetype
 ```
 
 ### ⚠️ pdf-lib เขียน `/Producer` ทับเอง
@@ -421,9 +679,9 @@ Word/LibreOffice จึงเอาพจนานุกรม**อังกฤ�
 · แก้ `document.xml` + `header*` + `footer*` + `footnotes` + `endnotes` · ไฟล์ที่คลายไม่ได้คืนเดิม ไม่ throw
 
 ```bash
-node --env-file=.env --import tsx tools/test-thai-lang.mjs  # 22 ข้อ กรณีขอบ
-node --env-file=.env tools/check-xml.mjs                    # ทุกแม่แบบจริง + ให้ LibreOffice เปิด
-node --env-file=.env tools/make-spell-demo.mjs              # ไฟล์ก่อน/หลังเทียบใน Word
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development --import tsx tools/test-thai-lang.mjs  # 22 ข้อ กรณีขอบ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/check-xml.mjs                    # ทุกแม่แบบจริง + ให้ LibreOffice เปิด
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/make-spell-demo.mjs              # ไฟล์ก่อน/หลังเทียบใน Word
 ```
 
 ผลจริง: ทั้ง 9 แม่แบบ run ภาษาไทยได้ `th-TH` ครบ 100% และ LibreOffice แปลงเป็น PDF ได้ครบ
@@ -469,7 +727,7 @@ node --env-file=.env tools/make-spell-demo.mjs              # ไฟล์ก่
   ไม่งั้นกลายเป็น unhandledrejection (หน้าจอแดง)
 
 ```bash
-node --env-file=.env tools/test-editor-bookmark.mjs   # 17 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-editor-bookmark.mjs   # 17 ข้อ
 ```
 
 เทสต์ยืนยันทั้ง**ตำแหน่ง** (ชิดขอบขวาจริง และแถบแท็บไม่พัง) และ**ผลจริงบน API**
@@ -585,7 +843,7 @@ node --env-file=.env tools/test-editor-bookmark.mjs   # 17 ข้อ
 - ครอบคลุมทั้งแท็บ **ฟอร์ม** และ **JSON** เพราะทั้งคู่แก้ `data` ตัวเดียวกัน
 - มีป้ายเตือนบนแถบเครื่องมือด้วย เผื่อผู้ใช้สลับไปแท็บอื่นแล้วไม่เห็น overlay
 
-ตรวจเองได้: `node --env-file=.env tools/test-focus-and-stale.mjs` (18 ข้อ)
+ตรวจเองได้: `node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-focus-and-stale.mjs` (18 ข้อ)
 
 #### เพิ่มตัวเลือกของ `select` ได้เอง
 
@@ -603,7 +861,7 @@ node --env-file=.env tools/test-editor-bookmark.mjs   # 17 ข้อ
 > จึงเก็บข้อความดิบไว้ใน state ชื่อ `bulk` แล้วค่อยแปลงเป็น options
 
 ```bash
-node --env-file=.env tools/test-field-builder.mjs   # 17 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-field-builder.mjs   # 17 ข้อ
 ```
 
 > ⚠️ **เทสต์พิมพ์ต้องใช้ `data-testid` ของช่องนั้น ๆ** อย่าเดา selector จาก `placeholder`
@@ -673,8 +931,8 @@ MiniMax: base `https://api.minimax.io/v1` · โมเดล `MiniMax-M3` (จ�
 | `apps/api/src/modules/studio/service.ts` | `fieldAdvice()` — คืนข้อเสนอ ไม่ทับ ไม่บันทึก |
 
 ```bash
-node --env-file=.env tools/test-field-ai-api.mjs   # 14 ข้อ — API ชั้นล่าง
-node --env-file=.env tools/test-field-ai.mjs       # 29 ข้อ — หน้าเว็บจริง
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-field-ai-api.mjs   # 14 ข้อ — API ชั้นล่าง
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-field-ai.mjs       # 29 ข้อ — หน้าเว็บจริง
 ```
 
 > **⚠️ ห้ามเดา `id` ของช่องในเทสต์** — `id` เกิดจาก hash ของ `key`
@@ -761,7 +1019,7 @@ node --env-file=.env tools/test-field-ai.mjs       # 29 ข้อ — หน้�
 > ⚠️ ข้อจำกัดที่หลีกเลี่ยงไม่ได้: Carbone ไม่มีประวัติเวอร์ชัน
 > เอกสารที่สร้างจากเวอร์ชันเก่า (ก่อนกด "อัปโหลดแม่แบบใหม่แทน") จะไม่ปรากฏในประวัติ
 
-ตรวจเองได้: `node --env-file=.env tools/test-history-pager.mjs` (23 ข้อ)
+ตรวจเองได้: `node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-history-pager.mjs` (23 ข้อ)
 
 #### แยก "แก้ฟอร์ม" ออกจาก "เปลี่ยนไฟล์แม่แบบ"
 
@@ -850,7 +1108,7 @@ node --env-file=.env tools/test-field-ai.mjs       # 29 ข้อ — หน้�
 (ข้อมูลเก่าค้างบนจอ โดยที่ API ไม่มีอะไรผิด)
 
 ```bash
-node --env-file=.env tools/test-my-history-ui.mjs   # 41 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-my-history-ui.mjs   # 41 ข้อ
 ```
 
 เทสต์ยืนยันว่ากดครั้งแรก**ยังไม่ลบ** · กดยืนยันแล้วแถวหาย · และจำนวนบน API ลดลงจริง
@@ -890,7 +1148,7 @@ node --env-file=.env tools/test-my-history-ui.mjs   # 41 ข้อ
 แล้วอีกฝั่งยังพังอยู่โดยไม่มีใครรู้ ต้องมีที่เดียว
 
 ```bash
-node --env-file=.env tools/test-share-url.mjs   # 22 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-share-url.mjs   # 22 ข้อ
 ```
 
 > ⚠️ ชุดนี้**สร้างแม่แบบชั่วคราวเองแล้วลบทิ้ง** เพราะมันเปลี่ยนสิทธิ์
@@ -988,7 +1246,7 @@ node --env-file=.env tools/test-share-url.mjs   # 22 ข้อ
 >   เวลาเครื่องผู้ใช้อาจไม่ตรงกับ server แล้วจำนวนวันจะเพี้ยน
 
 ```bash
-node --env-file=.env tools/test-trash.mjs   # 33 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-trash.mjs   # 33 ข้อ
 ```
 
 > ⚠️ ทดสอบตัวกวาดโดย**ย้อนเวลา** เขียน `purgeAt` ให้อยู่ในอดีต แล้วเรียก
@@ -1110,10 +1368,10 @@ Fastify ตอบ 500 ทันทีว่า
 ### ทดสอบ
 
 ```bash
-node --env-file=.env tools/test-studio.mjs      # 15 ข้อ ผ่านทั้งหมด
-node --env-file=.env tools/test-tags.mjs        # อ่านแท็กจากไฟล์จริง
-node --env-file=.env tools/test-nav-status.mjs  # 26 ข้อ — แถบโหลด/ผ้าคลุม/คัดลอก URL
-node --env-file=.env tools/shot-nav-status.mjs  # ถ่ายภาพหน้าจอไว้ดู
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-studio.mjs      # 15 ข้อ ผ่านทั้งหมด
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-tags.mjs        # อ่านแท็กจากไฟล์จริง
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-nav-status.mjs  # 26 ข้อ — แถบโหลด/ผ้าคลุม/คัดลอก URL
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/shot-nav-status.mjs  # ถ่ายภาพหน้าจอไว้ดู
 ```
 
 `test-nav-status.mjs` จำลองเครือข่ายช้าผ่าน CDP
@@ -1200,8 +1458,8 @@ npm run dev:shared    # tsc -b --watch packages/shared → API/worker รีส�
 เพดาน 12 วินาทีมีไว้กันหน้าจอค้างเกือบนาทีโดยที่ผู้ใช้ไม่รู้ว่าเกิดอะไร
 
 ```bash
-node --env-file=.env tools/test-rate-limit-ui.mjs   # 9 ข้อ — 429 ฝั่งหน้าเว็บ
-node --env-file=.env tools/test-rate-limit.mjs      # 9 ข้อ — 429 ฝั่งเซิร์ฟเวอร์
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-rate-limit-ui.mjs   # 9 ข้อ — 429 ฝั่งหน้าเว็บ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-rate-limit.mjs      # 9 ข้อ — 429 ฝั่งเซิร์ฟเวอร์
 ```
 
 > ⚠️ `test-rate-limit-ui.mjs` ตอบ 429 ปลอมด้วย CDP `Fetch.fulfillRequest`
@@ -1211,8 +1469,8 @@ node --env-file=.env tools/test-rate-limit.mjs      # 9 ข้อ — 429 ฝั
 ### ทดสอบการทนทาน
 
 ```bash
-node --env-file=.env tools/test-api-retry.mjs   # 8 ข้อ
-node --env-file=.env tools/test-rate-limit.mjs  # 9 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-api-retry.mjs   # 8 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-rate-limit.mjs  # 9 ข้อ
 ```
 
 ใช้ CDP `Fetch` domain แยก request `/api/*` แบบสองแบบ —
@@ -1278,7 +1536,7 @@ node --env-file=.env tools/test-rate-limit.mjs  # 9 ข้อ
 > → การ์ดใช้ `var(--editor-top, 160px)` มาตลอด แล้วดูเหมือน CSS พัง ทั้งที่ไม่ได้พัง
 > แก้ด้วย callback ref + state แต่สุดท้ายก็**ไม่ต้องวัดอีก** เพราะไม่ต้อง cap ความสูงแล้ว
 > (ถอด effect ทั้งก้อนออกจาก `TemplateEditor` แล้ว)
-> ตรวจด้วย `node --env-file=.env tools/inspect-preview-height.mjs` (พิมพ์ค่าจริงทุกตัว + ภาพหน้าจอ)
+> ตรวจด้วย `node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/inspect-preview-height.mjs` (พิมพ์ค่าจริงทุกตัว + ภาพหน้าจอ)
 
 > ⚠️ **กล่องพรีวิวต้องกันการย่อตัวเอง — แต่ต้องเป็น `min-height` ไม่ใช่ `max-height`**
 > `.editor-col--preview` เคยใช้ `max-height` → คอลัมน์สูงตามเนื้อหา → `.docpage` สูงตามกระดาษ
@@ -1313,8 +1571,8 @@ node --env-file=.env tools/test-rate-limit.mjs  # 9 ข้อ
 > โดยไม่ทำให้ความกว้างกล่องเปลี่ยน → ResizeObserver จะไม่เรียกมาให้
 
 ```bash
-node --env-file=.env tools/inspect-preview-height.mjs 579 539   # วัดที่ขนาดจอที่พัง
-node --env-file=.env tools/inspect-preview-height.mjs            # ค่าเริ่มต้น 1600×1000
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/inspect-preview-height.mjs 579 539   # วัดที่ขนาดจอที่พัง
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/inspect-preview-height.mjs            # ค่าเริ่มต้น 1600×1000
 ```
 
 เทสต์ครอบ: กล่องสูงอย่างน้อยหนึ่งหน้าจอ · ล้นในกล่อง 0px · แถบรูปย่อยังตกใต้ขอบจอและเลื่อนถึง
@@ -1354,7 +1612,7 @@ node --env-file=.env tools/inspect-preview-height.mjs            # ค่าเ�
 - เมนูปิดเมื่อคลิกข้างนอก / กด Esc เหมือนกล่องดาวน์โหลด
 
 ```bash
-node --env-file=.env tools/test-ruler-ui.mjs   # 78 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-ruler-ui.mjs   # 78 ข้อ
 ```
 
 > ⚠️ **จอเล็ก: เมนูต้องอยู่ในจอ และชื่อหน่วยต้องตรงกลาง**
@@ -1407,9 +1665,9 @@ node --env-file=.env tools/test-ruler-ui.mjs   # 78 ข้อ
 > และผู้ใช้เจอปัญหาที่ **71%** พอดี ต้องวัดค่าสั้นด้วย ไม่ใช่แค่ค่าที่เห็นตอนวัด
 
 ```bash
-node --env-file=.env tools/inspect-zoom-gap.mjs 1600 1000   # เครื่องมือวัด (รับขนาดจอเป็น argument)
-node --env-file=.env tools/inspect-menu-hover.mjs           # เครื่องมือวัดสีตอน hover
-node --env-file=.env tools/test-ruler-ui.mjs                 # 78 ข้อ (ชุด [12] = เรื่องนี้)
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/inspect-zoom-gap.mjs 1600 1000   # เครื่องมือวัด (รับขนาดจอเป็น argument)
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/inspect-menu-hover.mjs           # เครื่องมือวัดสีตอน hover
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-ruler-ui.mjs                 # 78 ข้อ (ชุด [12] = เรื่องนี้)
 ```
 
 **บั๊ก: hover แล้วตัวอักษรหาย (สีพื้นกับสีตัวอักษรเป็นสีเดียวกัน)**
@@ -1570,7 +1828,7 @@ node --env-file=.env tools/test-ruler-ui.mjs                 # 78 ข้อ (ช
 > → scrollbar แนวตั้งโผล่ทั้งที่บอกว่า "พอดีหน้า" (เจอจริงตอนทดสอบ)
 
 ```bash
-node --env-file=.env tools/test-fit-page.mjs   # 50 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-fit-page.mjs   # 50 ข้อ
 ```
 
 > ⚠️ **เกณฑ์ "canvas วาดเสร็จแล้ว" ต้องมาจาก `tools/lib/canvas-drawn.mjs`**
@@ -1609,7 +1867,7 @@ CSS ตอนพิมพ์ซ่อนแอปด้วย `body > *:not(.pri
 > แล้วเลือกช่วงหน้าในกล่องโต้ตอบพิมพ์ของเบราว์เซอร์
 
 ```bash
-node --env-file=.env tools/test-print-preview.mjs   # 18 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-print-preview.mjs   # 18 ข้อ
 ```
 
 > ⚠️ **ตัวแทน `window.print()` ในเทสต์ต้องเป็นฟังก์ชันซิงโครนัส**
@@ -1672,7 +1930,7 @@ node --env-file=.env tools/test-print-preview.mjs   # 18 ข้อ
 
 ```bash
 npx.cmd tsx tools/test-page-range.mjs       # 31 ข้อ — ตัวแยกช่วงหน้า (ล้วน ไม่ต้องมีเบราว์เซอร์)
-node --env-file=.env tools/test-download-pages.mjs   # เลือกหน้า · ZIP · ตัด PDF จริง
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-download-pages.mjs   # เลือกหน้า · ZIP · ตัด PDF จริง
 ```
 
 ### ไม้บรรทัด (ruler) บนพรีวิว
@@ -1689,7 +1947,7 @@ node --env-file=.env tools/test-download-pages.mjs   # เลือกหน้�
 
 ```bash
 npx.cmd tsx tools/test-ruler.mjs          # 27 ข้อ — จุดขีด/หน่วย (ล้วน)
-node --env-file=.env tools/test-ruler-ui.mjs     # 78 ข้อ — ตรงขอบกระดาษจริง
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-ruler-ui.mjs     # 78 ข้อ — ตรงขอบกระดาษจริง
 ```
 
 > **⚠️ `0` ของไม้บรรทัดต้องตรงขอบกระดาศเป๊ะ** ไม่งั้นผู้ใช้วัดผิด
@@ -1776,7 +2034,7 @@ node --env-file=.env tools/test-ruler-ui.mjs     # 78 ข้อ — ตรงข
 > เพราะ `hoverText` เรียก `scrollIntoView` → ถ้าหน้าเลื่อน พิกัดทุกอย่างขยับพร้อมกัน
 > (เจอตอนรันรอบแรก: สูงเท่ากัน 346→346 แต่ปุ่มขยับ 15px แล้วไปโทษแอปว่าเมนูขยับ)
 
-เครื่องมือไล่อาการ: `node --env-file=.env tools/inspect-dl-hover.mjs`
+เครื่องมือไล่อาการ: `node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/inspect-dl-hover.mjs`
 เดินเมาส์จากปุ่ม → ช่องว่าง 8px → ช่อง input แล้วผ่านตัวเลือกทั้ง 4
 พิมพ์ความสูงเมนูและสิ่งที่เมาส์โดนที่**ทุกจุด** (ก่อนแก้: 342 → 221 · ช่องหาย · หลังแก้: 346 ทุกจุด)
 
@@ -1856,8 +2114,8 @@ node --env-file=.env tools/test-ruler-ui.mjs     # 78 ข้อ — ตรงข
 ให้ใช้ `.doctools` (คลาสที่ใส่ไว้เฉพาะแถบ) ไม่ใช่ `.editor-preview` ที่ครอบทั้งการ์ด
 
 ```bash
-node --env-file=.env tools/test-ruler-ui.mjs       # 78 ข้อ
-node --env-file=.env tools/test-preview-layout.mjs  # 37 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-ruler-ui.mjs       # 78 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-preview-layout.mjs  # 37 ข้อ
 ```
 
 > **⚠️ ห้ามคลิกปุ่มไอคอนด้วย `element.click()`** — มันยิงแค่ event `click`
@@ -1898,7 +2156,7 @@ node --env-file=.env tools/test-preview-layout.mjs  # 37 ข้อ
 ทางแก้ที่ได้ผล: ห่อ `select` + ปุ่มไว้ในกลุ่มเดียวกัน แล้วใส่ `width: max-content` · `flexShrink: 0`
 
 ```bash
-node --env-file=.env tools/test-preview-layout.mjs   # 18 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-preview-layout.mjs   # 18 ข้อ
 ```
 
 วัดตำแหน่งจริงจาก `getBoundingClientRect()` ในเบราว์เซอร์ — ยืนยันว่าตัวอย่างอยู่ครึ่งขวา,
@@ -1967,8 +2225,8 @@ node --env-file=.env tools/test-preview-layout.mjs   # 18 ข้อ
 → hydration mismatch
 
 ```bash
-node --env-file=.env tools/test-studio-url.mjs     # 31 ข้อ — URL ของหน้าแก้ไข
-node --env-file=.env tools/test-list-tabs-url.mjs  # 29 ข้อ — URL ของแท็บหน้ารายการ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-studio-url.mjs     # 31 ข้อ — URL ของหน้าแก้ไข
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-list-tabs-url.mjs  # 29 ข้อ — URL ของแท็บหน้ารายการ
 ```
 
 ทดสอบทั้ง URL, ปุ่มย้อนกลับ/ไป-กลับ, deep link, และ key ที่ไม่มีอยู่จริง
@@ -2008,11 +2266,11 @@ node --env-file=.env tools/test-list-tabs-url.mjs  # 29 ข้อ — URL ขอ
 ไม่งั้นผลลัพธ์จะอยู่ฝั่งขวาที่มองไม่เห็น ผู้ใช้ต้องเดาว่าต้องกดแท็บไหน
 
 ```bash
-node --env-file=.env tools/test-editor-panes.mjs   # 23 ข้อ
-node --env-file=.env tools/test-studio-ui.mjs      # 26 ข้อ (หน้าแก้ไขทั้งหน้า)
-node --env-file=.env tools/test-my-history.mjs    # 18 ข้อ — เก็บ/ค้น/กู้ค่า + ไม่รั่วข้ามคน
-node --env-file=.env tools/test-my-history-ui.mjs # 19 ข้อ — แท็บซ้าย + ปุ่มแก้ไข
-node --env-file=.env tools/test-template-file.mjs # 23 ข้อ — ดาวน์โหลด/อัปโหลดแทน + สิทธิ์
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-editor-panes.mjs   # 23 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-studio-ui.mjs      # 26 ข้อ (หน้าแก้ไขทั้งหน้า)
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-my-history.mjs    # 18 ข้อ — เก็บ/ค้น/กู้ค่า + ไม่รั่วข้ามคน
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-my-history-ui.mjs # 19 ข้อ — แท็บซ้าย + ปุ่มแก้ไข
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-template-file.mjs # 23 ข้อ — ดาวน์โหลด/อัปโหลดแทน + สิทธิ์
 ```
 
 > **⚠️ เทสต์ที่เขียนทับของจริงต้องสร้างของชั่วคราวเอง**
@@ -2065,7 +2323,7 @@ await restoreForm(H, key, snap)          // คืนสภาพเดิม
 > `test-preview-layout` เคย seed ช่องให้แม่แบบ A แต่คลิก `table tbody tr td button.ghost` (แถวแรก = แม่แบบ B)
 > → รันเดี่ยวผ่าน · รันเป็นชุดแล้วแถวแรกเปลี่ยนเป็นแม่แบบหลายหน้า → กล่องพรีวิวสูง 1064px ล้นจอ → ตก
 
-เครื่องมือกวาดแม่แบบทดสอบที่ค้าง: `node --env-file=.env tools/purge-test-templates.mjs`
+เครื่องมือกวาดแม่แบบทดสอบที่ค้าง: `node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/purge-test-templates.mjs`
 
 > **⚠️ selector ของเทสต์ต้องเขียนให้ถูก** — ถ้าเขียน
 > `.editor-col--right:not(.editor-col--right)` จะไม่มี element ไหนตรงเลย
@@ -2091,7 +2349,7 @@ await restoreForm(H, key, snap)          // คืนสภาพเดิม
 (ต้องเอา `margin: '16px 0'` ของแถวตัวกรองออกด้วย ไม่งั้นจะเป็น 14 + 16 = 30px)
 
 ```bash
-node --env-file=.env tools/test-list-spacing.mjs   # 5 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-list-spacing.mjs   # 5 ข้อ
 ```
 
 วัดระยะห่างจริงจาก `getBoundingClientRect()` ระหว่างกล่อง `.card` ทุกคู่
@@ -2122,8 +2380,8 @@ node --env-file=.env tools/test-list-spacing.mjs   # 5 ข้อ
 > ผลคือแถวยังโชว์ "หมวด — แท็ก" เปล่า ๆ ทั้งที่ไม่มีข้อมูลให้ดู
 
 ```bash
-node --env-file=.env tools/inspect-list-mobile.mjs   # พิมพ์ค่าจริงทุกความกว้างจอ
-node --env-file=.env tools/test-list-mobile.mjs      # 44 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/inspect-list-mobile.mjs   # พิมพ์ค่าจริงทุกความกว้างจอ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-list-mobile.mjs      # 44 ข้อ
 ```
 
 เทสต์ครอบ: 360 / 414 / 579px · จอกว้างยังเป็นตารางครบ 5 คอลัมน์ ·
@@ -2174,8 +2432,8 @@ node --env-file=.env tools/test-list-mobile.mjs      # 44 ข้อ
 ให้ screen reader อ่านป้ายที่เปลี่ยนได้
 
 ```bash
-node --env-file=.env tools/test-share-url.mjs      # 27 ข้อ
-node --env-file=.env tools/test-list-mobile.mjs    # 44 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-share-url.mjs      # 27 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-list-mobile.mjs    # 44 ข้อ
 ```
 
 > ⚠️ กฎ `button.ghost.ok` / `button.ghost.err` ต้อง**ระบุ element** ไว้
@@ -2230,7 +2488,7 @@ node --env-file=.env tools/test-list-mobile.mjs    # 44 ข้อ
 `TrashBanner` เปลี่ยนมาใช้ตัวช่วยตัวเดียวกัน
 
 ```bash
-node --env-file=.env tools/test-row-owner.mjs   # 22 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-row-owner.mjs   # 22 ข้อ
 ```
 
 > ⚠️ เทสต์นี้ต้องสร้าง**สองคน** (สอง session) ไม่ใช่คนเดียว
@@ -2287,10 +2545,10 @@ node --env-file=.env tools/test-row-owner.mjs   # 22 ข้อ
   ถ้ายิงทีละแถวจะเป็น N+1 และยังยิง S3 ต่ออีกรอบ
 
 ```bash
-node --env-file=.env tools/test-preview-api.mjs   # 23 ข้อ — API ล้วน
-node --env-file=.env tools/test-preview-ui.mjs    # 21 ข้อ — สร้างตัวอย่างจริงในเบราว์เซอร์
-node --env-file=.env tools/test-list-view.mjs     # 17 ข้อ — มุมมีรายการ/ชิด
-node --env-file=.env tools/backfill-previews.mjs  # สร้างตัวอย่างให้แม่แบบที่มีอยู่แล้ว
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-preview-api.mjs   # 23 ข้อ — API ล้วน
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-preview-ui.mjs    # 21 ข้อ — สร้างตัวอย่างจริงในเบราว์เซอร์
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-list-view.mjs     # 17 ข้อ — มุมมีรายการ/ชิด
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/backfill-previews.mjs  # สร้างตัวอย่างให้แม่แบบที่มีอยู่แล้ว
 ```
 
 > ⚠️ **กันดักที่เจอระหว่างทำ — อย่าลบ**
@@ -2335,7 +2593,7 @@ node --env-file=.env tools/backfill-previews.mjs  # สร้างตัวอ�
 | `PATCH` | `/api/templates/:id` | แก้ metadata → `204` (body ว่างจะได้ `422`) |
 | `DELETE` | `/api/templates/:id` | ลบ → `204` |
 
-ทุก endpoint ต้อง login (ยกเว้น `/docs`) และใช้ `id` = **versionId**
+ทุก endpoint ต้อง login (ยกเว้น `/apis`) และใช้ `id` = **versionId**
 
 > **⚠️ ช่องโหว่ที่เคยเปิดอยู่: ดาวน์โหลดแม่แบบส่วนตัว**
 > `GET /api/templates/:id` เดิม**ไม่ตรวจสิทธิ์** → ใครล็อกอินก็เดา URL แล้วดาวน์โหลด
@@ -2371,8 +2629,8 @@ node --env-file=.env tools/backfill-previews.mjs  # สร้างตัวอ�
 สคริปต์นี้แก้โดยเอาไฟล์เดิมกลับมาอัปโหลด**พร้อมเปิด versioning**:
 
 ```bash
-node --env-file=.env tools/import-templates.mjs --dry-run   # ดูก่อน ไม่แก้อะไร
-node --env-file=.env tools/import-templates.mjs            # ลงจริง
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/import-templates.mjs --dry-run   # ดูก่อน ไม่แก้อะไร
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/import-templates.mjs            # ลงจริง
 ```
 
 ชื่อ/หมวด/แท็ก อยู่ในตัวแปร `MANIFEST` ที่หัวสคริปต์ — key คือ **sha256 จริงของไฟล์**
@@ -2385,8 +2643,8 @@ node --env-file=.env tools/import-templates.mjs            # ลงจริง
 ### ตรวจสอบว่าแม่แบบที่นำเข้าใช้ได้จริง
 
 ```bash
-node --env-file=.env tools/verify-templates.mjs   # ดูรายการ/หมวด/แท็ก
-node --env-file=.env tools/render-check.mjs      # เรนเดอร์จริง 2 แม่แบบ แล้วลบทิ้ง
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/verify-templates.mjs   # ดูรายการ/หมวด/แท็ก
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/render-check.mjs      # เรนเดอร์จริง 2 แม่แบบ แล้วลบทิ้ง
 ```
 
 ### ⚠️ Carbone ลบไฟล์จริงแบบ synchronous
@@ -2395,7 +2653,7 @@ node --env-file=.env tools/render-check.mjs      # เรนเดอร์จ�
 ถ้าสั่ง DELETE ด้วย `versionId` ของแม่แบบที่ไม่ได้เปิด versioning
 → ไฟล์ต้นฉบับหายถาวร และกู้จาก backup ได้ก็ต่อเมื่อยังมีสำเนา
 
-> เคยเกิดจริงระหว่างทดสอบ — กู้คืนจาก `../docserver-backup-20260930/template/` ได้
+> เคยเกิดจริงระหว่างทดสอบ — กู้คืนจาก `../data/docserver-backup-20260930/template/` ได้
 > **สำรอง `metadata.db` + `/app/template` ไว้ก่อนทุกครั้งที่จะลบแม่แบบ**
 
 ## เข้าจากเครื่องอื่นด้วย Tailscale
@@ -2422,9 +2680,9 @@ tailscale serve reset      # ถอดออกทั้งหมด
 |---|---|
 | `https://<host>.ts.net/` | เว็บ 2docx.com (หน้าแรก) |
 | `https://<host>.ts.net/studio` | **2docx Studio** — เครื่องมือจัดการแม่แบบ |
-| `https://<host>.ts.net/docs` | Swagger UI (ผ่าน rewrite ของ Next.js) |
+| `https://<host>.ts.net/apis` | Swagger UI (ผ่าน rewrite ของ Next.js) |
 | `https://<host>.ts.net/api/...` | API — ผ่าน rewrite ของ Next.js |
-| `https://<host>.ts.net/gateway/docs` | API ตรง ๆ (พอร์ต 4001) |
+| `https://<host>.ts.net/gateway/apis` | API ตรง ๆ (พอร์ต 4001) |
 | `https://<host>.ts.net/storage/` | rustfs-ui (ดูไฟล์ใน S3) |
 | `https://<host>.ts.net:8443/documents/...` | RustFS ตรง ๆ (สำหรับ presigned URL) |
 
@@ -2634,7 +2892,7 @@ deliver_policy: DeliverPolicy.New, // ← ผูกกับตอน "สร้
 # consumer เป็น durable และเริ่มรับเฉพาะงานใหม่
 curl -s 'http://127.0.0.1:8222/jsz?consumers=true&config=true' | grep -A6 render-worker
 
-node --env-file=.env tools/test-nats-queue.mjs   # 10 ข้อ
+node --env-file=../dokploy-infra/.env --env-file=../dokploy-infra/.env.development tools/test-nats-queue.mjs   # 10 ข้อ
 ```
 ### ⚠️ permissions ของ NATS ต้องมี `$JS.ACK.>`
 
@@ -2785,7 +3043,7 @@ Docker จะสร้าง volume ใหม่ → replica set มองเป
 | `?withUrl=false` | เหมือน default |
 | ยิงลิงก์จากรายการ | `200` · 57,593 bytes · magic `%PDF-` |
 | ประหยัดเวลา | 5 ครั้ง: default 112 ms · `withUrl=true` 119 ms |
-| Swagger | `withUrl` query param default `"false"` แสดงใน `/docs` |
+| Swagger | `withUrl` query param default `"false"` แสดงใน `/apis` |
 
 ### นำเข้าแม่แบบเดิม
 

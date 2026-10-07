@@ -118,8 +118,103 @@ export function extractJson(text: string): Record<string, unknown> | null {
   return null
 }
 
+/**
+ * ยิงโมเดลด้วย system prompt ที่เขียนเอง แล้วได้ object ที่ parse JSON แล้ว
+ *
+ * ── ทำไมต้องแยกออกมาจาก `askLlm` ──────────────────────────────────────
+ *   `askLlm` ตอบ `_reply` + ค่าในช่อง ซึ่งคือ "เติมฟอร์ม" เท่านั้น
+ *   แต่ฟีเจอร์สัมภาษณ์ต้องการให้โมเดล**ถามคำถาม** ซึ่งคือ JSON อีกรูปแบบหนึ่ง
+ *   ถ้า copy ส่วน fetch ไปไว้ในไฟล์ใหม่ เมื่อวันหนึ่งต้องแก้ timeout หรือ header
+ *   จะแก้แค่ที่เดียวแล้วอีกที่หลุด = บั๊กที่ไม่มีใครเจอเวลาจริง
+ *
+ * @returns object ที่โมเดลตอบ · หรือ `null` ถ้าตอบมาไม่ใช่ JSON
+ *          (คืน text ดิบให้ผู้เรียกตัดสิน เพราะบางโหมดยังอ่านคำตอบข้อความได้)
+ */
+export async function callModel(input: {
+  system: string
+  messages: ChatTurn[]
+  provider?: string
+  log?: (meta: Record<string, unknown>) => void
+}): Promise<{ parsed: Record<string, unknown> | null; raw: string; provider: string; model: string }> {
+  const provider = input.provider ?? env.LLM_PROVIDER
+
+  if (provider !== 'mock' && !env.LLM_API_KEY) {
+    throw new AppError(
+      'LLM_NOT_CONFIGURED',
+      `ยังตั้ง ${provider} ไม่ได้ — ยังไม่มี LLM_API_KEY ใน .env\n` +
+        'ตั้ง key แล้วรีสตาร์ท API หรือเลือก "ทดสอบ (mock)" ไว้ก่อน',
+      503,
+    )
+  }
+
+  const url = `${baseUrlFor(provider)}/chat/completions`
+  const body: Record<string, unknown> = {
+    model: env.LLM_MODEL,
+    messages: [
+      { role: 'system', content: input.system },
+      ...input.messages.slice(-8).map((m) => ({ role: m.role, content: m.content })),
+    ],
+    temperature: env.LLM_TEMPERATURE,
+    max_tokens: env.LLM_MAX_TOKENS,
+  }
+
+  // MiniMax M3 เปิด thinking โดยค่าเริ่มต้น (ช้ากว่าหลายเท่าเมื่อแค่เติมค่าในฟอร์ม)
+  if (provider === 'minimax' && env.LLM_THINKING === 'disabled') {
+    body.thinking = { type: 'disabled' }
+  }
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), env.LLM_TIMEOUT_MS)
+
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${env.LLM_API_KEY}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+  } catch (err) {
+    const aborted = (err as Error).name === 'AbortError'
+    throw new AppError(
+      aborted ? 'LLM_TIMEOUT' : 'LLM_UNREACHABLE',
+      aborted
+        ? `โมเดลไม่ตอบภายใน ${Math.round(env.LLM_TIMEOUT_MS / 1000)} วินาที`
+        : `ติดต่อ ${provider} ไม่ได้: ${(err as Error).message}`,
+      502,
+    )
+  } finally {
+    clearTimeout(timer)
+  }
+
+  const text = await res.text()
+  let json: ChatCompletionResponse
+  try {
+    json = JSON.parse(text) as ChatCompletionResponse
+  } catch {
+    throw new AppError('LLM_BAD_RESPONSE', `โมเดลตอบกลับมาไม่ใช่ JSON (HTTP ${res.status})`, 502)
+  }
+
+  if (!res.ok) {
+    input.log?.({ status: res.status, provider, model: env.LLM_MODEL, body: text.slice(0, 300) })
+    throw new AppError(
+      'LLM_ERROR',
+      `โมเดลตอบกลับมา ${res.status}: ${json.error?.message ?? text.slice(0, 200)}`,
+      502,
+    )
+  }
+
+  const raw = json.choices?.[0]?.message?.content ?? ''
+  if (!raw) throw new AppError('LLM_EMPTY', 'โมเดลไม่ได้ตอบอะไรเลย', 502)
+
+  return { parsed: extractJson(raw), raw, provider, model: env.LLM_MODEL }
+}
+
 /** ทิ้ง key ที่แม่แบบไม่รู้จัก — กันโมเดลแต่ง key ขึ้นเองจนข้อมูลเพี้ยน */
-function keepKnownKeys(
+export function keepKnownKeys(
   data: Record<string, unknown>,
   allowed: Set<string>,
 ): Record<string, unknown> {
